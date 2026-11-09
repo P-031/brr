@@ -1,0 +1,45 @@
+{
+  "realm": "brr",
+  "enabled": true,
+  "displayName": "BRR",
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "rememberMe": true,
+  "clients": [
+    {
+      "clientId": "brr-app",
+      "name": "BRR Mobile App",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "com.brr.brr://oauthredirect"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "com.brr.brr://oauthredirect"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "test@brr.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}
