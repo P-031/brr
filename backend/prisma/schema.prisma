@@ -1,0 +1,95 @@
+// Passwords stay in Keycloak. This database stores the cane-field data.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
+}
+
+enum Role {
+  FARMER
+  OFFICER
+}
+
+enum TaskKind {
+  PLANT
+  FERTILIZE
+  SPRAY
+  HARVEST
+}
+
+model User {
+  id          String   @id @default(cuid())
+  keycloakId  String   @unique
+  username    String   @unique
+  role        Role
+  displayName String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plots      Plot[]
+  caringFor  FarmerCare[] @relation("OfficerCare")
+  caretakers FarmerCare[] @relation("FarmerCare")
+
+  @@index([role])
+}
+
+/// One extension officer can follow many farmers.
+model FarmerCare {
+  officerId String
+  farmerId  String
+  createdAt DateTime @default(now())
+  officer   User     @relation("OfficerCare", fields: [officerId], references: [id], onDelete: Cascade)
+  farmer    User     @relation("FarmerCare", fields: [farmerId], references: [id], onDelete: Cascade)
+
+  @@id([officerId, farmerId])
+  @@index([farmerId])
+}
+
+model Plot {
+  id        String                                 @id @default(cuid())
+  farmerId  String
+  name      String
+  variety   String                                 @default("")
+  areaSqm   Float
+  centerLat Float
+  centerLng Float
+  /// Read and written with raw SQL in src/boundary.ts. Prisma Client cannot touch this column.
+  boundary  Unsupported("geometry(Polygon, 4326)")?
+  createdAt DateTime                               @default(now())
+  updatedAt DateTime                               @updatedAt
+
+  farmer User          @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  yields YieldRecord[]
+  tasks  FieldTask[]
+
+  @@index([farmerId, createdAt, id])
+  @@index([boundary], type: Gist)
+}
+
+model YieldRecord {
+  id         String   @id @default(cuid())
+  plotId     String
+  season     String
+  weightTons Float
+  createdAt  DateTime @default(now())
+  plot       Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  @@index([plotId, createdAt])
+}
+
+model FieldTask {
+  id     String   @id @default(cuid())
+  plotId String
+  kind   TaskKind
+  date   DateTime @db.Date
+  done   Boolean  @default(false)
+  plot   Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  @@index([plotId, date])
+}
