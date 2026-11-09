@@ -31,8 +31,10 @@ void main() {
     await tester.pump();
 
     expect(find.text('BRR'), findsOneWidget);
-    expect(find.text('เข้าสู่ระบบด้วย Keycloak'), findsOneWidget);
-    expect(find.text('สร้างบัญชีใหม่'), findsOneWidget);
-    expect(find.byIcon(Icons.login), findsOneWidget);
+    expect(find.text('บัญชีผู้ใช้'), findsOneWidget);
+    expect(find.text('รหัสผ่าน'), findsOneWidget);
+    expect(find.text('เข้าสู่ระบบ'), findsOneWidget);
+    expect(find.byType(TextFormField), findsNWidgets(2));
+    expect(find.byIcon(Icons.visibility_off_outlined), findsOneWidget);
   });
 }

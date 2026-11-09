@@ -5,6 +5,8 @@
   "sslRequired": "none",
   "registrationAllowed": true,
   "rememberMe": true,
+  "ssoSessionIdleTimeout": 604800,
+  "ssoSessionMaxLifespan": 604800,
   "clients": [
     {
       "clientId": "brr-app",
@@ -12,7 +14,7 @@
       "enabled": true,
       "publicClient": true,
       "standardFlowEnabled": true,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "implicitFlowEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
@@ -22,6 +24,35 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "com.brr.brr://oauthredirect"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access",
+        "address",
+        "phone",
+        "microprofile-jwt"
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "config": {
+        "clientId": "YOUR_GOOGLE_CLIENT_ID",
+        "clientSecret": "YOUR_GOOGLE_CLIENT_SECRET",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
       }
     }
   ],

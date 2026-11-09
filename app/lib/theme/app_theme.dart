@@ -35,6 +35,10 @@ class AppTheme {
           ),
         ),
       ),
+      cardTheme: CardThemeData(
+        color: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.green,
