@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/parcel.dart';
 import '../../services/parcel_service.dart';
 import '../../theme/app_theme.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 
 /// สถานะแปลง — parcel list with status chips.
 /// Status is mocked until the backend provides it.
 class ParcelStatusView extends StatelessWidget {
   const ParcelStatusView({super.key});
 
-  static const _statuses = ['กำลังเติบโต', 'พร้อมเก็บเกี่ยว'];
-
   @override
   Widget build(BuildContext context) {
+    final api = context.read<AuthViewModel>().api;
     return Scaffold(
       appBar: AppBar(title: const Text('สถานะแปลง')),
       body: FutureBuilder<List<Parcel>>(
-        future: ParcelService().fetchParcels(),
+        future: ParcelService(api).fetchParcels(),
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -27,7 +28,7 @@ class ParcelStatusView extends StatelessWidget {
             itemCount: parcels.length,
             itemBuilder: (context, i) {
               final p = parcels[i];
-              final status = _statuses[i % _statuses.length];
+              final status = p.variety ?? 'ไม่ระบุพันธุ์';
               return Card(
                 child: ListTile(
                   leading: const CircleAvatar(

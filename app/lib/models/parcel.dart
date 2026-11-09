@@ -9,25 +9,34 @@ class Parcel {
     required this.id,
     required this.name,
     required this.points,
+    this.variety,
+    this.owner,
   });
 
   final String id;
   final String name;
+  final String? variety;
+  final String? owner;
   final List<LatLng> points;
 
+  /// Backend `/plots/map` item — outline is a list of
+  /// `{latitude, longitude}` objects.
   factory Parcel.fromJson(Map<String, dynamic> json) {
-    final coords = (json['coordinates'] as List)
+    final outline = (json['outline'] as List? ?? [])
         .map(
           (c) => LatLng(
-            (c[0] as num).toDouble(),
-            (c[1] as num).toDouble(),
+            (c['latitude'] as num).toDouble(),
+            (c['longitude'] as num).toDouble(),
           ),
         )
         .toList();
+    final farmer = json['farmer'] as Map<String, dynamic>?;
     return Parcel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      points: coords,
+      id: '${json['id']}',
+      name: '${json['name']}',
+      variety: json['variety'] as String?,
+      owner: farmer?['displayName'] as String?,
+      points: outline,
     );
   }
 

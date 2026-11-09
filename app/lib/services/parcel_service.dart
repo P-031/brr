@@ -8,26 +8,30 @@ import 'api_client.dart';
 
 /// Data layer for land parcels.
 ///
-/// When [ApiConfig.enabled] is on, coordinates come from the backend
-/// (`GET /api/v1/parcels`, Bearer token via [ApiClient]).
-/// Until then it serves mock parcels around Buriram so the map screen
-/// can be built and tested.
+/// When [ApiConfig.enabled] is on, boundaries come from the backend
+/// (`GET /plots/map`, Bearer token via [ApiClient]).
+/// Otherwise it serves mock parcels around Buriram.
 class ParcelService {
   ParcelService([ApiClient? api]) : _api = api;
 
   final ApiClient? _api;
 
+  /// Bounding box covering Thailand — the backend clips to the
+  /// caller's own parcels anyway.
+  static const _box = 'west=97&south=5&east=106&north=21';
+
   Future<List<Parcel>> fetchParcels() async {
     if (ApiConfig.enabled && _api != null) {
-      final res = await _api.get('/api/v1/parcels');
+      final res = await _api.get('/plots/map?$_box');
       if (res.statusCode != 200) {
         throw Exception('โหลดข้อมูลพื้นที่ไม่สำเร็จ (${res.statusCode})');
       }
-      return (jsonDecode(res.body) as List)
+      final items = jsonDecode(res.body)['items'] as List;
+      return items
           .map((j) => Parcel.fromJson(j as Map<String, dynamic>))
           .toList();
     }
-    // Mock — remove once the backend is live.
+    // Mock — used only when the backend is disabled.
     return _mockParcels;
   }
 }

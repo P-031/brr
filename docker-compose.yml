@@ -6,6 +6,10 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Fixed issuer so tokens match the backend's KEYCLOAK_ISSUER
+      # even when the Android emulator reaches it via 10.0.2.2.
+      KC_HOSTNAME: http://127.0.0.1:8080
+      KC_HOSTNAME_STRICT: 'false'
     ports:
       - "8080:8080"
     volumes:
