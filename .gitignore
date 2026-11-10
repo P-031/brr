@@ -2,3 +2,9 @@
 node_modules
 dist
 backend/dev.log
+
+# iOS Google Maps key. Debug.xcconfig and Release.xcconfig stay tracked.
+**/Secrets.xcconfig
+
+# Web Google Maps JavaScript key.
+app/web/maps.js
