@@ -34,6 +34,113 @@ class ParcelService {
     // Mock — used only when the backend is disabled.
     return _mockParcels;
   }
+
+  /// Creates a new parcel — POST /plots when the backend is on.
+  /// [productionYear]/[officerName] are collected now and forwarded
+  /// once the backend schema supports them.
+  Future<Parcel> createParcel({
+    required String name,
+    String variety = '',
+    String? productionYear,
+    String? officerName,
+    String? project,
+    String? farmerName,
+    String? caneGroup,
+    String? zone,
+    String? province,
+    String? district,
+    String? subdistrict,
+    String? village,
+    String? rootNo,
+    String? sequenceNo,
+    String? prevPlotNo,
+    String? caneType,
+    String? caneVariety,
+    String? ownership,
+    String? terrain,
+    String? hasLoss,
+    String? lossRai,
+    String? targetYield,
+    String? note,
+    List<String> photos = const [],
+    bool draft = false,
+    required List<LatLng> points,
+  }) async {
+    // Draft = save on device only, never posts to the backend.
+    if (!draft && ApiConfig.enabled && _api != null) {
+      final res = await _api.postJson(
+        '/plots',
+        {
+          'name': name,
+          'variety': variety,
+          // TODO: send productionYear/officerName/project/farmerName/
+          // caneGroup/location fields/rootNo/sequenceNo when the
+          // schema supports them.
+          'points': [
+            for (final p in points)
+              {'latitude': p.latitude, 'longitude': p.longitude},
+          ],
+        },
+      );
+      if (res.statusCode >= 300) {
+        throw Exception('บันทึกแปลงไม่สำเร็จ (${res.statusCode})');
+      }
+      return Parcel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
+    }
+    return Parcel(id: 'local-${points.length}', name: name, points: points);
+  }
+
+  /// Extension officers for the caretaker dropdown.
+  /// Backend-ready: will list officer accounts once an endpoint
+  /// exists; until then returns a placeholder list.
+  Future<List<String>> fetchOfficers() async {
+    if (ApiConfig.enabled && _api != null) {
+      try {
+        final res = await _api.get('/accounts?role=officer');
+        if (res.statusCode == 200) {
+          final items = jsonDecode(res.body)['items'] as List;
+          return [
+            for (final j in items)
+              (j as Map<String, dynamic>)['displayName'] as String,
+          ];
+        }
+      } catch (_) {}
+    }
+    return const [];
+  }
+
+  /// Farmers for the dropdown — same backend-ready pattern as
+  /// [fetchOfficers].
+  Future<List<String>> fetchFarmers() async {
+    if (ApiConfig.enabled && _api != null) {
+      try {
+        final res = await _api.get('/accounts?role=farmer');
+        if (res.statusCode == 200) {
+          final items = jsonDecode(res.body)['items'] as List;
+          return [
+            for (final j in items)
+              (j as Map<String, dynamic>)['displayName'] as String,
+          ];
+        }
+      } catch (_) {}
+    }
+    return const [];
+  }
+
+  /// Sugarcane collectives (กลุ่มบำรุง) — placeholder until a backend
+  /// endpoint exists.
+  Future<List<String>> fetchCaneGroups() async {
+    if (ApiConfig.enabled && _api != null) {
+      try {
+        final res = await _api.get('/cane-groups');
+        if (res.statusCode == 200) {
+          final items = jsonDecode(res.body)['items'] as List;
+          return [for (final j in items) '${j['name']}'];
+        }
+      } catch (_) {}
+    }
+    return const [];
+  }
 }
 
 final _mockParcels = <Parcel>[

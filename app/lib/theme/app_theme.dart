@@ -6,6 +6,7 @@ class AppColors {
   static const Color greenLight = Color(0xFF43A047);
   static const Color gold = Color(0xFFC9A227);
   static const Color goldLight = Color(0xFFF5E6B8);
+  static const Color navy = Color(0xFF14213D);
   static const Color white = Colors.white;
 }
 

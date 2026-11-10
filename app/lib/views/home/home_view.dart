@@ -94,7 +94,7 @@ class HomeView extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 _MenuCard(
-                  icon: Icons.crop_free,
+                  icon: Icons.straighten,
                   title: 'วัดพื้นที่',
                   subtitle: 'ดูแปลงและคำนวณพื้นที่จากพิกัด',
                   onTap: () => Navigator.of(context).push(
@@ -134,10 +134,7 @@ class _MenuCard extends StatelessWidget {
           horizontal: 20,
           vertical: 8,
         ),
-        leading: const CircleAvatar(
-          backgroundColor: AppColors.green,
-          child: Icon(Icons.crop_free, color: AppColors.gold),
-        ),
+        leading: Icon(icon, size: 40, color: AppColors.green),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.chevron_right, color: AppColors.gold),

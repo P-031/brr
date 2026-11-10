@@ -69,4 +69,16 @@ class Parcel {
 
   /// Thai land unit: 1 rai = 1600 m².
   double get areaRai => areaSquareMeters / 1600;
+
+  /// Formats square meters as Thai land units —
+  /// "x ไร่ y งาน z ตร.วา" (1 ไร่ = 4 งาน, 1 งาน = 100 ตร.วา).
+  static String formatThaiArea(double sqm) {
+    final sqWa = sqm / 4; // 1 ตร.วา = 4 ตร.ม.
+    final rai = sqWa ~/ 400;
+    final ngan = (sqWa % 400) ~/ 100;
+    final wa = sqWa % 100;
+    return '$rai ไร่ $ngan งาน ${wa.toStringAsFixed(0)} ตร.วา';
+  }
+
+  String get areaThai => formatThaiArea(areaSquareMeters);
 }

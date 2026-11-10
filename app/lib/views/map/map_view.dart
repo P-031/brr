@@ -6,14 +6,15 @@ import 'package:provider/provider.dart';
 import '../../services/api_client.dart';
 import '../../theme/app_theme.dart';
 import '../../viewmodels/map_viewmodel.dart';
+import 'measurement_save_view.dart';
 
 /// Area-measurement screen — plots parcel boundaries from the backend
-/// as polygons + centroid pins on an OpenStreetMap layer.
+/// as polygons + pins, and supports drafting a new parcel by tapping
+/// points on the map (เพิ่มพิกัด / ย้อนกลับ / เสร็จสิ้น).
 class MapView extends StatelessWidget {
   const MapView({super.key, this.api});
 
-  /// Pass the authenticated ApiClient so parcels can come from the
-  /// backend when enabled. Null = mock data.
+  /// Pass the authenticated ApiClient so parcels go to the backend.
   final ApiClient? api;
 
   @override
@@ -58,6 +59,7 @@ class _MapBody extends StatelessWidget {
                         bounds: _boundsOf(vm.parcels),
                         padding: const EdgeInsets.all(40),
                       ),
+                      onTap: (_, point) => vm.addDraftPoint(point),
                     ),
                     children: [
                       TileLayer(
@@ -71,6 +73,13 @@ class _MapBody extends StatelessWidget {
                             Polygon(
                               points: p.points,
                               color: AppColors.green.withValues(alpha: 0.25),
+                              borderColor: AppColors.gold,
+                              borderStrokeWidth: 3,
+                            ),
+                          if (vm.draft.length >= 3)
+                            Polygon(
+                              points: vm.draft,
+                              color: AppColors.gold.withValues(alpha: 0.3),
                               borderColor: AppColors.gold,
                               borderStrokeWidth: 3,
                             ),
@@ -89,47 +98,23 @@ class _MapBody extends StatelessWidget {
                                 size: 40,
                               ),
                             ),
+                          for (var i = 0; i < vm.draft.length; i++)
+                            Marker(
+                              point: vm.draft[i],
+                              width: 24,
+                              height: 24,
+                              child: const Icon(
+                                Icons.circle,
+                                color: AppColors.gold,
+                                size: 16,
+                              ),
+                            ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                SizedBox(
-                  height: 120,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.all(12),
-                    children: [
-                      for (final p in vm.parcels)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  p.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text('≈ ${p.areaRai.toStringAsFixed(2)} ไร่'),
-                                Text(
-                                  '${p.areaSquareMeters.toStringAsFixed(0)} ตร.ม.',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                _BottomBar(vm: vm),
               ],
             ),
     );
@@ -143,5 +128,110 @@ class _MapBody extends StatelessWidget {
       return LatLngBounds(LatLng(14.99, 103.11), LatLng(15.0, 103.12));
     }
     return LatLngBounds.fromPoints(all);
+  }
+}
+
+class _BottomBar extends StatelessWidget {
+  const _BottomBar({required this.vm});
+
+  final MapViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+      child: vm.drawing
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'แตะแผนที่เพื่อปักจุด (${vm.draft.length} จุด)',
+                  style: const TextStyle(fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: vm.draft.isEmpty
+                            ? null
+                            : vm.undoDraftPoint,
+                        icon: const Icon(Icons.undo),
+                        label: const Text('ย้อนกลับ'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: () => _finish(context),
+                        icon: const Icon(Icons.check),
+                        label: const Text('เสร็จสิ้น'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            )
+          : SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: vm.startDrawing,
+                icon: const Icon(Icons.add_location_alt_outlined),
+                label: const Text('เพิ่มพิกัด'),
+              ),
+            ),
+    );
+  }
+
+  Future<void> _finish(BuildContext context) async {
+    if (vm.draft.length < 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ต้องปักอย่างน้อย 3 จุด')),
+      );
+      return;
+    }
+    final result = await Navigator.of(context).push<MeasurementResult>(
+      MaterialPageRoute(
+        builder: (_) => MeasurementSaveView(
+          areaSquareMeters: vm.draftAreaSqm,
+          officers: vm.service.fetchOfficers(),
+          farmers: vm.service.fetchFarmers(),
+          caneGroups: vm.service.fetchCaneGroups(),
+        ),
+      ),
+    );
+    if (result == null) return;
+    final err = await vm.finishDrawing(
+      result.name,
+      productionYear: result.productionYear,
+      officerName: result.officerName,
+      project: result.project,
+      farmerName: result.farmerName,
+      caneGroup: result.caneGroup,
+      zone: result.zone,
+      province: result.province,
+      district: result.district,
+      subdistrict: result.subdistrict,
+      village: result.village,
+      rootNo: result.rootNo,
+      sequenceNo: result.sequenceNo,
+      prevPlotNo: result.prevPlotNo,
+      caneType: result.caneType,
+      caneVariety: result.caneVariety,
+      ownership: result.ownership,
+      terrain: result.terrain,
+      hasLoss: result.hasLoss,
+      lossRai: result.lossRai,
+      targetYield: result.targetYield,
+      note: result.note,
+      photos: result.photos,
+      draft: result.draft,
+    );
+    if (context.mounted && err != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err)),
+      );
+    }
   }
 }
