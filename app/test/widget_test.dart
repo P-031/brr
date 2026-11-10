@@ -3,9 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/main.dart';
-import 'package:brr/models/auth_session.dart';
-import 'package:brr/services/session_store.dart';
-import 'package:brr/viewmodels/auth_viewmodel.dart';
+import 'package:brr/features/auth/models/auth_session.dart';
+import 'package:brr/features/auth/data/session_store.dart';
+import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 
 /// In-memory store — no platform channels.
 class FakeSessionStore extends SessionStore {

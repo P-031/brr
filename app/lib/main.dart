@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'theme/app_theme.dart';
-import 'viewmodels/auth_viewmodel.dart';
-import 'views/auth_gate.dart';
+import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:brr/features/auth/views/auth_gate.dart';
 
 void main() {
   runApp(
