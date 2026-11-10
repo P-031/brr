@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/session_store.dart';
@@ -104,11 +105,11 @@ class _LoginViewState extends State<LoginView> {
                   ),
                   child: const CircleAvatar(
                     radius: 40,
-                    backgroundColor: AppColors.green,
+                    backgroundColor: Colors.white,
                     child: Icon(
-                      Icons.lock_outline,
+                      Iconsax.lock,
                       size: 40,
-                      color: AppColors.gold,
+                      color: AppColors.green,
                     ),
                   ),
                 ),
@@ -132,7 +133,7 @@ class _LoginViewState extends State<LoginView> {
                     decoration: _decoration(
                       label:
                           'เลือกบัญชีที่บันทึกไว้ (${vm.savedAccounts.length})',
-                      icon: Icons.people_outline,
+                      icon: Iconsax.people,
                     ),
                     items: [
                       for (final a in vm.savedAccounts)
@@ -159,7 +160,7 @@ class _LoginViewState extends State<LoginView> {
                     textInputAction: TextInputAction.next,
                     decoration: _decoration(
                       label: 'บัญชีผู้ใช้',
-                      icon: Icons.person_outline,
+                      icon: Iconsax.user,
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'กรุณากรอกบัญชีผู้ใช้'
@@ -178,7 +179,7 @@ class _LoginViewState extends State<LoginView> {
                     onFieldSubmitted: (_) => _submit(vm),
                     decoration: _decoration(
                       label: 'รหัสผ่าน',
-                      icon: Icons.lock_outline,
+                      icon: Iconsax.lock,
                       suffix: IconButton(
                         icon: Icon(
                           _obscurePassword
@@ -197,20 +198,29 @@ class _LoginViewState extends State<LoginView> {
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: vm.isBusy ? null : () => _submit(vm),
-                    icon: vm.isBusy
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.login),
-                    label: Text(
-                      vm.isBusy ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ',
+                  child: _PopButton(
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: vm.isBusy ? null : () => _submit(vm),
+                      icon: vm.isBusy
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Iconsax.login, size: 22),
+                      label: Text(
+                        vm.isBusy ? 'กำลังเข้าสู่ระบบ...' : 'เข้าสู่ระบบ',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -230,8 +240,18 @@ class _LoginViewState extends State<LoginView> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: vm.isBusy ? null : vm.signInWithBrowser,
-                    icon: const Icon(Icons.g_mobiledata, size: 28),
-                    label: const Text('เข้าสู่ระบบด้วย Google'),
+                    icon: Image.asset(
+                      'assets/images/google_logo.png',
+                      width: 22,
+                      height: 22,
+                    ),
+                    label: const Text(
+                      'เข้าสู่ระบบด้วย Google',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -246,6 +266,41 @@ class _LoginViewState extends State<LoginView> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Lifts its child slightly on mouse hover / press.
+class _PopButton extends StatefulWidget {
+  const _PopButton({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_PopButton> createState() => _PopButtonState();
+}
+
+class _PopButtonState extends State<_PopButton> {
+  bool _hover = false;
+  bool _pressed = false;
+
+  bool get _up => _hover || _pressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerDown: (_) => setState(() => _pressed = true),
+      onPointerUp: (_) => setState(() => _pressed = false),
+      onPointerCancel: (_) => setState(() => _pressed = false),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          transform: Matrix4.translationValues(0, _up ? -4 : 0, 0),
+          child: widget.child,
         ),
       ),
     );

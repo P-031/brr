@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import '../../theme/app_theme.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../map/map_view.dart';
+import '../notifications/notifications_view.dart';
 
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
@@ -32,6 +34,32 @@ class HomeView extends StatelessWidget {
             ),
             child: Column(
               children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsView(),
+                      ),
+                    ),
+                    customBorder: const CircleBorder(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: ValueListenableBuilder<int>(
+                        valueListenable: unreadNotifications,
+                        builder: (_, count, _) => Badge(
+                          isLabelVisible: count > 0,
+                          backgroundColor: Colors.red,
+                          child: const Icon(
+                            Iconsax.notification,
+                            color: Colors.white,
+                            size: 26,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
                 Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -82,7 +110,7 @@ class HomeView extends StatelessWidget {
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.wifi_off, size: 16, color: AppColors.green),
+                  Icon(Iconsax.wifi_square, size: 16, color: AppColors.green),
                   SizedBox(width: 8),
                   Text('ออฟไลน์ — แสดงข้อมูลที่บันทึกไว้'),
                 ],
@@ -94,7 +122,7 @@ class HomeView extends StatelessWidget {
               padding: const EdgeInsets.all(16),
               children: [
                 _MenuCard(
-                  icon: Icons.straighten,
+                  icon: Iconsax.rulerpen,
                   title: 'วัดพื้นที่',
                   subtitle: 'ดูแปลงและคำนวณพื้นที่จากพิกัด',
                   onTap: () => Navigator.of(context).push(
@@ -137,7 +165,7 @@ class _MenuCard extends StatelessWidget {
         leading: Icon(icon, size: 40, color: AppColors.green),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.chevron_right, color: AppColors.gold),
+        trailing: const Icon(Iconsax.arrow_right_3, color: AppColors.gold),
         onTap: onTap,
       ),
     );

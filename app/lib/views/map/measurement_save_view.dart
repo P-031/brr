@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../models/parcel.dart';
@@ -220,7 +221,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
       },
       child: InputDecorator(
         decoration: _deco(label, icon, filled: selected != null).copyWith(
-          suffixIcon: const Icon(Icons.arrow_drop_down),
+          suffixIcon: const Icon(Iconsax.arrow_down),
         ),
         child: Text(
           selected ?? 'แตะเพื่อเลือก',
@@ -320,7 +321,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             _tf(
               _nameCtrl,
               'ชื่อแปลง',
-              Icons.edit_outlined,
+              Iconsax.edit,
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'กรุณากรอกชื่อแปลง' : null,
             ),
@@ -328,13 +329,13 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             _tf(
               _yearCtrl,
               'ปีการผลิต',
-              Icons.date_range_outlined,
+              Iconsax.calendar,
               keyboard: TextInputType.number,
             ),
             const SizedBox(height: 16),
             _picker(
               'นักส่งเสริมผู้ดูแล',
-              Icons.supervisor_account_outlined,
+              Iconsax.profile_2user,
               _items(widget.officers),
               _officer,
               (v) => setState(() => _officer = v),
@@ -342,7 +343,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'โครงการส่งเสริม',
-              Icons.folder_special_outlined,
+              Iconsax.folder,
               _static(_projects),
               _project,
               (v) => setState(() => _project = v),
@@ -350,7 +351,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'ชาวไร่',
-              Icons.person_outline,
+              Iconsax.user,
               _items(widget.farmers),
               _farmer,
               (v) => setState(() => _farmer = v),
@@ -358,7 +359,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'กลุ่มสร้างอ้อย (กลุ่มบำรุง)',
-              Icons.groups_outlined,
+              Iconsax.people,
               _items(widget.caneGroups),
               _caneGroup,
               (v) => setState(() => _caneGroup = v),
@@ -374,7 +375,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 12),
             _picker(
               'เขต',
-              Icons.location_on_outlined,
+              Iconsax.location,
               _static(_zones),
               _zone,
               (v) => setState(() => _zone = v),
@@ -382,7 +383,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'จังหวัด',
-              Icons.location_on_outlined,
+              Iconsax.location,
               _static(_provinces),
               _province,
               (v) => setState(() => _province = v),
@@ -390,7 +391,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'อำเภอ',
-              Icons.location_on_outlined,
+              Iconsax.location,
               _static(_districts),
               _district,
               (v) => setState(() => _district = v),
@@ -398,7 +399,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'ตำบล',
-              Icons.location_on_outlined,
+              Iconsax.location,
               _static(_subdistricts),
               _subdistrict,
               (v) => setState(() => _subdistrict = v),
@@ -406,15 +407,24 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'หมู่บ้าน',
-              Icons.location_on_outlined,
+              Iconsax.location,
               _static(_villages),
               _village,
               (v) => setState(() => _village = v),
             ),
             const SizedBox(height: 16),
+            const SizedBox(height: 24),
+            const Text(
+              'เลขแปลงปีก่อน',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: AppColors.green,
+              ),
+            ),
+            const SizedBox(height: 12),
             _picker(
               'เลขแปลงปีก่อน',
-              Icons.history_outlined,
+              Iconsax.clock,
               _static(_prevPlots),
               _prevPlot,
               (v) => setState(() => _prevPlot = v),
@@ -423,14 +433,14 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             _tf(
               _rootCtrl,
               'รูท',
-              Icons.pin_outlined,
+              Iconsax.hashtag,
               keyboard: TextInputType.number,
             ),
             const SizedBox(height: 16),
             _tf(
               _seqCtrl,
               'ลำดับ',
-              Icons.format_list_numbered,
+              Iconsax.task_square,
               keyboard: TextInputType.number,
             ),
             const SizedBox(height: 24),
@@ -444,7 +454,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 12),
             _picker(
               'ประเภทอ้อย',
-              Icons.grass_outlined,
+              Iconsax.hierarchy,
               _static(_caneTypes),
               _caneType,
               (v) => setState(() => _caneType = v),
@@ -452,7 +462,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'เลือกพันธุ์อ้อย',
-              Icons.eco_outlined,
+              Iconsax.tree,
               _static(_caneVarieties),
               _caneVariety,
               (v) => setState(() => _caneVariety = v),
@@ -460,7 +470,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'การถือครอง',
-              Icons.landscape_outlined,
+              Iconsax.map_1,
               _static(_ownerships),
               _ownership,
               (v) => setState(() => _ownership = v),
@@ -468,7 +478,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             _picker(
               'ระดับพื้นที่',
-              Icons.terrain_outlined,
+              Iconsax.convert_3d_cube,
               _static(_terrains),
               _terrain,
               (v) => setState(() => _terrain = v),
@@ -484,7 +494,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 12),
             _picker(
               'มีพื้นที่สูญเสีย',
-              Icons.report_gmailerrorred_outlined,
+              Iconsax.danger,
               _static(_lossOptions),
               _hasLoss,
               (v) => setState(() => _hasLoss = v),
@@ -493,7 +503,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             _tf(
               _lossCtrl,
               'พื้นที่สูญเสีย (ไร่)',
-              Icons.straighten,
+              Iconsax.ruler,
               keyboard: TextInputType.number,
             ),
             const SizedBox(height: 24),
@@ -508,7 +518,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             _tf(
               _targetCtrl,
               'เป้าหมายผลผลิต (ตัน/ไร่)',
-              Icons.flag_outlined,
+              Iconsax.flag,
               keyboard: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -517,7 +527,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             InputDecorator(
               decoration: _deco(
                 'เป้าหมายผลผลิต (ตันรวม)',
-                Icons.calculate_outlined,
+                Iconsax.calculator,
               ),
               child: Text(
                 _totalYield,
@@ -590,7 +600,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                                     radius: 11,
                                     backgroundColor: Colors.white,
                                     child: Icon(
-                                      Icons.close,
+                                      Iconsax.close_circle,
                                       size: 16,
                                       color: Colors.black87,
                                     ),
@@ -608,7 +618,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                       child: OutlinedButton.icon(
                         onPressed:
                             _photos.length < 3 ? _pickPhoto : null,
-                        icon: const Icon(Icons.camera_alt_outlined),
+                        icon: const Icon(Iconsax.camera),
                         label: const Text(
                           'ถ่ายภาพ',
                           style: TextStyle(fontSize: 15),
@@ -636,7 +646,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               height: 52,
               child: OutlinedButton.icon(
                 onPressed: () => _save(draft: true),
-                icon: const Icon(Icons.save_outlined),
+                icon: const Icon(Iconsax.save_2),
                 label: const Text(
                   'บันทึกข้อมูลลงเครื่อง (ฉบับร่าง)',
                   style: TextStyle(fontSize: 16),
@@ -694,7 +704,7 @@ class _PickerSheetState extends State<_PickerSheet> {
               decoration: InputDecoration(
                 hintText: 'ค้นหาด้วย รหัส หรือ ชื่อ ได้ที่นี่',
                 hintStyle: const TextStyle(fontSize: 15),
-                prefixIcon: const Icon(Icons.search),
+                prefixIcon: const Icon(Iconsax.search_normal),
                 filled: true,
                 fillColor: Colors.grey.shade100,
                 border: OutlineInputBorder(
@@ -727,7 +737,7 @@ class _PickerSheetState extends State<_PickerSheet> {
                       return Card(
                         child: ListTile(
                           leading: const CircleAvatar(
-                            child: Icon(Icons.person_outline),
+                            child: Icon(Iconsax.user),
                           ),
                           title: Text(
                             'ชื่อ: ${it.name}',

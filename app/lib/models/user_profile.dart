@@ -5,6 +5,8 @@ class UserProfile {
     required this.username,
     this.name,
     this.email,
+    this.phone,
+    this.photoPath,
   });
 
   /// `sub` claim.
@@ -15,6 +17,10 @@ class UserProfile {
   final String? name;
   final String? email;
 
+  /// Locally-edited fields — backend will own these eventually.
+  final String? phone;
+  final String? photoPath;
+
   factory UserProfile.fromClaims(Map<String, dynamic> claims) {
     return UserProfile(
       id: claims['sub'] as String? ?? '',
@@ -23,6 +29,16 @@ class UserProfile {
       email: claims['email'] as String?,
     );
   }
+
+  UserProfile copyWith({String? email, String? phone, String? photoPath}) =>
+      UserProfile(
+        id: id,
+        username: username,
+        name: name,
+        email: email ?? this.email,
+        phone: phone ?? this.phone,
+        photoPath: photoPath ?? this.photoPath,
+      );
 
   String get displayName => (name?.isNotEmpty ?? false) ? name! : username;
 }
