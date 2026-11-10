@@ -1,0 +1,17 @@
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: brr-keycloak
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Fixed issuer so tokens match the backend's KEYCLOAK_ISSUER
+      # even when the Android emulator reaches it via 10.0.2.2.
+      KC_HOSTNAME: http://127.0.0.1:8080
+      KC_HOSTNAME_STRICT: 'false'
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    restart: unless-stopped

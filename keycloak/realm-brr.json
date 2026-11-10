@@ -1,0 +1,115 @@
+{
+  "realm": "brr",
+  "enabled": true,
+  "displayName": "BRR",
+  "sslRequired": "none",
+  "registrationAllowed": true,
+  "rememberMe": true,
+  "ssoSessionIdleTimeout": 604800,
+  "ssoSessionMaxLifespan": 604800,
+  "clients": [
+    {
+      "clientId": "brr-app",
+      "name": "BRR Mobile App",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "com.brr.brr://oauthredirect"
+      ],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "com.brr.brr://oauthredirect"
+      },
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "offline_access",
+        "address",
+        "phone",
+        "microprofile-jwt"
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "config": {
+        "clientId": "YOUR_GOOGLE_CLIENT_ID",
+        "clientSecret": "YOUR_GOOGLE_CLIENT_SECRET",
+        "syncMode": "IMPORT",
+        "useJwksUrl": "true"
+      }
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "farmer" },
+      { "name": "officer" }
+    ]
+  },
+  "users": [
+    {
+      "username": "farmer1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Farmer",
+      "lastName": "One",
+      "email": "farmer1@brr.local",
+      "realmRoles": ["farmer"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "farmer1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "officer1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Officer",
+      "lastName": "One",
+      "email": "officer1@brr.local",
+      "realmRoles": ["officer"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "officer1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "test",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Test",
+      "lastName": "User",
+      "email": "test@brr.local",
+      "realmRoles": ["farmer"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test1234",
+          "temporary": false
+        }
+      ]
+    }
+  ]
+}

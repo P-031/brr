@@ -27,6 +27,10 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // OAuth redirect scheme used by flutter_appauth / Keycloak login.
+        // Must match the scheme in lib/config/keycloak_config.dart.
+        manifestPlaceholders["appAuthRedirectScheme"] = "com.brr.brr"
     }
 
     buildTypes {
