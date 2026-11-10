@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
@@ -93,7 +94,7 @@ class _MapBody extends StatelessWidget {
                               width: 40,
                               height: 40,
                               child: const Icon(
-                                Icons.location_pin,
+                                Iconsax.location_tick,
                                 color: AppColors.green,
                                 size: 40,
                               ),
@@ -104,7 +105,7 @@ class _MapBody extends StatelessWidget {
                               width: 24,
                               height: 24,
                               child: const Icon(
-                                Icons.circle,
+                                Iconsax.record_circle,
                                 color: AppColors.gold,
                                 size: 16,
                               ),
@@ -157,7 +158,7 @@ class _BottomBar extends StatelessWidget {
                         onPressed: vm.draft.isEmpty
                             ? null
                             : vm.undoDraftPoint,
-                        icon: const Icon(Icons.undo),
+                        icon: const Icon(Iconsax.undo),
                         label: const Text('ย้อนกลับ'),
                       ),
                     ),
@@ -165,7 +166,7 @@ class _BottomBar extends StatelessWidget {
                     Expanded(
                       child: FilledButton.icon(
                         onPressed: () => _finish(context),
-                        icon: const Icon(Icons.check),
+                        icon: const Icon(Iconsax.tick_circle),
                         label: const Text('เสร็จสิ้น'),
                       ),
                     ),
@@ -177,7 +178,7 @@ class _BottomBar extends StatelessWidget {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: vm.startDrawing,
-                icon: const Icon(Icons.add_location_alt_outlined),
+                icon: const Icon(Iconsax.location_add),
                 label: const Text('เพิ่มพิกัด'),
               ),
             ),

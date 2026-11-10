@@ -49,6 +49,54 @@ class AuthViewModel extends ChangeNotifier {
   String? get error => _error;
   UserProfile? get user => _session?.user;
 
+  /// Saves profile edits — persists locally until the backend
+  /// profile endpoint exists (TODO: PATCH /accounts/me).
+  Future<void> updateProfile({
+    String? email,
+    String? phone,
+    String? photoPath,
+  }) async {
+    final s = _session;
+    if (s == null) return;
+    final u = s.user.copyWith(
+      email: email,
+      phone: phone,
+      photoPath: photoPath,
+    );
+    _session = AuthSession(
+      accessToken: s.accessToken,
+      user: u,
+      refreshToken: s.refreshToken,
+      idToken: s.idToken,
+      accessTokenExpiry: s.accessTokenExpiry,
+    );
+    if (photoPath != null) {
+      await _store.savePhotoPath(u.username, photoPath);
+    }
+    notifyListeners();
+  }
+
+  /// Re-attaches the locally-saved profile photo after sign-in/refresh.
+  Future<AuthSession> _attachPhoto(AuthSession s) async {
+    final p = await _store.readPhotoPath(s.user.username);
+    if (p == null) return s;
+    return AuthSession(
+      accessToken: s.accessToken,
+      user: s.user.copyWith(photoPath: p),
+      refreshToken: s.refreshToken,
+      idToken: s.idToken,
+      accessTokenExpiry: s.accessTokenExpiry,
+    );
+  }
+
+  /// Changes the password via Keycloak — TODO: POST the account
+  /// credentials endpoint once wired; returns an error string or
+  /// null on success.
+  Future<String?> changePassword({
+    required String oldPassword,
+    required String newPassword,
+  }) async => 'ยังไม่เปิดใช้งาน';
+
   /// Backend API client — injects the current access token as Bearer
   /// and refreshes once on 401. Use for all future backend calls.
   late final ApiClient api = ApiClient(getAccessToken: getAccessToken);
@@ -91,9 +139,11 @@ class AuthViewModel extends ChangeNotifier {
       return;
     }
     try {
-      _session = await _auth.refresh(
-        saved.refreshToken,
-        fallbackIdToken: saved.idToken,
+      _session = await _attachPhoto(
+        await _auth.refresh(
+          saved.refreshToken,
+          fallbackIdToken: saved.idToken,
+        ),
       );
       _status = AuthStatus.authenticated;
       _offline = false;
@@ -106,12 +156,14 @@ class AuthViewModel extends ChangeNotifier {
       // cached profile and retry refresh when the network returns.
       final idToken = saved.idToken;
       if (idToken != null) {
-        _session = AuthSession(
-          accessToken: '',
-          refreshToken: saved.refreshToken,
-          idToken: idToken,
-          user: UserProfile.fromClaims(
-            AuthService.decodeJwt(idToken) ?? const {},
+        _session = await _attachPhoto(
+          AuthSession(
+            accessToken: '',
+            refreshToken: saved.refreshToken,
+            idToken: idToken,
+            user: UserProfile.fromClaims(
+              AuthService.decodeJwt(idToken) ?? const {},
+            ),
           ),
         );
         _status = AuthStatus.authenticated;
@@ -129,7 +181,9 @@ class AuthViewModel extends ChangeNotifier {
     _status = AuthStatus.authenticating;
     notifyListeners();
     try {
-      _session = await _auth.loginWithPassword(username, password);
+      _session = await _attachPhoto(
+        await _auth.loginWithPassword(username, password),
+      );
       _status = AuthStatus.authenticated;
       await _store.save(_session!);
       await _remember(_session!);
@@ -150,7 +204,7 @@ class AuthViewModel extends ChangeNotifier {
     _status = AuthStatus.authenticating;
     notifyListeners();
     try {
-      _session = await _auth.login();
+      _session = await _attachPhoto(await _auth.login());
       _status = AuthStatus.authenticated;
       await _store.save(_session!);
       await _remember(_session!);
@@ -171,9 +225,11 @@ class AuthViewModel extends ChangeNotifier {
     _status = AuthStatus.authenticating;
     notifyListeners();
     try {
-      _session = await _auth.refresh(
-        account.refreshToken,
-        fallbackIdToken: account.idToken,
+      _session = await _attachPhoto(
+        await _auth.refresh(
+          account.refreshToken,
+          fallbackIdToken: account.idToken,
+        ),
       );
       _status = AuthStatus.authenticated;
       await _store.save(_session!);
@@ -232,7 +288,9 @@ class AuthViewModel extends ChangeNotifier {
     final rt = _session?.refreshToken;
     if (rt == null) return;
     try {
-      _session = await _auth.refresh(rt, fallbackIdToken: _session?.idToken);
+      _session = await _attachPhoto(
+        await _auth.refresh(rt, fallbackIdToken: _session?.idToken),
+      );
       _offline = false;
       await _store.save(_session!);
     } on AuthException {

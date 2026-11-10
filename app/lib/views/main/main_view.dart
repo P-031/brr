@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax/iconsax.dart';
 
 import '../../theme/app_theme.dart';
 import '../home/home_view.dart';
@@ -44,9 +45,9 @@ class _MainViewState extends State<MainView> {
               ),
               child: Row(
                 children: [
-                  _navItem(0, Icons.home_outlined, 'หน้าหลัก'),
-                  _navItem(1, Icons.checklist, 'สถานะแปลง'),
-                  _navItem(2, Icons.menu, 'เมนู'),
+                  _navItem(0, Iconsax.home, 'หน้าหลัก'),
+                  _navItem(1, Iconsax.document_text, 'สถานะแปลง'),
+                  _navItem(2, Iconsax.element_3, 'เมนู'),
                 ],
               ),
             ),

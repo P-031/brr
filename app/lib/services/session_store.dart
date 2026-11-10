@@ -78,6 +78,13 @@ class SessionStore {
     );
   }
 
+  /// Per-user profile photo path (local until the backend stores it).
+  Future<void> savePhotoPath(String username, String path) =>
+      _storage.write(key: 'profile.photo.$username', value: path);
+
+  Future<String?> readPhotoPath(String username) =>
+      _storage.read(key: 'profile.photo.$username');
+
   Future<void> clear() async {
     await _storage.delete(key: _kRefreshToken);
     await _storage.delete(key: _kIdToken);

@@ -11,12 +11,17 @@ class Parcel {
     required this.points,
     this.variety,
     this.owner,
+    this.status,
   });
 
   final String id;
   final String name;
   final String? variety;
   final String? owner;
+
+  /// Approval status — backend supplies it later; until then items
+  /// land in the 'รออนุมัติ' tab.
+  final String? status;
   final List<LatLng> points;
 
   /// Backend `/plots/map` item — outline is a list of
@@ -36,6 +41,7 @@ class Parcel {
       name: '${json['name']}',
       variety: json['variety'] as String?,
       owner: farmer?['displayName'] as String?,
+      status: json['status'] as String?,
       points: outline,
     );
   }
