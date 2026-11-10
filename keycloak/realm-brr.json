@@ -56,7 +56,45 @@
       }
     }
   ],
+  "roles": {
+    "realm": [
+      { "name": "farmer" },
+      { "name": "officer" }
+    ]
+  },
   "users": [
+    {
+      "username": "farmer1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Farmer",
+      "lastName": "One",
+      "email": "farmer1@brr.local",
+      "realmRoles": ["farmer"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "farmer1234",
+          "temporary": false
+        }
+      ]
+    },
+    {
+      "username": "officer1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Officer",
+      "lastName": "One",
+      "email": "officer1@brr.local",
+      "realmRoles": ["officer"],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "officer1234",
+          "temporary": false
+        }
+      ]
+    },
     {
       "username": "test",
       "enabled": true,
@@ -64,6 +102,7 @@
       "firstName": "Test",
       "lastName": "User",
       "email": "test@brr.local",
+      "realmRoles": ["farmer"],
       "credentials": [
         {
           "type": "password",
