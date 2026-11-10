@@ -4,6 +4,7 @@ import { requireAuth } from "./auth";
 import { errorHandler } from "./http";
 import { accountRouter } from "./routes/account";
 import { fieldRouter } from "./routes/plots";
+import { syncRouter } from "./routes/sync";
 
 export function createApp() {
   const app = express();
@@ -18,6 +19,7 @@ export function createApp() {
   app.use(requireAuth);
   app.use(accountRouter);
   app.use(fieldRouter);
+  app.use(syncRouter);
   app.use((_req, res) => {
     res.status(404).json({ error: "ไม่พบเส้นทาง" });
   });

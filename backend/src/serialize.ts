@@ -49,7 +49,10 @@ export function plotSummary(plot: {
   areaSqm: number;
   centerLat: number;
   centerLng: number;
+  version: number;
+  surveyedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
   farmer: { id: string; username: string; displayName: string };
 }) {
   return {
@@ -58,7 +61,10 @@ export function plotSummary(plot: {
     variety: plot.variety,
     ...areaFields(plot.areaSqm),
     center: { latitude: plot.centerLat, longitude: plot.centerLng },
+    version: plot.version,
+    surveyedAt: plot.surveyedAt?.toISOString() ?? null,
     createdAt: plot.createdAt.toISOString(),
+    updatedAt: plot.updatedAt.toISOString(),
     farmer: {
       id: plot.farmer.id,
       username: plot.farmer.username,
@@ -80,7 +86,9 @@ export function yieldJson(record: {
   plotId: string;
   season: string;
   weightTons: number;
+  version: number;
   createdAt: Date;
+  updatedAt: Date;
   areaSqm: number;
 }) {
   return {
@@ -89,7 +97,9 @@ export function yieldJson(record: {
     season: record.season,
     weightTons: record.weightTons,
     tonsPerRai: tonsPerRai(record.weightTons, record.areaSqm),
+    version: record.version,
     createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
   };
 }
 
@@ -99,6 +109,8 @@ export function taskJson(task: {
   kind: keyof typeof taskName;
   date: Date;
   done: boolean;
+  version: number;
+  updatedAt: Date;
 }) {
   return {
     id: task.id,
@@ -106,5 +118,27 @@ export function taskJson(task: {
     kind: taskName[task.kind],
     date: formatDate(task.date),
     done: task.done,
+    version: task.version,
+    updatedAt: task.updatedAt.toISOString(),
+  };
+}
+
+export function surveyJson(survey: {
+  id: string;
+  plotId: string;
+  startedAt: Date;
+  finishedAt: Date;
+  corners: unknown;
+  areaSqm: number;
+  createdAt: Date;
+}) {
+  return {
+    id: survey.id,
+    plotId: survey.plotId,
+    startedAt: survey.startedAt.toISOString(),
+    finishedAt: survey.finishedAt.toISOString(),
+    corners: survey.corners,
+    ...areaFields(survey.areaSqm),
+    createdAt: survey.createdAt.toISOString(),
   };
 }
