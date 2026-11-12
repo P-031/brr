@@ -1,45 +1,68 @@
-import { Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { currentUser } from "../auth";
-import { normalizeRing, polygonAreaSqm, ringCenter, type LatLng } from "../area";
-import { plotsInBox, readBoundary, ringFromGeoJson, writeBoundary } from "../boundary";
+import { isValidRing, lockBoundaries, overlappingPlots, plotsInBox, ringFromGeoJson, writeBoundary } from "../boundary";
 import { decodeCursor, encodeCursor } from "../cursor";
 import { HttpError, route } from "../http";
+import { baseVersion, clientId, refuseDeleted, versionConflict, versionQuery, wasDeletedBy } from "../offline";
+import { blockingOverlaps, overlapError } from "../overlap";
+import { farmerIdsForList, ownedPlot, requireFarmer, summarySelect, toDetail, visiblePlot } from "../plotAccess";
 import { prisma } from "../prisma";
-import { plotDetail, plotSummary, taskJson, taskKindByName, yieldJson } from "../serialize";
-import type { AuthUser } from "../types";
+import { areaFields, plotSummary, surveyJson, taskJson, taskKindByName, yieldJson } from "../serialize";
+import { measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
 
-const pointSchema = z.object({
+const isoTime = z
+  .string()
+  .datetime({ offset: true })
+  .transform((value) => new Date(value));
+
+const cornerSchema = z.object({
   latitude: z.number().finite().gte(-90).lte(90),
   longitude: z.number().finite().gte(-180).lte(180),
+  accuracyM: z.number().finite().positive().max(10_000),
+  capturedAt: isoTime,
 });
 
-const pointsSchema = z.array(pointSchema).min(3).max(2000);
+/** One more corner than the rule allows, in case the walk ends back on the first corner. */
+const surveySchema = z.object({
+  startedAt: isoTime,
+  finishedAt: isoTime,
+  corners: z.array(cornerSchema).min(surveyRules.minCorners).max(surveyRules.maxCorners + 1),
+});
 
 const createPlotBody = z.object({
+  id: clientId,
   name: z.string().trim().min(1).max(120),
   variety: z.string().trim().max(120).default(""),
-  points: pointsSchema,
+  survey: surveySchema,
 });
 
 const updatePlotBody = z
   .object({
+    version: baseVersion,
     name: z.string().trim().min(1).max(120).optional(),
     variety: z.string().trim().max(120).optional(),
-    points: pointsSchema.optional(),
+    survey: surveySchema.optional(),
   })
-  .refine((value) => value.name !== undefined || value.variety !== undefined || value.points !== undefined, {
+  .refine((value) => value.name !== undefined || value.variety !== undefined || value.survey !== undefined, {
     message: "ไม่มีข้อมูลให้แก้",
   });
 
+const overlapCheckBody = z.object({
+  survey: surveySchema,
+  plotId: z.string().trim().min(1).max(64).optional(),
+});
+
 const yieldBody = z.object({
+  id: clientId,
   season: z.string().trim().min(1).max(80),
   weightTons: z.number().finite().nonnegative(),
 });
 
 const updateYieldBody = z
   .object({
+    version: baseVersion,
     season: z.string().trim().min(1).max(80).optional(),
     weightTons: z.number().finite().nonnegative().optional(),
   })
@@ -50,6 +73,7 @@ const updateYieldBody = z
 const taskNames = ["ปลูก", "ใส่ปุ๋ย", "พ่นยา", "ตัดอ้อย"] as const;
 
 const taskBody = z.object({
+  id: clientId,
   kind: z.enum(taskNames),
   date: z.string(),
   done: z.boolean().default(false),
@@ -57,6 +81,7 @@ const taskBody = z.object({
 
 const updateTaskBody = z
   .object({
+    version: baseVersion,
     kind: z.enum(taskNames).optional(),
     date: z.string().optional(),
     done: z.boolean().optional(),
@@ -65,17 +90,8 @@ const updateTaskBody = z
     message: "ไม่มีข้อมูลให้แก้",
   });
 
-const summarySelect = {
-  id: true,
-  name: true,
-  variety: true,
-  areaSqm: true,
-  centerLat: true,
-  centerLng: true,
-  createdAt: true,
-  farmerId: true,
-  farmer: { select: { id: true, username: true, displayName: true } },
-} satisfies Prisma.PlotSelect;
+/** Boundary saves wait on one lock, so give them longer than Prisma's 5 second default. */
+const boundaryTx = { maxWait: 10_000, timeout: 20_000 };
 
 function pathId(value: unknown): string {
   const picked = Array.isArray(value) ? value[0] : value;
@@ -97,62 +113,40 @@ function parseDate(value: string): Date {
   return date;
 }
 
-function measuredRing(points: LatLng[]) {
-  const ring = normalizeRing(points);
-  if (ring.length < 3) throw new HttpError(400, "ขอบแปลงต้องมีอย่างน้อย 3 จุด");
-  const areaSqm = polygonAreaSqm(ring);
-  if (!(areaSqm > 0)) throw new HttpError(400, "จุดขอบแปลงคำนวณพื้นที่ไม่ได้");
-  return { ring, areaSqm, center: ringCenter(ring) };
-}
-
-async function farmerIdsForList(user: AuthUser, requestedFarmerId: string | undefined): Promise<string[]> {
-  if (user.role === "FARMER") return [user.id];
-
-  const links = await prisma.farmerCare.findMany({
-    where: { officerId: user.id },
-    select: { farmerId: true },
-  });
-  const assigned = new Set(links.map((link) => link.farmerId));
-  if (!requestedFarmerId) return [...assigned];
-  if (!assigned.has(requestedFarmerId)) throw new HttpError(404, "ไม่พบชาวไร่");
-  return [requestedFarmerId];
-}
-
-async function visiblePlot(user: AuthUser, plotId: string) {
-  const plot = await prisma.plot.findUnique({
-    where: { id: plotId },
-    select: summarySelect,
-  });
-  if (!plot) throw new HttpError(404, "ไม่พบแปลง");
-
-  if (user.role === "FARMER") {
-    if (plot.farmerId !== user.id) throw new HttpError(404, "ไม่พบแปลง");
-    return plot;
-  }
-
-  const link = await prisma.farmerCare.findUnique({
-    where: { officerId_farmerId: { officerId: user.id, farmerId: plot.farmerId } },
-  });
-  if (!link) throw new HttpError(404, "ไม่พบแปลง");
-  return plot;
-}
-
-async function ownedPlot(user: AuthUser, plotId: string) {
-  if (user.role !== "FARMER") throw new HttpError(403, "เฉพาะชาวไร่ที่แก้ข้อมูลได้");
-  const plot = await prisma.plot.findUnique({ where: { id: plotId } });
-  if (!plot || plot.farmerId !== user.id) throw new HttpError(404, "ไม่พบแปลง");
-  return plot;
-}
-
-async function toDetail(plot: Awaited<ReturnType<typeof visiblePlot>>) {
-  return plotDetail({ ...plot, points: await readBoundary(plot.id) });
-}
-
 function coordinate(value: unknown, min: number, max: number) {
   return z.coerce.number().finite().gte(min).lte(max).parse(queryText(value));
 }
 
+/** Call with the boundary lock held. */
+async function assertFits(tx: Prisma.TransactionClient, measured: MeasuredSurvey, farmerId: string, plotId?: string) {
+  if (!(await isValidRing(tx, measured.ring))) {
+    throw new HttpError(400, "ขอบแปลงไม่ถูกต้อง", { code: "SURVEY_INVALID" });
+  }
+  const rows = await overlappingPlots(tx, measured.ring, plotId);
+  const conflicts = blockingOverlaps(rows, measured.areaSqm, farmerId);
+  if (conflicts.length > 0) throw overlapError(conflicts);
+}
+
+function surveyRecord(plotId: string, survey: Survey, measured: MeasuredSurvey) {
+  return {
+    plotId,
+    startedAt: survey.startedAt,
+    finishedAt: survey.finishedAt,
+    areaSqm: measured.areaSqm,
+    corners: measured.corners.map((corner) => ({
+      latitude: corner.latitude,
+      longitude: corner.longitude,
+      accuracyM: corner.accuracyM,
+      capturedAt: corner.capturedAt.toISOString(),
+    })),
+  };
+}
+
 export const fieldRouter = Router();
+
+fieldRouter.get("/survey-rules", (_req, res) => {
+  res.json(surveyRules);
+});
 
 fieldRouter.get(
   "/plots",
@@ -237,31 +231,61 @@ fieldRouter.get(
   }),
 );
 
+/** Same checks as saving, without saving. Lets the app warn while the farmer is still in the field. */
+fieldRouter.post(
+  "/plots/overlap-check",
+  route(async (req, res) => {
+    const user = currentUser(req);
+    requireFarmer(user);
+    const body = overlapCheckBody.parse(req.body);
+    if (body.plotId) await ownedPlot(user, body.plotId);
+
+    const measured = measureSurvey(body.survey, new Date());
+    const rows = await overlappingPlots(prisma, measured.ring, body.plotId);
+    res.json({
+      ...areaFields(measured.areaSqm),
+      points: measured.ring,
+      conflicts: blockingOverlaps(rows, measured.areaSqm, user.id),
+    });
+  }),
+);
+
 fieldRouter.post(
   "/plots",
   route(async (req, res) => {
     const user = currentUser(req);
     if (user.role !== "FARMER") throw new HttpError(403, "เฉพาะชาวไร่ที่สร้างแปลงได้");
-
     const body = createPlotBody.parse(req.body);
-    const measured = measuredRing(body.points);
-    const plotId = await prisma.$transaction(async (tx) => {
-      const created = await tx.plot.create({
+
+    const existing = await prisma.plot.findUnique({ where: { id: body.id }, select: { farmerId: true } });
+    if (existing) {
+      if (existing.farmerId !== user.id) throw new HttpError(409, "รหัสแปลงนี้ถูกใช้แล้ว");
+      res.json(await toDetail(await visiblePlot(user, body.id)));
+      return;
+    }
+    await refuseDeleted("PLOT", body.id);
+
+    const measured = measureSurvey(body.survey, new Date());
+    await prisma.$transaction(async (tx) => {
+      await lockBoundaries(tx);
+      await assertFits(tx, measured, user.id);
+      await tx.plot.create({
         data: {
+          id: body.id,
           farmerId: user.id,
           name: body.name,
           variety: body.variety,
           areaSqm: measured.areaSqm,
           centerLat: measured.center.latitude,
           centerLng: measured.center.longitude,
+          surveyedAt: body.survey.finishedAt,
         },
-        select: { id: true },
       });
-      await writeBoundary(tx, created.id, measured.ring);
-      return created.id;
-    });
+      await writeBoundary(tx, body.id, measured.ring);
+      await tx.plotSurvey.create({ data: surveyRecord(body.id, body.survey, measured) });
+    }, boundaryTx);
 
-    res.status(201).json(await toDetail(await visiblePlot(user, plotId)));
+    res.status(201).json(await toDetail(await visiblePlot(user, body.id)));
   }),
 );
 
@@ -280,23 +304,35 @@ fieldRouter.patch(
     const plotId = pathId(req.params.plotId);
     await ownedPlot(user, plotId);
     const body = updatePlotBody.parse(req.body);
-    const measured = body.points ? measuredRing(body.points) : undefined;
+    const survey = body.survey;
+    const measured = survey ? measureSurvey(survey, new Date()) : undefined;
 
-    await prisma.$transaction(async (tx) => {
-      await tx.plot.update({
-        where: { id: plotId },
+    const saved = await prisma.$transaction(async (tx) => {
+      if (measured) await lockBoundaries(tx);
+      const updated = await tx.plot.updateMany({
+        where: { id: plotId, version: body.version },
         data: {
           name: body.name,
           variety: body.variety,
           areaSqm: measured?.areaSqm,
           centerLat: measured?.center.latitude,
           centerLng: measured?.center.longitude,
+          surveyedAt: survey?.finishedAt,
+          version: { increment: 1 },
         },
       });
-      if (measured) await writeBoundary(tx, plotId, measured.ring);
-    });
+      if (updated.count === 0) return false;
+      if (survey && measured) {
+        await assertFits(tx, measured, user.id, plotId);
+        await writeBoundary(tx, plotId, measured.ring);
+        await tx.plotSurvey.create({ data: surveyRecord(plotId, survey, measured) });
+      }
+      return true;
+    }, boundaryTx);
 
-    res.json(await toDetail(await visiblePlot(user, plotId)));
+    const detail = await toDetail(await visiblePlot(user, plotId));
+    if (!saved) throw versionConflict(detail);
+    res.json(detail);
   }),
 );
 
@@ -304,10 +340,39 @@ fieldRouter.delete(
   "/plots/:plotId",
   route(async (req, res) => {
     const user = currentUser(req);
+    requireFarmer(user);
     const plotId = pathId(req.params.plotId);
-    await ownedPlot(user, plotId);
-    await prisma.plot.delete({ where: { id: plotId } });
+    const version = versionQuery(req.query.version);
+
+    const plot = await prisma.plot.findUnique({ where: { id: plotId }, select: { farmerId: true } });
+    if (!plot || plot.farmerId !== user.id) {
+      if (await wasDeletedBy("PLOT", plotId, user.id)) {
+        res.status(204).send();
+        return;
+      }
+      throw new HttpError(404, "ไม่พบแปลง");
+    }
+
+    const removed = await prisma.$transaction(async (tx) => {
+      const result = await tx.plot.deleteMany({ where: { id: plotId, ...(version ? { version } : {}) } });
+      if (result.count === 0) return false;
+      await tx.deletedRecord.create({ data: { kind: "PLOT", recordId: plotId, farmerId: user.id } });
+      return true;
+    });
+    if (!removed) throw versionConflict(await toDetail(await visiblePlot(user, plotId)));
     res.status(204).send();
+  }),
+);
+
+fieldRouter.get(
+  "/plots/:plotId/surveys",
+  route(async (req, res) => {
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const surveys = await prisma.plotSurvey.findMany({
+      where: { plotId: plot.id },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ items: surveys.map(surveyJson) });
   }),
 );
 
@@ -331,8 +396,17 @@ fieldRouter.post(
     const user = currentUser(req);
     const plot = await ownedPlot(user, pathId(req.params.plotId));
     const body = yieldBody.parse(req.body);
+
+    const existing = await prisma.yieldRecord.findUnique({ where: { id: body.id } });
+    if (existing) {
+      if (existing.plotId !== plot.id) throw new HttpError(409, "รหัสผลผลิตนี้ถูกใช้แล้ว");
+      res.json(yieldJson({ ...existing, areaSqm: plot.areaSqm }));
+      return;
+    }
+    await refuseDeleted("YIELD", body.id);
+
     const record = await prisma.yieldRecord.create({
-      data: { plotId: plot.id, season: body.season, weightTons: body.weightTons },
+      data: { id: body.id, plotId: plot.id, season: body.season, weightTons: body.weightTons },
     });
     res.status(201).json(yieldJson({ ...record, areaSqm: plot.areaSqm }));
   }),
@@ -344,14 +418,21 @@ fieldRouter.patch(
     const user = currentUser(req);
     const yieldId = pathId(req.params.yieldId);
     const record = await prisma.yieldRecord.findUnique({ where: { id: yieldId } });
-    if (!record) throw new HttpError(404, "ไม่พบผลผลิต");
+    if (!record) {
+      await refuseDeleted("YIELD", yieldId);
+      throw new HttpError(404, "ไม่พบผลผลิต");
+    }
     const plot = await ownedPlot(user, record.plotId);
     const body = updateYieldBody.parse(req.body);
-    const updated = await prisma.yieldRecord.update({
-      where: { id: yieldId },
-      data: { season: body.season, weightTons: body.weightTons },
+
+    const updated = await prisma.yieldRecord.updateMany({
+      where: { id: yieldId, version: body.version },
+      data: { season: body.season, weightTons: body.weightTons, version: { increment: 1 } },
     });
-    res.json(yieldJson({ ...updated, areaSqm: plot.areaSqm }));
+    const current = await prisma.yieldRecord.findUniqueOrThrow({ where: { id: yieldId } });
+    const json = yieldJson({ ...current, areaSqm: plot.areaSqm });
+    if (updated.count === 0) throw versionConflict(json);
+    res.json(json);
   }),
 );
 
@@ -359,11 +440,32 @@ fieldRouter.delete(
   "/yields/:yieldId",
   route(async (req, res) => {
     const user = currentUser(req);
+    requireFarmer(user);
     const yieldId = pathId(req.params.yieldId);
+    const version = versionQuery(req.query.version);
+
     const record = await prisma.yieldRecord.findUnique({ where: { id: yieldId } });
-    if (!record) throw new HttpError(404, "ไม่พบผลผลิต");
-    await ownedPlot(user, record.plotId);
-    await prisma.yieldRecord.delete({ where: { id: yieldId } });
+    if (!record) {
+      if (await wasDeletedBy("YIELD", yieldId, user.id)) {
+        res.status(204).send();
+        return;
+      }
+      throw new HttpError(404, "ไม่พบผลผลิต");
+    }
+    const plot = await ownedPlot(user, record.plotId);
+
+    const removed = await prisma.$transaction(async (tx) => {
+      const result = await tx.yieldRecord.deleteMany({ where: { id: yieldId, ...(version ? { version } : {}) } });
+      if (result.count === 0) return false;
+      await tx.deletedRecord.create({
+        data: { kind: "YIELD", recordId: yieldId, farmerId: user.id, plotId: plot.id },
+      });
+      return true;
+    });
+    if (!removed) {
+      const current = await prisma.yieldRecord.findUniqueOrThrow({ where: { id: yieldId } });
+      throw versionConflict(yieldJson({ ...current, areaSqm: plot.areaSqm }));
+    }
     res.status(204).send();
   }),
 );
@@ -386,8 +488,18 @@ fieldRouter.post(
     const user = currentUser(req);
     const plot = await ownedPlot(user, pathId(req.params.plotId));
     const body = taskBody.parse(req.body);
+
+    const existing = await prisma.fieldTask.findUnique({ where: { id: body.id } });
+    if (existing) {
+      if (existing.plotId !== plot.id) throw new HttpError(409, "รหัสงานนี้ถูกใช้แล้ว");
+      res.json(taskJson(existing));
+      return;
+    }
+    await refuseDeleted("TASK", body.id);
+
     const task = await prisma.fieldTask.create({
       data: {
+        id: body.id,
         plotId: plot.id,
         kind: taskKindByName[body.kind],
         date: parseDate(body.date),
@@ -404,18 +516,25 @@ fieldRouter.patch(
     const user = currentUser(req);
     const taskId = pathId(req.params.taskId);
     const existing = await prisma.fieldTask.findUnique({ where: { id: taskId } });
-    if (!existing) throw new HttpError(404, "ไม่พบงาน");
+    if (!existing) {
+      await refuseDeleted("TASK", taskId);
+      throw new HttpError(404, "ไม่พบงาน");
+    }
     await ownedPlot(user, existing.plotId);
     const body = updateTaskBody.parse(req.body);
-    const task = await prisma.fieldTask.update({
-      where: { id: taskId },
+
+    const updated = await prisma.fieldTask.updateMany({
+      where: { id: taskId, version: body.version },
       data: {
         kind: body.kind ? taskKindByName[body.kind] : undefined,
         date: body.date ? parseDate(body.date) : undefined,
         done: body.done,
+        version: { increment: 1 },
       },
     });
-    res.json(taskJson(task));
+    const current = taskJson(await prisma.fieldTask.findUniqueOrThrow({ where: { id: taskId } }));
+    if (updated.count === 0) throw versionConflict(current);
+    res.json(current);
   }),
 );
 
@@ -423,11 +542,29 @@ fieldRouter.delete(
   "/tasks/:taskId",
   route(async (req, res) => {
     const user = currentUser(req);
+    requireFarmer(user);
     const taskId = pathId(req.params.taskId);
+    const version = versionQuery(req.query.version);
+
     const existing = await prisma.fieldTask.findUnique({ where: { id: taskId } });
-    if (!existing) throw new HttpError(404, "ไม่พบงาน");
-    await ownedPlot(user, existing.plotId);
-    await prisma.fieldTask.delete({ where: { id: taskId } });
+    if (!existing) {
+      if (await wasDeletedBy("TASK", taskId, user.id)) {
+        res.status(204).send();
+        return;
+      }
+      throw new HttpError(404, "ไม่พบงาน");
+    }
+    const plot = await ownedPlot(user, existing.plotId);
+
+    const removed = await prisma.$transaction(async (tx) => {
+      const result = await tx.fieldTask.deleteMany({ where: { id: taskId, ...(version ? { version } : {}) } });
+      if (result.count === 0) return false;
+      await tx.deletedRecord.create({
+        data: { kind: "TASK", recordId: taskId, farmerId: user.id, plotId: plot.id },
+      });
+      return true;
+    });
+    if (!removed) throw versionConflict(taskJson(await prisma.fieldTask.findUniqueOrThrow({ where: { id: taskId } })));
     res.status(204).send();
   }),
 );
