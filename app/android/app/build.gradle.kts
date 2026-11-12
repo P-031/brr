@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+// Secrets/keys live in android/local.properties (gitignored).
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
@@ -31,6 +39,11 @@ android {
         // OAuth redirect scheme used by flutter_appauth / Keycloak login.
         // Must match the scheme in lib/config/keycloak_config.dart.
         manifestPlaceholders["appAuthRedirectScheme"] = "com.brr.brr"
+
+        // Google Maps SDK key — set GOOGLE_MAPS_API_KEY in
+        // android/local.properties (do NOT commit the real key).
+        manifestPlaceholders["googleMapsApiKey"] =
+            localProperties.getProperty("GOOGLE_MAPS_API_KEY") ?: ""
     }
 
     buildTypes {

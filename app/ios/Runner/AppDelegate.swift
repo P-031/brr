@@ -1,4 +1,5 @@
 import Flutter
+import GoogleMaps
 import UIKit
 
 @main
@@ -7,6 +8,10 @@ import UIKit
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
+    // TODO: replace with the iOS-restricted Google Maps API key before
+    // building for iOS (do not commit the real key — inject it via env
+    // or a build config instead).
+    GMSServices.provideAPIKey("YOUR-IOS-GOOGLE-MAPS-API-KEY")
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 

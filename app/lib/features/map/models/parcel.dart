@@ -1,6 +1,5 @@
-import 'dart:math';
-
 import 'package:latlong2/latlong.dart';
+import 'package:maps_toolkit/maps_toolkit.dart' as mt;
 
 /// A land parcel fetched from the backend — boundary coordinates plus
 /// a display name. Area is computed locally with the shoelace formula.
@@ -12,6 +11,8 @@ class Parcel {
     this.variety,
     this.owner,
     this.status,
+    this.centerOverride,
+    this.isDraft = false,
   });
 
   final String id;
@@ -24,10 +25,18 @@ class Parcel {
   final String? status;
   final List<LatLng> points;
 
-  /// Backend `/plots/map` item — outline is a list of
-  /// `{latitude, longitude}` objects.
+  /// Device-only draft saved with "บันทึกร่าง" — never posted to the
+  /// backend; persisted in SharedPreferences so it survives restarts.
+  final bool isDraft;
+
+  /// Backend-supplied centroid — preferred over averaging when set.
+  final LatLng? centerOverride;
+
+  /// Backend shape — `/plots/map` returns `outline`, while `POST /plots`
+  /// and `/plots/:id` return `points`; both are `{latitude, longitude}`.
   factory Parcel.fromJson(Map<String, dynamic> json) {
-    final outline = (json['outline'] as List? ?? [])
+    final raw = (json['outline'] ?? json['points']) as List? ?? [];
+    final points = raw
         .map(
           (c) => LatLng(
             (c['latitude'] as num).toDouble(),
@@ -36,17 +45,41 @@ class Parcel {
         )
         .toList();
     final farmer = json['farmer'] as Map<String, dynamic>?;
+    final center = json['center'] as Map<String, dynamic>?;
     return Parcel(
       id: '${json['id']}',
       name: '${json['name']}',
       variety: json['variety'] as String?,
       owner: farmer?['displayName'] as String?,
       status: json['status'] as String?,
-      points: outline,
+      points: points,
+      isDraft: json['isDraft'] == true,
+      centerOverride: center == null
+          ? null
+          : LatLng(
+              (center['latitude'] as num).toDouble(),
+              (center['longitude'] as num).toDouble(),
+            ),
     );
   }
 
+  /// Local persistence for drafts — SharedPreferences JSON.
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'name': name,
+    'variety': variety,
+    'owner': owner,
+    'status': status,
+    'isDraft': isDraft,
+    'points': [
+      for (final p in points)
+        {'latitude': p.latitude, 'longitude': p.longitude},
+    ],
+  };
+
   LatLng get center {
+    if (centerOverride != null) return centerOverride!;
+    if (points.isEmpty) return const LatLng(0, 0);
     var lat = 0.0, lng = 0.0;
     for (final p in points) {
       lat += p.latitude;
@@ -55,22 +88,16 @@ class Parcel {
     return LatLng(lat / points.length, lng / points.length);
   }
 
-  /// Approximate area in square meters (shoelace on projected coords).
+  /// Geodesic area in square meters — spherical-excess formula on the
+  /// WGS84 mean radius, the same algorithm Google Maps uses
+  /// (SphericalUtil.computeArea). Accurate to ~0.1% for land parcels.
+  /// TODO: once the backend is connected, PostGIS `ST_Area(geography)`
+  /// should be the authoritative value (full-ellipsoid precision).
   double get areaSquareMeters {
     if (points.length < 3) return 0;
-    const mPerDegLat = 111320.0;
-    final cosLat = cos(points.first.latitude * pi / 180);
-    double sum = 0;
-    for (var i = 0; i < points.length; i++) {
-      final a = points[i];
-      final b = points[(i + 1) % points.length];
-      final ax = a.longitude * mPerDegLat * cosLat;
-      final ay = a.latitude * mPerDegLat;
-      final bx = b.longitude * mPerDegLat * cosLat;
-      final by = b.latitude * mPerDegLat;
-      sum += ax * by - bx * ay;
-    }
-    return (sum / 2).abs();
+    return mt.SphericalUtil.computeArea([
+      for (final p in points) mt.LatLng(p.latitude, p.longitude),
+    ]).toDouble();
   }
 
   /// Thai land unit: 1 rai = 1600 m².

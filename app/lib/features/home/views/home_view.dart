@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
 import 'package:brr/features/map/views/map_view.dart';
 import 'package:brr/features/notifications/views/notifications_view.dart';
 
@@ -13,20 +16,24 @@ class HomeView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vm = context.watch<AuthViewModel>();
-    final name = vm.user?.displayName ?? 'ผู้ใช้';
-    final email = vm.user?.email;
+    final user = vm.user;
+    final name = user?.displayName ?? 'ผู้ใช้';
+    final email = user?.email;
     return Scaffold(
       body: Column(
         children: [
-          // green header
+          // sugarcane header
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(24, 56, 24, 32),
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [AppColors.green, AppColors.greenLight],
+              image: DecorationImage(
+                image: AssetImage('assets/images/home_header.jpg'),
+                fit: BoxFit.cover,
+                colorFilter: ColorFilter.mode(
+                  Color(0x66000000),
+                  BlendMode.darken,
+                ),
               ),
               borderRadius: BorderRadius.vertical(
                 bottom: Radius.circular(28),
@@ -68,14 +75,19 @@ class HomeView extends StatelessWidget {
                   child: CircleAvatar(
                     radius: 40,
                     backgroundColor: Colors.white,
-                    child: Text(
-                      name.isNotEmpty ? name[0].toUpperCase() : '?',
-                      style: const TextStyle(
-                        fontSize: 32,
-                        color: AppColors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    backgroundImage: user?.photoPath != null
+                        ? FileImage(File(user!.photoPath!))
+                        : null,
+                    child: user?.photoPath == null
+                        ? Text(
+                            name.isNotEmpty ? name[0].toUpperCase() : '?',
+                            style: const TextStyle(
+                              fontSize: 32,
+                              color: AppColors.green,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -127,7 +139,9 @@ class HomeView extends StatelessWidget {
                   subtitle: 'ดูแปลงและคำนวณพื้นที่จากพิกัด',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => MapView(api: vm.api),
+                      builder: (_) => MapView(
+                        createViewModel: () => MapViewModel(api: vm.api),
+                      ),
                     ),
                   ),
                 ),

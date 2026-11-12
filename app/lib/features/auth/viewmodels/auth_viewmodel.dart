@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:brr/features/auth/models/auth_session.dart';
+import 'package:brr/features/auth/models/saved_account.dart';
 import 'package:brr/features/auth/models/user_profile.dart';
+import 'package:brr/core/config/api_config.dart';
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/auth/data/auth_service.dart';
+import 'package:brr/features/auth/data/avatar_store.dart';
 import 'package:brr/features/auth/data/session_store.dart';
 
 enum AuthStatus { restoring, unauthenticated, authenticating, authenticated }
@@ -63,10 +67,16 @@ class AuthViewModel extends ChangeNotifier {
   }) async {
     final s = _session;
     if (s == null) return;
+    // Persist the picked photo first so the stored path points at a
+    // durable copy, not the picker cache.
+    final saved =
+        photoPath != null
+            ? await _avatars.persist(photoPath, s.user.username)
+            : null;
     final u = s.user.copyWith(
       email: email,
       phone: phone,
-      photoPath: photoPath,
+      photoPath: saved ?? photoPath,
     );
     _session = AuthSession(
       accessToken: s.accessToken,
@@ -75,11 +85,11 @@ class AuthViewModel extends ChangeNotifier {
       idToken: s.idToken,
       accessTokenExpiry: s.accessTokenExpiry,
     );
-    if (photoPath != null) {
-      await _store.savePhotoPath(u.username, photoPath);
-    }
+    if (saved != null) await _store.savePhotoPath(u.username, saved);
     notifyListeners();
   }
+
+  final AvatarStore _avatars = AvatarStore();
 
   /// Re-attaches the locally-saved profile photo after sign-in/refresh.
   Future<AuthSession> _attachPhoto(AuthSession s) async {
@@ -94,13 +104,26 @@ class AuthViewModel extends ChangeNotifier {
     );
   }
 
-  /// Changes the password via Keycloak — TODO: POST the account
-  /// credentials endpoint once wired; returns an error string or
-  /// null on success.
+  /// Changes the password via the backend, which verifies the old
+  /// password with Keycloak and resets it through the Admin API.
+  /// Returns an error string or null on success.
   Future<String?> changePassword({
     required String oldPassword,
     required String newPassword,
-  }) async => 'ยังไม่เปิดใช้งาน';
+  }) async {
+    try {
+      final res = await api.putJson(ApiConfig.accountPasswordPath, {
+        'currentPassword': oldPassword,
+        'newPassword': newPassword,
+      });
+      if (res.statusCode == 204) return null;
+      final body = jsonDecode(res.body);
+      if (body is Map && body['error'] is String) return body['error'] as String;
+      return 'เปลี่ยนรหัสผ่านไม่สำเร็จ (${res.statusCode})';
+    } catch (_) {
+      return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
+    }
+  }
 
   /// Backend API client — injects the current access token as Bearer
   /// and refreshes once on 401. Use for all future backend calls.

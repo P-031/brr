@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:brr/core/config/api_config.dart';
 import 'package:brr/features/map/models/parcel.dart';
@@ -20,6 +21,44 @@ class ParcelService {
   /// caller's own parcels anyway.
   static const _box = 'west=97&south=5&east=106&north=21';
 
+  /// SharedPreferences key holding device-only draft parcels.
+  static const _draftsKey = 'draft_parcels';
+
+  Future<List<Parcel>> _loadDrafts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_draftsKey);
+    if (raw == null) return [];
+    try {
+      return [
+        for (final j in jsonDecode(raw) as List)
+          Parcel.fromJson(j as Map<String, dynamic>),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _saveDraft(Parcel p) async {
+    final prefs = await SharedPreferences.getInstance();
+    final drafts = await _loadDrafts();
+    drafts.add(p);
+    await prefs.setString(
+      _draftsKey,
+      jsonEncode([for (final d in drafts) d.toJson()]),
+    );
+  }
+
+  /// Removes a stored draft by id (e.g. after it's pushed to the backend).
+  Future<void> removeDraft(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final drafts = await _loadDrafts();
+    drafts.removeWhere((d) => d.id == id);
+    await prefs.setString(
+      _draftsKey,
+      jsonEncode([for (final d in drafts) d.toJson()]),
+    );
+  }
+
   Future<List<Parcel>> fetchParcels() async {
     if (ApiConfig.enabled && _api != null) {
       final res = await _api.get('/plots/map?$_box');
@@ -27,12 +66,13 @@ class ParcelService {
         throw Exception('โหลดข้อมูลพื้นที่ไม่สำเร็จ (${res.statusCode})');
       }
       final items = jsonDecode(res.body)['items'] as List;
-      return items
-          .map((j) => Parcel.fromJson(j as Map<String, dynamic>))
-          .toList();
+      return [
+        ...items.map((j) => Parcel.fromJson(j as Map<String, dynamic>)),
+        ...await _loadDrafts(),
+      ];
     }
     // Mock — used only when the backend is disabled.
-    return _mockParcels;
+    return [..._mockParcels, ...await _loadDrafts()];
   }
 
   /// Creates a new parcel — POST /plots when the backend is on.
@@ -87,7 +127,14 @@ class ParcelService {
       }
       return Parcel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
     }
-    return Parcel(id: 'local-${points.length}', name: name, points: points);
+    final local = Parcel(
+      id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+      name: name,
+      points: points,
+      isDraft: draft,
+    );
+    if (draft) await _saveDraft(local);
+    return local;
   }
 
   /// Extension officers for the caretaker dropdown.

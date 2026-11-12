@@ -28,7 +28,12 @@ class MapViewModel extends ChangeNotifier {
   String? get error => _error;
   bool get drawing => _drawing;
   List<LatLng> get draft => List.unmodifiable(_draft);
-  ParcelService get service => _service;
+
+  /// Dropdown options for the save form — views never touch the
+  /// service directly.
+  Future<List<String>> fetchOfficers() => _service.fetchOfficers();
+  Future<List<String>> fetchFarmers() => _service.fetchFarmers();
+  Future<List<String>> fetchCaneGroups() => _service.fetchCaneGroups();
 
   /// Draft area in square meters for the save form preview.
   double get draftAreaSqm =>
@@ -63,6 +68,20 @@ class MapViewModel extends ChangeNotifier {
   /// ย้อนกลับ — remove the last drafted point.
   void undoDraftPoint() {
     if (_draft.isNotEmpty) _draft.removeLast();
+    notifyListeners();
+  }
+
+  /// ลากย้ายหมุด — update the point at [index] after a pin drag.
+  void moveDraftPoint(int index, LatLng p) {
+    if (index < 0 || index >= _draft.length) return;
+    _draft[index] = p;
+    notifyListeners();
+  }
+
+  /// เริ่มใหม่ — clear every drafted point, stay in drawing mode.
+  void clearDraft() {
+    if (_draft.isEmpty) return;
+    _draft.clear();
     notifyListeners();
   }
 
