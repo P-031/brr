@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
-import 'package:brr/features/auth/data/session_store.dart';
+import 'package:brr/features/auth/models/saved_account.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/auth/views/auth_scaffold.dart';

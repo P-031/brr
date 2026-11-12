@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/main.dart';
 import 'package:brr/features/auth/models/auth_session.dart';
+import 'package:brr/features/auth/models/saved_account.dart';
 import 'package:brr/features/auth/data/session_store.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 
@@ -14,6 +15,18 @@ class FakeSessionStore extends SessionStore {
 
   @override
   Future<({String refreshToken, String? idToken})?> read() async => null;
+
+  @override
+  Future<List<SavedAccount>> readAccounts() async => const [];
+
+  @override
+  Future<void> saveAccounts(List<SavedAccount> accounts) async {}
+
+  @override
+  Future<void> savePhotoPath(String username, String path) async {}
+
+  @override
+  Future<String?> readPhotoPath(String username) async => null;
 
   @override
   Future<void> clear() async {}

@@ -22,6 +22,9 @@ class ApiClient {
   Future<http.Response> postJson(String path, Map<String, Object?> body) =>
       _send('POST', path, body: jsonEncode(body));
 
+  Future<http.Response> putJson(String path, Map<String, Object?> body) =>
+      _send('PUT', path, body: jsonEncode(body));
+
   Future<http.Response> _send(
     String method,
     String path, {
@@ -33,9 +36,12 @@ class ApiClient {
       'Content-Type': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
+    final uri = _uri(path);
     final res = method == 'GET'
-        ? await _client.get(_uri(path), headers: headers)
-        : await _client.post(_uri(path), headers: headers, body: body);
+        ? await _client.get(uri, headers: headers)
+        : method == 'PUT'
+        ? await _client.put(uri, headers: headers, body: body)
+        : await _client.post(uri, headers: headers, body: body);
     // Expired token — get a fresh one and retry once.
     if (res.statusCode == 401 && !retried) {
       final fresh = await _getAccessToken();

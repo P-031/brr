@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:brr/core/theme/app_theme.dart';
-
-/// Shared layout for auth screens — green/gold gradient background
-/// with the [child] card centered.
+/// Shared layout for auth screens — sugarcane-field photo background
+/// with a soft scrim and the [child] card centered.
 class AuthScaffold extends StatelessWidget {
   const AuthScaffold({required this.child, super.key});
 
@@ -14,17 +12,19 @@ class AuthScaffold extends StatelessWidget {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [AppColors.green, AppColors.greenLight, AppColors.gold],
+          image: DecorationImage(
+            image: AssetImage('assets/images/login_bg.jpg'),
+            fit: BoxFit.cover,
           ),
         ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(32),
-              child: child,
+        child: Container(
+          color: Colors.black.withValues(alpha: 0.18),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(32),
+                child: child,
+              ),
             ),
           ),
         ),

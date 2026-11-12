@@ -13,4 +13,8 @@ class ApiConfig {
   /// Endpoint the backend should expose to create users
   /// (backend calls Keycloak Admin REST with service credentials).
   static const String registerPath = '/api/v1/auth/register';
+
+  /// Changes the signed-in user's Keycloak password through the
+  /// backend (verifies the old password, then Admin REST reset).
+  static const String accountPasswordPath = '/me/password';
 }
