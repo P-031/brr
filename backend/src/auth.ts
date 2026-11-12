@@ -42,7 +42,7 @@ export async function authenticate(req: Request): Promise<void> {
 
   let payload: JWTPayload;
   try {
-    const verified = await jwtVerify(token, jwks, { issuer: env.keycloakIssuer });
+    const verified = await jwtVerify(token, jwks, { issuer: env.keycloakIssuers });
     payload = verified.payload;
   } catch {
     throw new HttpError(401, "โทเคนไม่ถูกต้องหรือหมดอายุ");

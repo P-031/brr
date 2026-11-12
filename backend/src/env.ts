@@ -8,13 +8,23 @@ function required(name: string): string {
 
 const baseUrl = required("KEYCLOAK_BASE_URL").replace(/\/$/, "");
 const realm = required("KEYCLOAK_REALM");
+const issuer = (process.env.KEYCLOAK_ISSUER?.trim() || `${baseUrl}/realms/${realm}`).replace(/\/$/, "");
+
+/** Keycloak in dev stamps the issuer with whichever host was called. */
+function issuerAliases(value: string): string[] {
+  const match = value.match(/^(https?:\/\/)[^/:]+(:\d+)?(\/.*)$/);
+  if (!match) return [value];
+  const [, scheme, port = "", path] = match;
+  return [...new Set(["127.0.0.1", "localhost", "10.0.2.2"].map((host) => `${scheme}${host}${port}${path}`))];
+}
 
 export const env = {
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: required("DATABASE_URL"),
   keycloakBaseUrl: baseUrl,
   keycloakRealm: realm,
-  keycloakIssuer: (process.env.KEYCLOAK_ISSUER?.trim() || `${baseUrl}/realms/${realm}`).replace(/\/$/, ""),
+  keycloakIssuer: issuer,
+  keycloakIssuers: issuerAliases(issuer),
   keycloakClientId: required("KEYCLOAK_CLIENT_ID"),
 };
 
