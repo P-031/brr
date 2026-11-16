@@ -152,7 +152,7 @@ class AuthViewModel extends ChangeNotifier {
 
   /// Called once at app start — silently restores a saved session.
   Future<void> _restoreSession() async {
-    ({String refreshToken, String? idToken})? saved;
+    ({String refreshToken, String? idToken, String? accessToken})? saved;
     try {
       saved = await _store.read();
       savedAccounts
@@ -189,8 +189,9 @@ class AuthViewModel extends ChangeNotifier {
             accessToken: '',
             refreshToken: saved.refreshToken,
             idToken: idToken,
-            user: UserProfile.fromClaims(
-              AuthService.decodeJwt(idToken) ?? const {},
+            user: AuthService.profileFromTokens(
+              saved.accessToken ?? '',
+              idToken,
             ),
           ),
         );
@@ -281,6 +282,7 @@ class AuthViewModel extends ChangeNotifier {
       displayName: session.user.displayName,
       refreshToken: session.refreshToken ?? '',
       idToken: session.idToken,
+      accessToken: session.accessToken,
     );
     savedAccounts.removeWhere((a) => a.username == acc.username);
     savedAccounts.add(acc);
