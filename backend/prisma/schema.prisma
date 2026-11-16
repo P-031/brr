@@ -56,6 +56,28 @@ model Plot {
   farmerId  String
   name      String
   variety   String                                 @default("")
+  // Measurement-form metadata — all optional so old records and
+  // bare creates still work.
+  productionYear String?
+  officerName    String?
+  project        String?
+  caneGroup      String?
+  zone           String?
+  province       String?
+  district       String?
+  subdistrict    String?
+  village        String?
+  rootNo         String?
+  sequenceNo     String?
+  prevPlotNo     String?
+  caneType       String?
+  caneVariety    String?
+  ownership      String?
+  terrain        String?
+  hasLoss        String?
+  lossRai        Float?
+  targetYield    Float?
+  note           String?
   areaSqm   Float
   centerLat Float
   centerLng Float

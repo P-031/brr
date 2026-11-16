@@ -15,6 +15,7 @@ export type MapPlotRow = {
   id: string;
   name: string;
   variety: string;
+  productionYear: string | null;
   areaSqm: number;
   centerLat: number;
   centerLng: number;
@@ -59,7 +60,7 @@ export async function readBoundary(plotId: string): Promise<LatLng[]> {
 export async function plotsInBox(farmerIds: string[], box: Box, limit: number): Promise<MapPlotRow[]> {
   const tolerance = Math.max(box.east - box.west, box.north - box.south) / 2000;
   return prisma.$queryRaw<MapPlotRow[]>`
-    SELECT p.id, p.name, p.variety, p."areaSqm", p."centerLat", p."centerLng", p."createdAt",
+    SELECT p.id, p.name, p.variety, p."productionYear", p."areaSqm", p."centerLat", p."centerLng", p."createdAt",
            p."farmerId", u.username, u."displayName",
            ST_AsGeoJSON(ST_SimplifyPreserveTopology(p.boundary, ${tolerance}::float8)) AS outline
     FROM "Plot" p

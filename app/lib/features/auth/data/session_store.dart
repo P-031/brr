@@ -13,6 +13,7 @@ class SessionStore {
 
   static const _kRefreshToken = 'auth.refresh_token';
   static const _kIdToken = 'auth.id_token';
+  static const _kAccessToken = 'auth.access_token';
   static const _kAccounts = 'auth.saved_accounts';
 
   final FlutterSecureStorage _storage;
@@ -21,14 +22,20 @@ class SessionStore {
     final rt = session.refreshToken;
     if (rt == null) return;
     await _storage.write(key: _kRefreshToken, value: rt);
+    await _storage.write(key: _kAccessToken, value: session.accessToken);
     final id = session.idToken;
     if (id != null) await _storage.write(key: _kIdToken, value: id);
   }
 
-  Future<({String refreshToken, String? idToken})?> read() async {
+  Future<({String refreshToken, String? idToken, String? accessToken})?>
+  read() async {
     final rt = await _storage.read(key: _kRefreshToken);
     if (rt == null) return null;
-    return (refreshToken: rt, idToken: await _storage.read(key: _kIdToken));
+    return (
+      refreshToken: rt,
+      idToken: await _storage.read(key: _kIdToken),
+      accessToken: await _storage.read(key: _kAccessToken),
+    );
   }
 
   Future<List<SavedAccount>> readAccounts() async {
@@ -60,5 +67,6 @@ class SessionStore {
   Future<void> clear() async {
     await _storage.delete(key: _kRefreshToken);
     await _storage.delete(key: _kIdToken);
+    await _storage.delete(key: _kAccessToken);
   }
 }

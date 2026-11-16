@@ -147,7 +147,7 @@ class AuthService {
       refreshToken: result.refreshToken,
       idToken: idToken,
       accessTokenExpiry: result.accessTokenExpirationDateTime,
-      user: UserProfile.fromClaims(decodeJwt(idToken) ?? const {}),
+      user: profileFromTokens(token, idToken),
     );
   }
 
@@ -168,8 +168,18 @@ class AuthService {
       accessTokenExpiry: expiresIn != null
           ? DateTime.now().add(Duration(seconds: expiresIn))
           : null,
-      user: UserProfile.fromClaims(decodeJwt(idToken) ?? const {}),
+      user: profileFromTokens(token, idToken),
     );
+  }
+
+  /// Builds the profile from id-token claims, falling back to the
+  /// access token — realm roles (`realm_access`) only live in the
+  /// access token with Keycloak's default "roles" scope mappers.
+  static UserProfile profileFromTokens(String accessToken, String? idToken) {
+    return UserProfile.fromClaims({
+      ...?decodeJwt(accessToken),
+      ...?decodeJwt(idToken),
+    });
   }
 
   /// Decodes the payload of a JWT (no signature verification — tokens

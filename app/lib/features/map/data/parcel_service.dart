@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -59,9 +60,9 @@ class ParcelService {
     );
   }
 
-  Future<List<Parcel>> fetchParcels() async {
+  Future<List<Parcel>> fetchParcels({String? box}) async {
     if (ApiConfig.enabled && _api != null) {
-      final res = await _api.get('/plots/map?$_box');
+      final res = await _api.get('/plots/map?${box ?? _box}');
       if (res.statusCode != 200) {
         throw Exception('โหลดข้อมูลพื้นที่ไม่สำเร็จ (${res.statusCode})');
       }
@@ -85,6 +86,7 @@ class ParcelService {
     String? officerName,
     String? project,
     String? farmerName,
+    String? farmerId,
     String? caneGroup,
     String? zone,
     String? province,
@@ -113,9 +115,29 @@ class ParcelService {
         {
           'name': name,
           'variety': variety,
-          // TODO: send productionYear/officerName/project/farmerName/
-          // caneGroup/location fields/rootNo/sequenceNo when the
-          // schema supports them.
+          // Officer saves the plot for the picked farmer; farmers
+          // omit it and the backend uses their own account.
+          'farmerId': ?farmerId,
+          'productionYear': ?productionYear,
+          'officerName': ?officerName,
+          'project': ?project,
+          'caneGroup': ?caneGroup,
+          'zone': ?zone,
+          'province': ?province,
+          'district': ?district,
+          'subdistrict': ?subdistrict,
+          'village': ?village,
+          'rootNo': ?rootNo,
+          'sequenceNo': ?sequenceNo,
+          'prevPlotNo': ?prevPlotNo,
+          'caneType': ?caneType,
+          'caneVariety': ?caneVariety,
+          'ownership': ?ownership,
+          'terrain': ?terrain,
+          'hasLoss': ?hasLoss,
+          'lossRai': ?double.tryParse(lossRai ?? ''),
+          'targetYield': ?double.tryParse(targetYield ?? ''),
+          'note': ?note,
           'points': [
             for (final p in points)
               {'latitude': p.latitude, 'longitude': p.longitude},
@@ -131,6 +153,7 @@ class ParcelService {
       id: 'local-${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       points: points,
+      productionYear: productionYear,
       isDraft: draft,
     );
     if (draft) await _saveDraft(local);
@@ -143,7 +166,7 @@ class ParcelService {
   Future<List<String>> fetchOfficers() async {
     if (ApiConfig.enabled && _api != null) {
       try {
-        final res = await _api.get('/accounts?role=officer');
+        final res = await _api.get('/officers');
         if (res.statusCode == 200) {
           final items = jsonDecode(res.body)['items'] as List;
           return [
@@ -151,42 +174,58 @@ class ParcelService {
               (j as Map<String, dynamic>)['displayName'] as String,
           ];
         }
-      } catch (_) {}
+        throw Exception('GET /officers → ${res.statusCode}');
+      } catch (e) {
+        debugPrint('fetchOfficers failed: $e');
+        rethrow;
+      }
     }
     return const [];
   }
 
-  /// Farmers for the dropdown — same backend-ready pattern as
-  /// [fetchOfficers].
-  Future<List<String>> fetchFarmers() async {
+  /// Farmers under this officer's care (farmerCare links) — used in
+  /// the save form so an officer can pick the plot owner.
+  Future<List<FarmerRef>> fetchFarmers() async {
     if (ApiConfig.enabled && _api != null) {
       try {
-        final res = await _api.get('/accounts?role=farmer');
+        final res = await _api.get('/farmers');
         if (res.statusCode == 200) {
           final items = jsonDecode(res.body)['items'] as List;
           return [
             for (final j in items)
-              (j as Map<String, dynamic>)['displayName'] as String,
+              FarmerRef(
+                id: '${j['id']}',
+                name: '${j['displayName'] ?? j['username']}',
+              ),
           ];
         }
-      } catch (_) {}
+        throw Exception('GET /farmers → ${res.statusCode}');
+      } catch (e) {
+        debugPrint('fetchFarmers failed: $e');
+        rethrow;
+      }
     }
     return const [];
   }
 
-  /// Sugarcane collectives (กลุ่มบำรุง) — placeholder until a backend
-  /// endpoint exists.
-  Future<List<String>> fetchCaneGroups() async {
+  /// All picker option lists for the save form — master data served
+  /// by the backend (`GET /meta/options`).
+  Future<FormOptions> fetchOptions() async {
     if (ApiConfig.enabled && _api != null) {
       try {
-        final res = await _api.get('/cane-groups');
+        final res = await _api.get('/meta/options');
         if (res.statusCode == 200) {
-          final items = jsonDecode(res.body)['items'] as List;
-          return [for (final j in items) '${j['name']}'];
+          return FormOptions.fromJson(
+            jsonDecode(res.body) as Map<String, dynamic>,
+          );
         }
-      } catch (_) {}
+        throw Exception('GET /meta/options → ${res.statusCode}');
+      } catch (e) {
+        debugPrint('fetchOptions failed: $e');
+        rethrow;
+      }
     }
-    return const [];
+    return const FormOptions();
   }
 }
 

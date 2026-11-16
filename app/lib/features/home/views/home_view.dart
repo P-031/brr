@@ -140,7 +140,10 @@ class HomeView extends StatelessWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => MapView(
-                        createViewModel: () => MapViewModel(api: vm.api),
+                        createViewModel: () => MapViewModel(
+                          api: vm.api,
+                          canDrawManually: vm.user?.role == 'OFFICER',
+                        ),
                       ),
                     ),
                   ),

@@ -6,7 +6,9 @@ import { normalizeRing, polygonAreaSqm, ringCenter, type LatLng } from "../area"
 import { plotsInBox, readBoundary, ringFromGeoJson, writeBoundary } from "../boundary";
 import { decodeCursor, encodeCursor } from "../cursor";
 import { HttpError, route } from "../http";
+import { enqueuePlotEvent } from "../jobs";
 import { prisma } from "../prisma";
+import { cacheDelPattern, cacheGet, cacheSet } from "../redis";
 import { plotDetail, plotSummary, taskJson, taskKindByName, yieldJson } from "../serialize";
 import type { AuthUser } from "../types";
 
@@ -17,9 +19,35 @@ const pointSchema = z.object({
 
 const pointsSchema = z.array(pointSchema).min(3).max(2000);
 
+const metaString = (max = 160) => z.string().trim().max(max).optional();
+const metaNumber = () => z.number().finite().nonnegative().optional();
+
 const createPlotBody = z.object({
   name: z.string().trim().min(1).max(120),
   variety: z.string().trim().max(120).default(""),
+  // Officer-created plots belong to a farmer under their care.
+  farmerId: z.string().trim().min(1).optional(),
+  // Measurement-form metadata saved with the plot.
+  productionYear: metaString(20),
+  officerName: metaString(),
+  project: metaString(),
+  caneGroup: metaString(),
+  zone: metaString(60),
+  province: metaString(60),
+  district: metaString(60),
+  subdistrict: metaString(60),
+  village: metaString(80),
+  rootNo: metaString(30),
+  sequenceNo: metaString(30),
+  prevPlotNo: metaString(60),
+  caneType: metaString(80),
+  caneVariety: metaString(80),
+  ownership: metaString(60),
+  terrain: metaString(60),
+  hasLoss: metaString(200),
+  lossRai: metaNumber(),
+  targetYield: metaNumber(),
+  note: metaString(500),
   points: pointsSchema,
 });
 
@@ -27,9 +55,29 @@ const updatePlotBody = z
   .object({
     name: z.string().trim().min(1).max(120).optional(),
     variety: z.string().trim().max(120).optional(),
+    productionYear: metaString(20),
+    officerName: metaString(),
+    project: metaString(),
+    caneGroup: metaString(),
+    zone: metaString(60),
+    province: metaString(60),
+    district: metaString(60),
+    subdistrict: metaString(60),
+    village: metaString(80),
+    rootNo: metaString(30),
+    sequenceNo: metaString(30),
+    prevPlotNo: metaString(60),
+    caneType: metaString(80),
+    caneVariety: metaString(80),
+    ownership: metaString(60),
+    terrain: metaString(60),
+    hasLoss: metaString(200),
+    lossRai: metaNumber(),
+    targetYield: metaNumber(),
+    note: metaString(500),
     points: pointsSchema.optional(),
   })
-  .refine((value) => value.name !== undefined || value.variety !== undefined || value.points !== undefined, {
+  .refine((value) => Object.values(value).some((v) => v !== undefined), {
     message: "ไม่มีข้อมูลให้แก้",
   });
 
@@ -69,6 +117,26 @@ const summarySelect = {
   id: true,
   name: true,
   variety: true,
+  productionYear: true,
+  officerName: true,
+  project: true,
+  caneGroup: true,
+  zone: true,
+  province: true,
+  district: true,
+  subdistrict: true,
+  village: true,
+  rootNo: true,
+  sequenceNo: true,
+  prevPlotNo: true,
+  caneType: true,
+  caneVariety: true,
+  ownership: true,
+  terrain: true,
+  hasLoss: true,
+  lossRai: true,
+  targetYield: true,
+  note: true,
   areaSqm: true,
   centerLat: true,
   centerLng: true,
@@ -137,10 +205,33 @@ async function visiblePlot(user: AuthUser, plotId: string) {
   return plot;
 }
 
+/** Who the new plot belongs to: the farmer themself, or any farmer the
+ *  officer picked — first save silently links that farmer to the
+ *  officer's care so the new plot stays visible to them. */
+async function plotOwnerForCreate(user: AuthUser, requestedFarmerId: string | undefined): Promise<string> {
+  if (user.role === "FARMER") return user.id;
+  if (!requestedFarmerId) throw new HttpError(400, "ต้องระบุชาวไร่เจ้าของแปลง");
+  const farmer = await prisma.user.findUnique({ where: { id: requestedFarmerId } });
+  if (!farmer || farmer.role !== "FARMER") throw new HttpError(404, "ไม่พบชาวไร่");
+  await prisma.farmerCare.upsert({
+    where: { officerId_farmerId: { officerId: user.id, farmerId: requestedFarmerId } },
+    create: { officerId: user.id, farmerId: requestedFarmerId },
+    update: {},
+  });
+  return requestedFarmerId;
+}
+
 async function ownedPlot(user: AuthUser, plotId: string) {
-  if (user.role !== "FARMER") throw new HttpError(403, "เฉพาะชาวไร่ที่แก้ข้อมูลได้");
   const plot = await prisma.plot.findUnique({ where: { id: plotId } });
-  if (!plot || plot.farmerId !== user.id) throw new HttpError(404, "ไม่พบแปลง");
+  if (!plot) throw new HttpError(404, "ไม่พบแปลง");
+  if (user.role === "FARMER") {
+    if (plot.farmerId !== user.id) throw new HttpError(404, "ไม่พบแปลง");
+    return plot;
+  }
+  const link = await prisma.farmerCare.findUnique({
+    where: { officerId_farmerId: { officerId: user.id, farmerId: plot.farmerId } },
+  });
+  if (!link) throw new HttpError(404, "ไม่พบแปลง");
   return plot;
 }
 
@@ -217,14 +308,23 @@ fieldRouter.get(
       throw new HttpError(400, "กรอบแผนที่ไม่ถูกต้อง");
     }
     const limit = z.coerce.number().int().min(1).max(500).default(200).parse(queryText(req.query.limit));
-    const farmerIds = await farmerIdsForList(user, queryText(req.query.farmerId));
+    const farmerFilter = queryText(req.query.farmerId) ?? "";
+    const cacheKey =
+      `plots:map:${user.id}:${box.west},${box.south},${box.east},${box.north}:${limit}:${farmerFilter}`;
+    const cached = await cacheGet(cacheKey);
+    if (cached !== undefined) {
+      res.json(cached);
+      return;
+    }
+
+    const farmerIds = await farmerIdsForList(user, farmerFilter);
     if (farmerIds.length === 0) {
       res.json({ items: [], truncated: false });
       return;
     }
 
     const rows = await plotsInBox(farmerIds, box, limit + 1);
-    res.json({
+    const payload = {
       items: rows.slice(0, limit).map((row) => ({
         ...plotSummary({
           ...row,
@@ -233,7 +333,9 @@ fieldRouter.get(
         outline: ringFromGeoJson(row.outline),
       })),
       truncated: rows.length > limit,
-    });
+    };
+    await cacheSet(cacheKey, payload, 60);
+    res.json(payload);
   }),
 );
 
@@ -241,16 +343,35 @@ fieldRouter.post(
   "/plots",
   route(async (req, res) => {
     const user = currentUser(req);
-    if (user.role !== "FARMER") throw new HttpError(403, "เฉพาะชาวไร่ที่สร้างแปลงได้");
-
     const body = createPlotBody.parse(req.body);
+    const farmerId = await plotOwnerForCreate(user, body.farmerId);
     const measured = measuredRing(body.points);
     const plotId = await prisma.$transaction(async (tx) => {
       const created = await tx.plot.create({
         data: {
-          farmerId: user.id,
+          farmerId,
           name: body.name,
           variety: body.variety,
+          productionYear: body.productionYear,
+          officerName: body.officerName,
+          project: body.project,
+          caneGroup: body.caneGroup,
+          zone: body.zone,
+          province: body.province,
+          district: body.district,
+          subdistrict: body.subdistrict,
+          village: body.village,
+          rootNo: body.rootNo,
+          sequenceNo: body.sequenceNo,
+          prevPlotNo: body.prevPlotNo,
+          caneType: body.caneType,
+          caneVariety: body.caneVariety,
+          ownership: body.ownership,
+          terrain: body.terrain,
+          hasLoss: body.hasLoss,
+          lossRai: body.lossRai,
+          targetYield: body.targetYield,
+          note: body.note,
           areaSqm: measured.areaSqm,
           centerLat: measured.center.latitude,
           centerLng: measured.center.longitude,
@@ -261,6 +382,8 @@ fieldRouter.post(
       return created.id;
     });
 
+    await cacheDelPattern("plots:map:*");
+    await enqueuePlotEvent("plot.created", { userId: user.id, plotId, name: body.name });
     res.status(201).json(await toDetail(await visiblePlot(user, plotId)));
   }),
 );
@@ -281,13 +404,13 @@ fieldRouter.patch(
     await ownedPlot(user, plotId);
     const body = updatePlotBody.parse(req.body);
     const measured = body.points ? measuredRing(body.points) : undefined;
+    const { points, ...meta } = body;
 
     await prisma.$transaction(async (tx) => {
       await tx.plot.update({
         where: { id: plotId },
         data: {
-          name: body.name,
-          variety: body.variety,
+          ...meta,
           areaSqm: measured?.areaSqm,
           centerLat: measured?.center.latitude,
           centerLng: measured?.center.longitude,
@@ -296,6 +419,7 @@ fieldRouter.patch(
       if (measured) await writeBoundary(tx, plotId, measured.ring);
     });
 
+    await cacheDelPattern("plots:map:*");
     res.json(await toDetail(await visiblePlot(user, plotId)));
   }),
 );
@@ -307,6 +431,7 @@ fieldRouter.delete(
     const plotId = pathId(req.params.plotId);
     await ownedPlot(user, plotId);
     await prisma.plot.delete({ where: { id: plotId } });
+    await cacheDelPattern("plots:map:*");
     res.status(204).send();
   }),
 );

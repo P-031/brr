@@ -5,6 +5,7 @@ class SavedAccount {
     required this.displayName,
     required this.refreshToken,
     this.idToken,
+    this.accessToken,
   });
 
   final String username;
@@ -12,11 +13,16 @@ class SavedAccount {
   final String refreshToken;
   final String? idToken;
 
+  /// Last access token — kept for its claims (e.g. `realm_access` roles
+  /// live only here), never reused for API calls after expiry.
+  final String? accessToken;
+
   factory SavedAccount.fromJson(Map<String, dynamic> j) => SavedAccount(
     username: j['username'] as String,
     displayName: j['displayName'] as String,
     refreshToken: j['refreshToken'] as String,
     idToken: j['idToken'] as String?,
+    accessToken: j['accessToken'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -24,5 +30,6 @@ class SavedAccount {
     'displayName': displayName,
     'refreshToken': refreshToken,
     'idToken': idToken,
+    'accessToken': accessToken,
   };
 }

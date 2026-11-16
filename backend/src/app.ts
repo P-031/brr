@@ -3,6 +3,7 @@ import express from "express";
 import { requireAuth } from "./auth";
 import { errorHandler } from "./http";
 import { accountRouter } from "./routes/account";
+import { metaRouter } from "./routes/meta";
 import { fieldRouter } from "./routes/plots";
 
 export function createApp() {
@@ -17,6 +18,7 @@ export function createApp() {
 
   app.use(requireAuth);
   app.use(accountRouter);
+  app.use(metaRouter);
   app.use(fieldRouter);
   app.use((_req, res) => {
     res.status(404).json({ error: "ไม่พบเส้นทาง" });
