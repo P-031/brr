@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:provider/provider.dart';
 
@@ -53,6 +52,16 @@ class _MapBodyState extends State<_MapBody> {
 
   /// Draft pin index currently armed for tap-to-move (0-based).
   int? _movingIndex;
+
+  /// Save form is pushed over the map — the platform view is
+  /// unmounted while covered so the native map stops compositing
+  /// entirely (biggest emulator-jank source). Camera is restored
+  /// from [_camera] when the form closes.
+  bool _formOpen = false;
+
+  /// GPS auto-locate runs only on the first map creation — a
+  /// remount after the form closes keeps the user's last camera.
+  bool _didInitialLocate = false;
 
   /// Renders a numbered gold pin (ring + white bold index) as a marker
   /// bitmap — draft pins show their tap order like survey stakes.
@@ -131,7 +140,9 @@ class _MapBodyState extends State<_MapBody> {
   }
 
   /// Map tap: relocate an armed pin, otherwise drop a new point.
+  /// Ignored while walk-measuring — pins come from the GPS stream.
   void _onMapTap(LatLng p, MapViewModel vm) {
+    if (vm.walking) return;
     final point = ll.LatLng(p.latitude, p.longitude);
     final i = _movingIndex;
     if (i != null && i < vm.draft.length) {
@@ -164,31 +175,21 @@ class _MapBodyState extends State<_MapBody> {
 
   static LatLng _ll(ll.LatLng p) => LatLng(p.latitude, p.longitude);
 
+  /// Last GPS fix the camera already followed (walk mode).
+  ll.LatLng? _followedFix;
+
   /// Moves the camera to the user's GPS position. [auto] is used when
   /// the page opens — it suppresses error toasts and returns false so
   /// the caller can fall back to fitting the parcels.
-  Future<bool> _locate({bool auto = false}) async {
+  Future<bool> _locate(MapViewModel vm, {bool auto = false}) async {
     if (mounted) setState(() => _locating = true);
     try {
-      if (!await Geolocator.isLocationServiceEnabled()) {
-        throw 'เปิด GPS ก่อนใช้งาน';
-      }
-      var perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        throw 'ไม่ได้รับอนุญาตตำแหน่ง';
-      }
-      final pos = await Geolocator.getCurrentPosition();
+      final pos = await vm.locate();
+      if (pos == null) throw 'เปิด GPS แล้วอนุญาตตำแหน่ง';
       if (!mounted) return true;
       setState(() => _locationGranted = true);
       await _controller?.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(pos.latitude, pos.longitude),
-          17,
-        ),
+        CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 17),
       );
       return true;
     } catch (e) {
@@ -206,7 +207,7 @@ class _MapBodyState extends State<_MapBody> {
   /// On page open: jump to the user's current position; if GPS /
   /// permission is unavailable, fit the camera around the parcels.
   Future<void> _initialLocate(MapViewModel vm) async {
-    if (!await _locate(auto: true)) _fitParcels(vm);
+    if (!await _locate(vm, auto: true)) _fitParcels(vm);
   }
 
   /// Reset the camera bearing to north (compass button).
@@ -295,6 +296,14 @@ class _MapBodyState extends State<_MapBody> {
   Widget build(BuildContext context) {
     final vm = context.watch<MapViewModel>();
     _ensurePinIcons(vm.draft.length);
+    // Follow the walker — pan the camera onto each new GPS fix.
+    final fix = vm.lastFix;
+    if (!_formOpen && vm.walking && fix != null && fix != _followedFix) {
+      _followedFix = fix;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _controller?.animateCamera(CameraUpdate.newLatLng(_ll(fix)));
+      });
+    }
     // Edge-to-edge map: transparent status bar, light icons for the
     // satellite imagery behind it.
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -303,7 +312,7 @@ class _MapBodyState extends State<_MapBody> {
       ),
       child: Scaffold(
         body: vm.loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const _MapSkeleton()
           : vm.error != null
           ? Center(
               child: Column(
@@ -323,30 +332,52 @@ class _MapBodyState extends State<_MapBody> {
                 Expanded(
                   child: Stack(
                     children: [
-                      GoogleMap(
-                        initialCameraPosition: _initialCamera,
+                      if (_formOpen)
+                        // ฟอร์มบันทึกทับอยู่ — แผนที่ถูก unmount เพื่อ
+                        // หยุดงาน platform view ทั้งหมดจนกว่าจะปิดฟอร์ม
+                        const ColoredBox(color: Color(0xFFE8E6E1))
+                      else
+                        GoogleMap(
+                        initialCameraPosition: _camera,
                         onMapCreated: (c) {
                           _controller = c;
-                          _initialLocate(
-                            context.read<MapViewModel>(),
-                          );
+                          if (!_didInitialLocate) {
+                            _didInitialLocate = true;
+                            _initialLocate(
+                              context.read<MapViewModel>(),
+                            );
+                          }
                         },
                         onCameraMove: (pos) => _camera = pos,
+                        // เลื่อน/ซูมเสร็จ → โหลดแปลงเฉพาะกรอบที่เห็น
+                        // ใหม่ (แถบโหลดบางๆ ขึ้นด้านบนขณะรอ)
+                        onCameraIdle: () async {
+                          final r = await _controller?.getVisibleRegion();
+                          if (r == null || !context.mounted) return;
+                          context.read<MapViewModel>().loadViewport(
+                            'west=${r.southwest.longitude}'
+                            '&south=${r.southwest.latitude}'
+                            '&east=${r.northeast.longitude}'
+                            '&north=${r.northeast.latitude}',
+                          );
+                        },
                         onTap: (p) => _onMapTap(p, vm),
                         mapType: _mapType,
                         compassEnabled: true,
                         zoomControlsEnabled: false,
-                        myLocationEnabled: _locationGranted,
+                        myLocationEnabled: _locationGranted && !_formOpen,
                         myLocationButtonEnabled: false,
                         polygons: {
-                          for (final p in vm.parcels)
+                          for (final p in vm.visibleParcels)
                             Polygon(
                               polygonId: PolygonId(p.id),
                               points: [for (final x in p.points) _ll(x)],
                               fillColor:
-                                  (p.isDraft ? AppColors.gold : AppColors.green)
-                                      .withValues(alpha: 0.25),
-                              strokeColor: AppColors.gold,
+                                  (p.isDraft ? AppColors.gold : Colors.red)
+                                      .withValues(alpha: 0.3),
+                              strokeColor: p.isDraft
+                                  ? AppColors.gold
+                                  : Colors.red,
                               strokeWidth: 3,
                             ),
                           if (vm.draft.length >= 3)
@@ -361,15 +392,14 @@ class _MapBodyState extends State<_MapBody> {
                             ),
                         },
                         markers: {
-                          for (final p in vm.parcels)
+                          // Red pin marks the user's position — updated
+                          // by the GPS button or live fixes while walking.
+                          if (vm.userPos != null)
                             Marker(
-                              markerId: MarkerId(p.id),
-                              position: _ll(p.center),
-                              infoWindow: InfoWindow(
-                                title: p.isDraft ? '${p.name} (ร่าง)' : p.name,
-                              ),
+                              markerId: const MarkerId('me'),
+                              position: _ll(vm.userPos!),
                               icon: BitmapDescriptor.defaultMarkerWithHue(
-                                BitmapDescriptor.hueGreen,
+                                BitmapDescriptor.hueRed,
                               ),
                             ),
                           for (var i = 0; i < vm.draft.length; i++)
@@ -396,6 +426,18 @@ class _MapBodyState extends State<_MapBody> {
                             ),
                         },
                       ),
+                      // แถบโหลดบางๆ ขณะดึงแปลงของกรอบจอใหม่
+                      if (vm.loadingViewport)
+                        Positioned(
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          child: const LinearProgressIndicator(
+                            minHeight: 3,
+                            color: AppColors.green,
+                            backgroundColor: Colors.transparent,
+                          ),
+                        ),
                       // Back button floats over the map (no AppBar —
                       // the map runs edge-to-edge under the status bar).
                       Positioned(
@@ -409,6 +451,61 @@ class _MapBodyState extends State<_MapBody> {
                           ),
                         ),
                       ),
+                      // ฟิลเตอร์ปีการผลิต — เลือกปีแล้วแผนที่แสดง
+                      // เฉพาะแปลงของปีนั้น (draft แสดงเสมอ)
+                      if (vm.years.isNotEmpty)
+                        Positioned(
+                          top: MediaQuery.of(context).padding.top + 12,
+                          left: 76,
+                          child: Container(
+                            height: 48,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black26,
+                                  blurRadius: 6,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Iconsax.calendar_1,
+                                  size: 18,
+                                  color: AppColors.green,
+                                ),
+                                const SizedBox(width: 8),
+                                DropdownButtonHideUnderline(
+                                  child: DropdownButton<String?>(
+                                    value: vm.yearFilter,
+                                    icon: const Icon(
+                                      Iconsax.arrow_down_1,
+                                      size: 18,
+                                      color: AppColors.green,
+                                    ),
+                                    items: [
+                                      const DropdownMenuItem<String?>(
+                                        child: Text('ทุกปีการผลิต'),
+                                      ),
+                                      for (final y in vm.years)
+                                        DropdownMenuItem<String?>(
+                                          value: y,
+                                          child: Text(y),
+                                        ),
+                                    ],
+                                    onChanged: vm.setYearFilter,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       // ประเภทแผนที่ + เข็มทิศ + GPS — Google-Maps-style
                       // controls; structured so a backend-driven config
                       // can replace the local state later.
@@ -435,7 +532,7 @@ class _MapBodyState extends State<_MapBody> {
                             ),
                             const SizedBox(height: 10),
                             GestureDetector(
-                              onTap: _locating ? null : _locate,
+                              onTap: _locating ? null : () => _locate(vm),
                               child: _MapButton(
                                 icon: Iconsax.gps,
                                 loading: _locating,
@@ -444,12 +541,116 @@ class _MapBodyState extends State<_MapBody> {
                           ],
                         ),
                       ),
+                      // Overlay กันกดซ้ำระหว่าง POST /plots — ครอบทั้ง
+                      // แผนที่จนกว่าบันทึกจะเสร็จ
+                      if (vm.saving)
+                        Positioned.fill(
+                          child: Container(
+                            color: Colors.black38,
+                            child: const Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(
+                                    color: Colors.white,
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'กำลังบันทึกแปลง...',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
-                _BottomBar(vm: vm, movingIndex: _movingIndex),
+                _BottomBar(
+                  vm: vm,
+                  movingIndex: _movingIndex,
+                  onFormOpen: (v) => setState(() => _formOpen = v),
+                ),
               ],
             ),
+      ),
+    );
+  }
+}
+
+/// Skeleton shown while parcels load — a soft-pulsing map-shaped
+/// placeholder so the first frame doesn't look empty.
+class _MapSkeleton extends StatefulWidget {
+  const _MapSkeleton();
+
+  @override
+  State<_MapSkeleton> createState() => _MapSkeletonState();
+}
+
+class _MapSkeletonState extends State<_MapSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, _) => Opacity(
+        opacity: 0.45 + 0.4 * _c.value,
+        child: Column(
+          children: [
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.fromLTRB(16, 72, 16, 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Iconsax.location,
+                        size: 64,
+                        color: Colors.black26,
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        'กำลังโหลดแปลง...',
+                        style: TextStyle(
+                          color: Colors.black45,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              height: 72,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -514,6 +715,54 @@ class _MapTypeThumb extends StatelessWidget {
 }
 
 /// White circular map-control button (map type / compass / GPS).
+/// Walk-measure status line — point count plus a color-coded GPS
+/// accuracy badge so the farmer knows the signal quality.
+class _WalkStatus extends StatelessWidget {
+  const _WalkStatus({required this.vm});
+
+  final MapViewModel vm;
+
+  @override
+  Widget build(BuildContext context) {
+    final acc = vm.gpsAccuracy;
+    final color = acc == null
+        ? Colors.grey
+        : acc <= 10
+        ? AppColors.green
+        : acc <= 20
+        ? Colors.orange
+        : Colors.red;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          vm.walkPaused
+              ? 'หยุดพักชั่วคราว (${vm.draft.length} จุด)'
+              : 'เดินวัดอยู่… ${vm.draft.length} จุด',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: color),
+          ),
+          child: Text(
+            acc == null ? 'GPS รอสัญญาณ' : 'GPS ±${acc.toStringAsFixed(0)} ม.',
+            style: TextStyle(
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MapButton extends StatelessWidget {
   const _MapButton({required this.icon, required this.loading});
 
@@ -547,12 +796,20 @@ class _MapButton extends StatelessWidget {
 }
 
 class _BottomBar extends StatelessWidget {
-  const _BottomBar({required this.vm, required this.movingIndex});
+  const _BottomBar({
+    required this.vm,
+    required this.movingIndex,
+    this.onFormOpen,
+  });
 
   final MapViewModel vm;
 
   /// Draft pin armed for tap-to-move (0-based), or null.
   final int? movingIndex;
+
+  /// Tells the map when the save form covers it — used to pause
+  /// the my-location dot animation while the form is open.
+  final void Function(bool open)? onFormOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -563,15 +820,17 @@ class _BottomBar extends StatelessWidget {
           ? Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  movingIndex != null
-                      ? 'แตะจุดใหม่เพื่อย้ายหมุด #${movingIndex! + 1}'
-                      : 'แตะแผนที่เพื่อปักจุด (${vm.draft.length} จุด)',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                vm.walking
+                    ? _WalkStatus(vm: vm)
+                    : Text(
+                        movingIndex != null
+                            ? 'แตะจุดใหม่เพื่อย้ายหมุด #${movingIndex! + 1}'
+                            : 'แตะแผนที่เพื่อปักจุด (${vm.draft.length} จุด)',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
@@ -583,13 +842,22 @@ class _BottomBar extends StatelessWidget {
                             horizontal: 8,
                           ),
                         ),
-                        onPressed: vm.draft.isEmpty
-                            ? null
-                            : vm.clearDraft,
-                        icon: const Icon(Iconsax.refresh, size: 24),
-                        label: const Text(
-                          'เริ่มใหม่',
-                          style: TextStyle(
+                        onPressed: vm.walking
+                            ? vm.toggleWalkPause
+                            : (vm.draft.isEmpty ? null : vm.clearDraft),
+                        icon: Icon(
+                          vm.walking
+                              ? (vm.walkPaused
+                                    ? Iconsax.play
+                                    : Iconsax.pause)
+                              : Iconsax.refresh,
+                          size: 24,
+                        ),
+                        label: Text(
+                          vm.walking
+                              ? (vm.walkPaused ? 'เดินต่อ' : 'พัก')
+                              : 'เริ่มใหม่',
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -642,16 +910,54 @@ class _BottomBar extends StatelessWidget {
                 ),
               ],
             )
+          : vm.canDrawManually
+          ? Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    onPressed: () => _startWalk(context),
+                    icon: const Icon(Icons.directions_walk, size: 24),
+                    label: const Text(
+                      'เดินวัด',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    onPressed: vm.startDrawing,
+                    icon: const Icon(Iconsax.location_add, size: 24),
+                    label: const Text(
+                      'แตะวาด',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            )
           : SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
-                onPressed: vm.startDrawing,
-                icon: const Icon(Iconsax.location_add, size: 24),
+                onPressed: () => _startWalk(context),
+                icon: const Icon(Icons.directions_walk, size: 24),
                 label: const Text(
-                  'เพิ่มพิกัด',
+                  'เดินวัด',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -662,6 +968,15 @@ class _BottomBar extends StatelessWidget {
     );
   }
 
+  Future<void> _startWalk(BuildContext context) async {
+    final err = await vm.startWalk();
+    if (err != null && context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err)));
+    }
+  }
+
   Future<void> _finish(BuildContext context) async {
     if (vm.draft.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -669,16 +984,19 @@ class _BottomBar extends StatelessWidget {
       );
       return;
     }
+    onFormOpen?.call(true);
     final result = await Navigator.of(context).push<MeasurementResult>(
       MaterialPageRoute(
         builder: (_) => MeasurementSaveView(
           areaSquareMeters: vm.draftAreaSqm,
-          officers: vm.fetchOfficers(),
-          farmers: vm.fetchFarmers(),
-          caneGroups: vm.fetchCaneGroups(),
+          officers: vm.fetchOfficers,
+          farmers: vm.fetchFarmers,
+          options: vm.fetchOptions,
+          isOfficer: vm.canDrawManually,
         ),
       ),
     );
+    onFormOpen?.call(false);
     if (result == null) return;
     final err = await vm.finishDrawing(
       result.name,
@@ -686,6 +1004,7 @@ class _BottomBar extends StatelessWidget {
       officerName: result.officerName,
       project: result.project,
       farmerName: result.farmerName,
+      farmerId: result.farmerId,
       caneGroup: result.caneGroup,
       zone: result.zone,
       province: result.province,

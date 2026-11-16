@@ -11,6 +11,7 @@ class Parcel {
     this.variety,
     this.owner,
     this.status,
+    this.productionYear,
     this.centerOverride,
     this.isDraft = false,
   });
@@ -19,6 +20,7 @@ class Parcel {
   final String name;
   final String? variety;
   final String? owner;
+  final String? productionYear;
 
   /// Approval status — backend supplies it later; until then items
   /// land in the 'รออนุมัติ' tab.
@@ -52,6 +54,10 @@ class Parcel {
       variety: json['variety'] as String?,
       owner: farmer?['displayName'] as String?,
       status: json['status'] as String?,
+      productionYear:
+          (json['meta'] as Map<String, dynamic>?)?['productionYear']
+              as String? ??
+          json['productionYear'] as String?,
       points: points,
       isDraft: json['isDraft'] == true,
       centerOverride: center == null
@@ -70,6 +76,7 @@ class Parcel {
     'variety': variety,
     'owner': owner,
     'status': status,
+    'productionYear': productionYear,
     'isDraft': isDraft,
     'points': [
       for (final p in points)
@@ -114,4 +121,103 @@ class Parcel {
   }
 
   String get areaThai => formatThaiArea(areaSquareMeters);
+}
+
+/// A farmer account an officer can pick as the plot owner —
+/// `{id, displayName}` pair from `/accounts/farmers`.
+class FarmerRef {
+  const FarmerRef({required this.id, required this.name});
+
+  final String id;
+  final String name;
+}
+
+/// `{code, name}` pair for pickers whose value isn't the display text
+/// (e.g. prevPlots carries the plot id in [code]).
+typedef OptionItem = ({String code, String name});
+
+/// Option lists for the measurement save form — fetched from the
+/// backend (`GET /meta/options`), never hardcoded in the app.
+class FormOptions {
+  const FormOptions({
+    this.zones = const [],
+    this.provinces = const [],
+    this.locations = const {},
+    this.projects = const [],
+    this.caneGroups = const [],
+    this.caneTypes = const [],
+    this.caneVarieties = const [],
+    this.ownerships = const [],
+    this.terrains = const [],
+    this.lossOptions = const [],
+    this.prevPlots = const [],
+  });
+
+  factory FormOptions.fromJson(Map<String, dynamic> j) {
+    List<String> names(String k) =>
+        [for (final v in j[k] as List? ?? const []) '$v'];
+    return FormOptions(
+      zones: names('zones'),
+      provinces: names('provinces'),
+      locations: _parseLocations(j['locations']),
+      projects: names('projects'),
+      caneGroups: names('caneGroups'),
+      caneTypes: names('caneTypes'),
+      caneVarieties: names('caneVarieties'),
+      ownerships: names('ownerships'),
+      terrains: names('terrains'),
+      lossOptions: names('lossOptions'),
+      prevPlots: [
+        for (final v in j['prevPlots'] as List? ?? const [])
+          (code: '${v['code']}', name: '${v['name']}'),
+      ],
+    );
+  }
+
+  /// จังหวัด → อำเภอ → ตำบล → [หมู่บ้าน] for cascading pickers.
+  static Map<String, Map<String, Map<String, List<String>>>>
+      _parseLocations(dynamic j) {
+    if (j is! Map) return const {};
+    List<String> strs(dynamic v) =>
+        [for (final e in v as List? ?? const []) '$e'];
+    Map<String, List<String>> tambons(dynamic v) => {
+      if (v is Map)
+        for (final e in v.entries) '${e.key}': strs(e.value),
+    };
+    Map<String, Map<String, List<String>>> districts(dynamic v) => {
+      if (v is Map)
+        for (final e in v.entries) '${e.key}': tambons(e.value),
+    };
+    return {
+      for (final e in j.entries) '${e.key}': districts(e.value),
+    };
+  }
+
+  /// อำเภอในจังหวัดที่เลือก — empty until a province is picked.
+  List<String> districtsOf(String? province) =>
+      locations[province]?.keys.toList() ?? const [];
+
+  /// ตำบลในอำเภอที่เลือก.
+  List<String> subdistrictsOf(String? province, String? district) =>
+      locations[province]?[district]?.keys.toList() ?? const [];
+
+  /// หมู่บ้านในตำบลที่เลือก.
+  List<String> villagesOf(
+    String? province,
+    String? district,
+    String? subdistrict,
+  ) =>
+      locations[province]?[district]?[subdistrict] ?? const [];
+
+  final List<String> zones;
+  final List<String> provinces;
+  final Map<String, Map<String, Map<String, List<String>>>> locations;
+  final List<String> projects;
+  final List<String> caneGroups;
+  final List<String> caneTypes;
+  final List<String> caneVarieties;
+  final List<String> ownerships;
+  final List<String> terrains;
+  final List<String> lossOptions;
+  final List<OptionItem> prevPlots;
 }

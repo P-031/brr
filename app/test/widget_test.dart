@@ -14,7 +14,8 @@ class FakeSessionStore extends SessionStore {
   Future<void> save(AuthSession session) async {}
 
   @override
-  Future<({String refreshToken, String? idToken})?> read() async => null;
+  Future<({String refreshToken, String? idToken, String? accessToken})?>
+  read() async => null;
 
   @override
   Future<List<SavedAccount>> readAccounts() async => const [];
