@@ -17,10 +17,23 @@ class LocationService {
   }
 
   /// One-shot position — returns null when permission is missing.
+  /// ลอง lastKnown ก่อน (~instant พอสำหรับตั้งกล้อง) ถ้าไม่มีค่อย
+  /// รอ fix ใหม่แต่จำกัด 10 วิ — เครื่องไม่มี fix เดิมจะได้
+  /// fallback เร็วแทนที่จะรอค้าง
   Future<LatLng?> currentPosition() async {
     if (!await ensurePermission()) return null;
-    final p = await Geolocator.getCurrentPosition();
-    return LatLng(p.latitude, p.longitude);
+    final last = await Geolocator.getLastKnownPosition();
+    if (last != null) return LatLng(last.latitude, last.longitude);
+    try {
+      final p = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          timeLimit: Duration(seconds: 10),
+        ),
+      );
+      return LatLng(p.latitude, p.longitude);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Continuous fixes for walk-measure — ~3 m between emissions.

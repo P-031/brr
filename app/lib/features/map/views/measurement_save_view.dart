@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -71,6 +72,68 @@ class MeasurementResult {
   final String? note;
   final List<String> photos;
   final bool draft;
+}
+
+/// แป้นพิมพ์ไทยกดตำแหน่งเลขได้อักขระไทย/สัญลักษณ์ (เช่น / -) —
+/// แปลงเลขไทย ๐-๙ เป็นอารบิกแล้วตัดตัวอื่นทิ้ง ทำให้ช่องตัวเลข
+/// พิมพ์ได้ไม่ว่าแป้นจะอยู่โหมดไหน
+class _DigitFormatter extends TextInputFormatter {
+  const _DigitFormatter({this.decimal = false});
+
+  /// true = อนุญาตจุดทศนิยม 1 จุด (ไร่สูญเสีย/เป้าผลผลิต)
+  final bool decimal;
+
+  static const _thai = '๐๑๒๓๔๕๖๗๘๙';
+
+  /// แป้นไทย Kedmanee — อักขระที่แถวตัวเลขพิมพ์ออกมาโดยไม่กด Shift
+  /// จับคู่กับเลขตาม "ตำแหน่งปุ่ม" (กดปุ่ม 4 ได้ ภ = ตั้งใจพิมพ์ 4)
+  static const _kedmanee = {
+    'ๅ': '1',
+    '/': '2',
+    '-': '3',
+    'ภ': '4',
+    'ถ': '5',
+    'ุ': '6',
+    'ึ': '7',
+    'ค': '8',
+    'ต': '9',
+    'จ': '0',
+  };
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final sb = StringBuffer();
+    var hasDot = false;
+    for (final r in newValue.text.runes) {
+      final ch = String.fromCharCode(r);
+      final ti = _thai.indexOf(ch);
+      if (ti >= 0) {
+        sb.write(ti);
+        continue;
+      }
+      final kd = _kedmanee[ch];
+      if (kd != null) {
+        sb.write(kd);
+        continue;
+      }
+      if (r >= 0x30 && r <= 0x39) {
+        sb.write(ch);
+        continue;
+      }
+      if (decimal && !hasDot && ch == '.') {
+        hasDot = true;
+        sb.write('.');
+      }
+    }
+    final text = sb.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 }
 
 /// บันทึกข้อมูลการวัด — shows the measured area (ไร่/งาน/ตร.วา)
@@ -337,6 +400,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     int maxLines = 1,
     String? helper,
     String? Function(String?)? validator,
+    List<TextInputFormatter>? formatters,
   }) => ValueListenableBuilder<TextEditingValue>(
     valueListenable: ctrl,
     builder: (_, value, _) => TextFormField(
@@ -345,6 +409,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
       keyboardType: keyboard,
       maxLines: maxLines,
       validator: validator,
+      inputFormatters: formatters,
       decoration: _deco(
         label,
         icon,
@@ -407,6 +472,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               'ปีการผลิต',
               Iconsax.calendar,
               keyboard: TextInputType.number,
+              formatters: const [_DigitFormatter()],
             ),
             const SizedBox(height: 16),
             _picker(
@@ -524,6 +590,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               'รูท',
               Iconsax.hashtag,
               keyboard: TextInputType.number,
+              formatters: const [_DigitFormatter()],
             ),
             const SizedBox(height: 16),
             _tf(
@@ -531,6 +598,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               'ลำดับ',
               Iconsax.task_square,
               keyboard: TextInputType.number,
+              formatters: const [_DigitFormatter()],
             ),
             const SizedBox(height: 24),
             const Text(
@@ -597,7 +665,10 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               _lossCtrl,
               'พื้นที่สูญเสีย (ไร่)',
               Iconsax.ruler,
-              keyboard: TextInputType.number,
+              keyboard: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              formatters: const [_DigitFormatter(decimal: true)],
             ),
             const SizedBox(height: 24),
             const Text(
@@ -615,6 +686,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               keyboard: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              formatters: const [_DigitFormatter(decimal: true)],
               helper: 'ไม่ควรใส่เกิน 30 ตัน/ไร่',
               validator: (v) {
                 final t = double.tryParse(v?.trim() ?? '');

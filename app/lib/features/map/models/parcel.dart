@@ -14,6 +14,7 @@ class Parcel {
     this.productionYear,
     this.centerOverride,
     this.isDraft = false,
+    this.meta,
   });
 
   final String id;
@@ -21,6 +22,10 @@ class Parcel {
   final String? variety;
   final String? owner;
   final String? productionYear;
+
+  /// ข้อมูลประกอบแปลงจาก backend (`meta` object ใน payload) —
+  /// productionYear/officerName/caneType/village/… ใช้โชว์ตอนแตะแปลง
+  final Map<String, dynamic>? meta;
 
   /// Approval status — backend supplies it later; until then items
   /// land in the 'รออนุมัติ' tab.
@@ -54,12 +59,18 @@ class Parcel {
       variety: json['variety'] as String?,
       owner: farmer?['displayName'] as String?,
       status: json['status'] as String?,
-      productionYear:
-          (json['meta'] as Map<String, dynamic>?)?['productionYear']
-              as String? ??
-          json['productionYear'] as String?,
+      // "" จาก backend นับเป็นไม่ระบุปี (null) — ให้ตรงกลุ่มกับ
+      // หน้าเลือกดาวน์โหลดและ yearAllowlist ของแผนที่
+      productionYear: () {
+        final y =
+            (json['meta'] as Map<String, dynamic>?)?['productionYear']
+                as String? ??
+            json['productionYear'] as String?;
+        return (y == null || y.isEmpty) ? null : y;
+      }(),
       points: points,
       isDraft: json['isDraft'] == true,
+      meta: json['meta'] as Map<String, dynamic>?,
       centerOverride: center == null
           ? null
           : LatLng(
@@ -78,6 +89,7 @@ class Parcel {
     'status': status,
     'productionYear': productionYear,
     'isDraft': isDraft,
+    'meta': ?meta,
     'points': [
       for (final p in points)
         {'latitude': p.latitude, 'longitude': p.longitude},
@@ -121,6 +133,22 @@ class Parcel {
   }
 
   String get areaThai => formatThaiArea(areaSquareMeters);
+
+  /// Bbox overlap กับกรอบ (west, south, east, north) — ใช้คัดแปลง
+  /// นอกจอออกก่อนโยนเข้า GoogleMap; ประมาณจาก bbox ของ polygon เอง
+  /// ราคาถูกมาก (~points ละ 4 op) แม้มี false positive เล็กน้อย
+  bool intersectsBox(double west, double south, double east, double north) {
+    if (points.isEmpty) return false;
+    var w = double.infinity, s = double.infinity;
+    var e = -double.infinity, n = -double.infinity;
+    for (final p in points) {
+      if (p.longitude < w) w = p.longitude;
+      if (p.longitude > e) e = p.longitude;
+      if (p.latitude < s) s = p.latitude;
+      if (p.latitude > n) n = p.latitude;
+    }
+    return w <= east && e >= west && s <= north && n >= south;
+  }
 }
 
 /// A farmer account an officer can pick as the plot owner —
@@ -150,6 +178,10 @@ class FormOptions {
     this.ownerships = const [],
     this.terrains = const [],
     this.lossOptions = const [],
+    this.plotStatuses = const [],
+    this.plotRequestTypes = const [],
+    this.parcelStatuses = const [],
+    this.riskLevels = const [],
     this.prevPlots = const [],
   });
 
@@ -167,6 +199,10 @@ class FormOptions {
       ownerships: names('ownerships'),
       terrains: names('terrains'),
       lossOptions: names('lossOptions'),
+      plotStatuses: names('plotStatuses'),
+      plotRequestTypes: names('plotRequestTypes'),
+      parcelStatuses: names('parcelStatuses'),
+      riskLevels: names('riskLevels'),
       prevPlots: [
         for (final v in j['prevPlots'] as List? ?? const [])
           (code: '${v['code']}', name: '${v['name']}'),
@@ -219,5 +255,12 @@ class FormOptions {
   final List<String> ownerships;
   final List<String> terrains;
   final List<String> lossOptions;
+
+  /// สถานะแปลง/ประเภทคำขอแก้ไข — dropdown หน้า "ยื่นคำขออัปเดต
+  /// สถานะแปลง1/2" (มาจาก /meta/options เหมือนตัวเลือกอื่น)
+  final List<String> plotStatuses;
+  final List<String> plotRequestTypes;
+  final List<String> parcelStatuses;
+  final List<String> riskLevels;
   final List<OptionItem> prevPlots;
 }
