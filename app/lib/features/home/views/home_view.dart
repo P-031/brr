@@ -9,6 +9,7 @@ import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
 import 'package:brr/features/map/views/map_view.dart';
 import 'package:brr/features/notifications/views/notifications_view.dart';
+import 'package:brr/features/plot_activities/views/plot_activities_view.dart';
 
 class HomeView extends StatelessWidget {
   const HomeView({super.key});
@@ -136,7 +137,7 @@ class HomeView extends StatelessWidget {
                 _MenuCard(
                   icon: Iconsax.rulerpen,
                   title: 'วัดพื้นที่',
-                  subtitle: 'ดูแปลงและคำนวณพื้นที่จากพิกัด',
+                  subtitle: 'เดินวัดหรือแตะวาดขอบแปลงจากพิกัด GPS',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => MapView(
@@ -145,6 +146,32 @@ class HomeView extends StatelessWidget {
                           canDrawManually: vm.user?.role == 'OFFICER',
                         ),
                       ),
+                    ),
+                  ),
+                ),
+                _MenuCard(
+                  icon: Iconsax.map,
+                  title: 'แผนที่แปลง',
+                  subtitle: 'ดูแปลงอ้อยที่บันทึกไว้ — ดาวน์โหลดตามปีการผลิต',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => MapView(
+                        parcelBrowser: true,
+                        createViewModel: () => MapViewModel(
+                          api: vm.api,
+                          canDrawManually: vm.user?.role == 'OFFICER',
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _MenuCard(
+                  icon: Iconsax.task_square,
+                  title: 'กิจกรรมแปลง',
+                  subtitle: 'รายการแปลงพร้อมตัวกรอง — ปี เขต ประเภทอ้อย สถานะ',
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => PlotActivitiesView(api: vm.api),
                     ),
                   ),
                 ),

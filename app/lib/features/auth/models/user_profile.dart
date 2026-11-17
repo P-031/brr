@@ -8,6 +8,7 @@ class UserProfile {
     this.phone,
     this.photoPath,
     this.role,
+    this.zone,
   });
 
   /// `sub` claim.
@@ -25,6 +26,10 @@ class UserProfile {
   /// 'OFFICER' / 'FARMER' — from the Keycloak realm roles.
   final String? role;
 
+  /// เขตที่รับผิดชอบ — จาก custom claim `zone` ของ token (null ถ้า
+  /// Keycloak ยังไม่ส่งมา)
+  final String? zone;
+
   static String? _roleFromClaims(Map<String, dynamic> claims) {
     final access = claims['realm_access'];
     if (access is! Map || access['roles'] is! List) return null;
@@ -41,6 +46,7 @@ class UserProfile {
       name: claims['name'] as String?,
       email: claims['email'] as String?,
       role: _roleFromClaims(claims),
+      zone: claims['zone'] as String?,
     );
   }
 
@@ -53,6 +59,7 @@ class UserProfile {
         phone: phone ?? this.phone,
         photoPath: photoPath ?? this.photoPath,
         role: role,
+        zone: zone,
       );
 
   String get displayName => (name?.isNotEmpty ?? false) ? name! : username;

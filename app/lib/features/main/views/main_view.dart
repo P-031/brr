@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/home/views/home_view.dart';
 import 'package:brr/features/menu/views/menu_view.dart';
 import 'package:brr/features/parcel_status/views/parcel_status_view.dart';
@@ -24,7 +26,11 @@ class _MainViewState extends State<MainView> {
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: const [HomeView(), ParcelStatusView(), MenuView()],
+        children: [
+          const HomeView(),
+          ParcelStatusView(api: context.read<AuthViewModel>().api),
+          const MenuView(),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(

@@ -1,47 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:provider/provider.dart';
 
-import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/features/parcel_status/viewmodels/parcel_status_viewmodel.dart';
 
 /// สถานะแปลง — scrollable status tabs + filtered parcel list.
-///
-/// Backend-ready: not wired yet — swap [_parcels] for a
-/// ParcelService/MapViewModel fetch when the endpoint is ready.
-class ParcelStatusView extends StatefulWidget {
-  const ParcelStatusView({super.key});
+/// ชื่อ tab มาจาก backend (/meta/options → parcelStatuses) เสมอ;
+/// รายการแปลงจะต่อเมื่อมี endpoint (ดู ParcelStatusViewModel)
+class ParcelStatusView extends StatelessWidget {
+  const ParcelStatusView({super.key, this.api});
 
-  @override
-  State<ParcelStatusView> createState() => _ParcelStatusState();
-}
-
-class _ParcelStatusState extends State<ParcelStatusView> {
-  int _tab = 0;
-  late final List<GlobalKey> _keys = List.generate(
-    _tabs.length,
-    (_) => GlobalKey(),
-  );
-
-  static const _tabs = [
-    'รออนุมัติ',
-    'อนุมัติ',
-    'ไม่อนุมัติ',
-    'ยกเลิก',
-    'แปลงที่ลบแล้ว',
-    'แปลงรอยืนยัน',
-    'ยกเลิกแบบมีหนี้ค้าง',
-  ];
-
-  // TODO(backend): replace with vm.parcels from ParcelService.
-  static const _parcels = <Parcel>[];
-
-  String _statusOf(Parcel p) => p.status ?? 'รออนุมัติ';
+  /// ApiClient เดียวกับ session — null = โหมดออฟไลน์ (แสดงว่าง)
+  final ApiClient? api;
 
   @override
   Widget build(BuildContext context) {
-    final items = _parcels
-        .where((p) => _statusOf(p) == _tabs[_tab])
-        .toList();
+    return ChangeNotifierProvider(
+      create: (_) =>
+          ParcelStatusViewModel(api == null ? null : ParcelService(api)),
+      child: const _Body(),
+    );
+  }
+}
+
+class _Body extends StatefulWidget {
+  const _Body();
+
+  @override
+  State<_Body> createState() => _BodyState();
+}
+
+class _BodyState extends State<_Body> {
+  int _tab = 0;
+  List<GlobalKey> _keys = const [];
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<ParcelStatusViewModel>();
+    final tabs = vm.statuses;
+    if (_tab >= tabs.length) _tab = 0;
+    if (_keys.length != tabs.length) {
+      _keys = List.generate(tabs.length, (_) => GlobalKey());
+    }
+    final items = tabs.isEmpty
+        ? const <Parcel>[]
+        : vm.parcelsOf(tabs[_tab]);
     return Column(
       children: [
         Container(
@@ -58,19 +65,41 @@ class _ParcelStatusState extends State<ParcelStatusView> {
           color: Colors.white,
           child: Column(
             children: [
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Row(
-                  children: [
-                    for (var i = 0; i < _tabs.length; i++)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 14),
-                        child: _chip(i),
-                      ),
-                  ],
+              if (vm.loading)
+                const Padding(
+                  padding: EdgeInsets.all(14),
+                  child: SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: AppColors.green,
+                    ),
+                  ),
+                )
+              else if (vm.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: TextButton.icon(
+                    onPressed: vm.load,
+                    icon: const Icon(Iconsax.refresh, size: 18),
+                    label: const Text('โหลดสถานะไม่สำเร็จ — ลองใหม่'),
+                  ),
+                )
+              else
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < tabs.length; i++)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 14),
+                          child: _chip(i, tabs[i]),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
               const Divider(height: 1, color: Colors.black12),
             ],
           ),
@@ -98,7 +127,7 @@ class _ParcelStatusState extends State<ParcelStatusView> {
                         subtitle: Text(p.areaThai),
                         trailing: Chip(
                           label: Text(
-                            _statusOf(p),
+                            tabs[_tab],
                             style: const TextStyle(fontSize: 12),
                           ),
                           backgroundColor: AppColors.goldLight,
@@ -112,7 +141,7 @@ class _ParcelStatusState extends State<ParcelStatusView> {
     );
   }
 
-  Widget _inner(int i) {
+  Widget _inner(int i, String label) {
     final selected = _tab == i;
     return Container(
       padding: EdgeInsets.symmetric(
@@ -131,7 +160,7 @@ class _ParcelStatusState extends State<ParcelStatusView> {
         ),
       ),
       child: Text(
-        _tabs[i],
+        label,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -143,7 +172,7 @@ class _ParcelStatusState extends State<ParcelStatusView> {
     );
   }
 
-  Widget _chip(int i) {
+  Widget _chip(int i, String label) {
     final selected = _tab == i;
     return GestureDetector(
       key: _keys[i],
@@ -164,7 +193,7 @@ class _ParcelStatusState extends State<ParcelStatusView> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         transform: Matrix4.translationValues(0, selected ? -8 : 0, 0),
-        child: _inner(i),
+        child: _inner(i, label),
       ),
     );
   }

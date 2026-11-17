@@ -65,8 +65,12 @@ class MenuView extends StatelessWidget {
                     Row(
                       children: [
                         _badge(user?.email ?? '-'),
-                        const SizedBox(width: 6),
-                        _badge('Zone: -'),
+                        // เขตจาก claim ของ token — แสดงเฉพาะตอน
+                        // backend/Keycloak ส่งมาจริง
+                        if (user?.zone != null) ...[
+                          const SizedBox(width: 6),
+                          _badge('Zone: ${user!.zone}'),
+                        ],
                       ],
                     ),
                   ],
