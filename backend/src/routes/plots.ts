@@ -31,10 +31,13 @@ const surveySchema = z.object({
   corners: z.array(cornerSchema).min(surveyRules.minCorners).max(surveyRules.maxCorners + 1),
 });
 
+const seasonText = z.string().trim().min(1).max(80);
+
 const createPlotBody = z.object({
   id: clientId,
   name: z.string().trim().min(1).max(120),
   variety: z.string().trim().max(120).default(""),
+  season: seasonText,
   survey: surveySchema,
 });
 
@@ -51,6 +54,7 @@ const updatePlotBody = z
 
 const overlapCheckBody = z.object({
   survey: surveySchema,
+  season: seasonText,
   plotId: z.string().trim().min(1).max(64).optional(),
 });
 
@@ -118,13 +122,20 @@ function coordinate(value: unknown, min: number, max: number) {
 }
 
 /** Call with the boundary lock held. */
-async function assertFits(tx: Prisma.TransactionClient, measured: MeasuredSurvey, farmerId: string, plotId?: string) {
+async function assertFits(
+  tx: Prisma.TransactionClient,
+  measured: MeasuredSurvey,
+  farmerId: string,
+  season: string,
+  plotId?: string,
+) {
   if (!(await isValidRing(tx, measured.ring))) {
-    throw new HttpError(400, "ขอบแปลงไม่ถูกต้อง", { code: "SURVEY_INVALID" });
+    throw new HttpError(400, "ขอบแปลงไม่ถูกต้อง", { code: "SURVEY_INVALID"});
   }
-  const rows = await overlappingPlots(tx, measured.ring, plotId);
+  const rows = await overlappingPlots(tx, measured.ring, season, plotId);
   const conflicts = blockingOverlaps(rows, measured.areaSqm, farmerId);
   if (conflicts.length > 0) throw overlapError(conflicts);
+  
 }
 
 function surveyRecord(plotId: string, survey: Survey, measured: MeasuredSurvey) {
@@ -149,6 +160,24 @@ fieldRouter.get("/survey-rules", (_req, res) => {
 });
 
 fieldRouter.get(
+  "/seasons",
+  route(async (req, res) => {
+    const farmerIds = await farmerIdsForList(currentUser(req), queryText(req.query.farmerId));
+    if (farmerIds.length === 0) {
+      res.json({ items: [] });
+      return;
+    }
+    const rows = await prisma.plot.findMany({
+      where: { farmerId: { in: farmerIds } },
+      distinct: ["season"],
+      select: { season: true },
+      orderBy: { season: "desc" },
+    });
+    res.json({ items: rows.map((row) => row.season) });
+  }),
+);
+
+fieldRouter.get(
   "/plots",
   route(async (req, res) => {
     const user = currentUser(req);
@@ -157,11 +186,13 @@ fieldRouter.get(
         limit: z.coerce.number().int().min(1).max(50).default(20),
         cursor: z.string().min(1).optional(),
         farmerId: z.string().min(1).optional(),
+        season: seasonText,
       })
       .parse({
         limit: queryText(req.query.limit),
         cursor: queryText(req.query.cursor),
         farmerId: queryText(req.query.farmerId),
+        season: queryText(req.query.season),
       });
 
     const farmerIds = await farmerIdsForList(user, query.farmerId);
@@ -174,6 +205,7 @@ fieldRouter.get(
     const plots = await prisma.plot.findMany({
       where: {
         farmerId: { in: farmerIds },
+        season: query.season,
         ...(cursor
           ? {
               OR: [
@@ -211,13 +243,14 @@ fieldRouter.get(
       throw new HttpError(400, "กรอบแผนที่ไม่ถูกต้อง");
     }
     const limit = z.coerce.number().int().min(1).max(500).default(200).parse(queryText(req.query.limit));
+    const season = seasonText.parse(queryText(req.query.season));
     const farmerIds = await farmerIdsForList(user, queryText(req.query.farmerId));
     if (farmerIds.length === 0) {
       res.json({ items: [], truncated: false });
       return;
     }
 
-    const rows = await plotsInBox(farmerIds, box, limit + 1);
+    const rows = await plotsInBox(farmerIds, box, season, limit + 1);
     res.json({
       items: rows.slice(0, limit).map((row) => ({
         ...plotSummary({
@@ -241,7 +274,7 @@ fieldRouter.post(
     if (body.plotId) await ownedPlot(user, body.plotId);
 
     const measured = measureSurvey(body.survey, new Date());
-    const rows = await overlappingPlots(prisma, measured.ring, body.plotId);
+    const rows = await overlappingPlots(prisma, measured.ring, body.season, body.plotId);
     res.json({
       ...areaFields(measured.areaSqm),
       points: measured.ring,
@@ -268,13 +301,14 @@ fieldRouter.post(
     const measured = measureSurvey(body.survey, new Date());
     await prisma.$transaction(async (tx) => {
       await lockBoundaries(tx);
-      await assertFits(tx, measured, user.id);
+      await assertFits(tx, measured, user.id, body.season);
       await tx.plot.create({
         data: {
           id: body.id,
           farmerId: user.id,
           name: body.name,
           variety: body.variety,
+          season: body.season,
           areaSqm: measured.areaSqm,
           centerLat: measured.center.latitude,
           centerLng: measured.center.longitude,
@@ -302,7 +336,7 @@ fieldRouter.patch(
   route(async (req, res) => {
     const user = currentUser(req);
     const plotId = pathId(req.params.plotId);
-    await ownedPlot(user, plotId);
+    const plot = await ownedPlot(user, plotId);
     const body = updatePlotBody.parse(req.body);
     const survey = body.survey;
     const measured = survey ? measureSurvey(survey, new Date()) : undefined;
@@ -323,7 +357,7 @@ fieldRouter.patch(
       });
       if (updated.count === 0) return false;
       if (survey && measured) {
-        await assertFits(tx, measured, user.id, plotId);
+        await assertFits(tx, measured, user.id, plot.season, plotId);
         await writeBoundary(tx, plotId, measured.ring);
         await tx.plotSurvey.create({ data: surveyRecord(plotId, survey, measured) });
       }
@@ -344,7 +378,10 @@ fieldRouter.delete(
     const plotId = pathId(req.params.plotId);
     const version = versionQuery(req.query.version);
 
-    const plot = await prisma.plot.findUnique({ where: { id: plotId }, select: { farmerId: true } });
+    const plot = await prisma.plot.findUnique({
+      where: { id: plotId },
+      select: { farmerId: true, season: true },
+    });
     if (!plot || plot.farmerId !== user.id) {
       if (await wasDeletedBy("PLOT", plotId, user.id)) {
         res.status(204).send();
@@ -356,7 +393,9 @@ fieldRouter.delete(
     const removed = await prisma.$transaction(async (tx) => {
       const result = await tx.plot.deleteMany({ where: { id: plotId, ...(version ? { version } : {}) } });
       if (result.count === 0) return false;
-      await tx.deletedRecord.create({ data: { kind: "PLOT", recordId: plotId, farmerId: user.id } });
+      await tx.deletedRecord.create({
+        data: { kind: "PLOT", recordId: plotId, farmerId: user.id, season: plot.season },
+      });
       return true;
     });
     if (!removed) throw versionConflict(await toDetail(await visiblePlot(user, plotId)));
@@ -458,7 +497,7 @@ fieldRouter.delete(
       const result = await tx.yieldRecord.deleteMany({ where: { id: yieldId, ...(version ? { version } : {}) } });
       if (result.count === 0) return false;
       await tx.deletedRecord.create({
-        data: { kind: "YIELD", recordId: yieldId, farmerId: user.id, plotId: plot.id },
+        data: { kind: "YIELD", recordId: yieldId, farmerId: user.id, plotId: plot.id, season: plot.season },
       });
       return true;
     });
@@ -560,7 +599,7 @@ fieldRouter.delete(
       const result = await tx.fieldTask.deleteMany({ where: { id: taskId, ...(version ? { version } : {}) } });
       if (result.count === 0) return false;
       await tx.deletedRecord.create({
-        data: { kind: "TASK", recordId: taskId, farmerId: user.id, plotId: plot.id },
+        data: { kind: "TASK", recordId: taskId, farmerId: user.id, plotId: plot.id, season: plot.season },
       });
       return true;
     });

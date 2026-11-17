@@ -65,6 +65,8 @@ model Plot {
   areaSqm   Float
   centerLat Float
   centerLng Float
+  /// Crop season this plot belongs to. Chosen before load or save. Never changed later.
+  season    String
   /// Read and written with raw SQL in src/boundary.ts. Prisma Client cannot touch this column.
   boundary   Unsupported("geometry(Polygon, 4326)")?
   /// Bumped on every change. Offline edits must send the version they started from.
@@ -80,6 +82,7 @@ model Plot {
 
   @@index([farmerId, createdAt, id])
   @@index([farmerId, updatedAt])
+  @@index([farmerId, season])
   @@index([boundary], type: Gist)
 }
 
@@ -132,6 +135,8 @@ model DeletedRecord {
   recordId  String
   farmerId  String
   plotId    String?
+  /// Season of the deleted plot, so a sync for one season does not receive the others.
+  season    String?
   deletedAt DateTime   @default(now())
 
   @@id([kind, recordId])
