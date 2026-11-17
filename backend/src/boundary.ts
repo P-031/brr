@@ -25,6 +25,7 @@ export type MapPlotRow = {
   farmerId: string;
   username: string;
   displayName: string;
+  season: string;
   outline: string | null;
 };
 
@@ -90,13 +91,19 @@ export async function isValidRing(db: Db, ring: LatLng[]): Promise<boolean> {
 }
 
 /** Every plot of any farmer that shares ground with the ring, with the shared area in square metres. */
-export async function overlappingPlots(db: Db, ring: LatLng[], excludePlotId?: string): Promise<OverlapRow[]> {
+export async function overlappingPlots(
+  db: Db,
+  ring: LatLng[],
+  season: string,
+  excludePlotId?: string,
+): Promise<OverlapRow[]> {
   return db.$queryRaw<OverlapRow[]>`
     WITH drawn AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON(${polygonGeoJson(ring)}), 4326) AS geom)
     SELECT p.id, p.name, p."farmerId", p."areaSqm",
            ST_Area(ST_Intersection(ST_MakeValid(p.boundary), drawn.geom)::geography) AS "overlapSqm"
     FROM "Plot" p, drawn
-    WHERE p.boundary && drawn.geom
+    WHERE p.season = ${season}
+      AND p.boundary && drawn.geom
       AND ST_Intersects(p.boundary, drawn.geom)
       AND p.id <> ${excludePlotId ?? ""}
     ORDER BY "overlapSqm" DESC
@@ -104,15 +111,22 @@ export async function overlappingPlots(db: Db, ring: LatLng[], excludePlotId?: s
 }
 
 /** Plots whose outline touches the box, with corners thinned to the map's scale. */
-export async function plotsInBox(farmerIds: string[], box: Box, limit: number): Promise<MapPlotRow[]> {
+export async function plotsInBox(
+  farmerIds: string[],
+  box: Box,
+  season: string,
+  limit: number,
+): Promise<MapPlotRow[]> {
   const tolerance = Math.max(box.east - box.west, box.north - box.south) / 2000;
   return prisma.$queryRaw<MapPlotRow[]>`
     SELECT p.id, p.name, p.variety, p."areaSqm", p."centerLat", p."centerLng", p.version,
-           p."surveyedAt", p."createdAt", p."updatedAt", p."farmerId", u.username, u."displayName",
+           p."surveyedAt", p."createdAt", p."updatedAt", p."farmerId", p.season,
+           u.username, u."displayName",
            ST_AsGeoJSON(ST_SimplifyPreserveTopology(p.boundary, ${tolerance}::float8)) AS outline
     FROM "Plot" p
     JOIN "User" u ON u.id = p."farmerId"
-    WHERE p."farmerId" IN (${Prisma.join(farmerIds)})
+    WHERE p.season = ${season}
+      AND p."farmerId" IN (${Prisma.join(farmerIds)})
       AND p.boundary && ST_MakeEnvelope(
         ${box.west}::float8, ${box.south}::float8, ${box.east}::float8, ${box.north}::float8, 4326
       )

@@ -30,8 +30,13 @@ syncRouter.get(
       .object({
         since: z.string().datetime({ offset: true }).optional(),
         farmerId: z.string().min(1).max(64).optional(),
+        season: z.string().trim().min(1).max(80),
       })
-      .parse({ since: queryText(req.query.since), farmerId: queryText(req.query.farmerId) });
+      .parse({
+        since: queryText(req.query.since),
+        farmerId: queryText(req.query.farmerId),
+        season: queryText(req.query.season),
+      });
 
     const since = query.since ? new Date(query.since) : undefined;
     const farmerIds = await farmerIdsForList(user, query.farmerId);
@@ -39,22 +44,22 @@ syncRouter.get(
 
     const [plots, yields, tasks, deleted] = await Promise.all([
       prisma.plot.findMany({
-        where: { farmerId: { in: farmerIds }, updatedAt: changed },
+        where: { farmerId: { in: farmerIds }, season: query.season, updatedAt: changed },
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         select: summarySelect,
       }),
       prisma.yieldRecord.findMany({
-        where: { plot: { farmerId: { in: farmerIds } }, updatedAt: changed },
+        where: { plot: { farmerId: { in: farmerIds }, season: query.season }, updatedAt: changed },
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
         include: { plot: { select: { areaSqm: true } } },
       }),
       prisma.fieldTask.findMany({
-        where: { plot: { farmerId: { in: farmerIds } }, updatedAt: changed },
+        where: { plot: { farmerId: { in: farmerIds }, season: query.season }, updatedAt: changed },
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
       }),
       since
         ? prisma.deletedRecord.findMany({
-            where: { farmerId: { in: farmerIds }, deletedAt: { gt: since } },
+            where: { farmerId: { in: farmerIds }, season: query.season, deletedAt: { gt: since } },
             orderBy: { deletedAt: "asc" },
           })
         : Promise.resolve([]),

@@ -53,12 +53,14 @@ export function plotSummary(plot: {
   surveyedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  season: string;
   farmer: { id: string; username: string; displayName: string };
 }) {
   return {
     id: plot.id,
     name: plot.name,
     variety: plot.variety,
+    season: plot.season,
     ...areaFields(plot.areaSqm),
     center: { latitude: plot.centerLat, longitude: plot.centerLng },
     version: plot.version,
