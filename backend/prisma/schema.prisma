@@ -67,6 +67,30 @@ model Plot {
   centerLng Float
   /// Crop season this plot belongs to. Chosen before load or save. Never changed later.
   season    String
+  officerName String?
+  project     String?
+  caneGroup   String?
+  zone        String?
+  province    String?
+  district    String?
+  subdistrict String?
+  village     String?
+  rootNo      String?
+  sequenceNo  String?
+  prevPlotNo  String?
+  caneType    String?
+  caneVariety String?
+  ownership   String?
+  terrain     String?
+  hasLoss     String?
+  lossRai     Float?
+  targetYield Float?
+  note        String?
+  /// harvest = กลุ่มตัด, maintain = กลุ่มบำรุง
+  groupKind   String?
+  status      String?
+
+  requests PlotRequest[]  
   /// Read and written with raw SQL in src/boundary.ts. Prisma Client cannot touch this column.
   boundary   Unsupported("geometry(Polygon, 4326)")?
   /// Bumped on every change. Offline edits must send the version they started from.
@@ -141,4 +165,32 @@ model DeletedRecord {
 
   @@id([kind, recordId])
   @@index([farmerId, deletedAt])
+}
+
+model PlotRequest {
+  id        String  @id @default(cuid())
+  plotId    String
+  kind      String
+  value     String
+  createdAt DateTime @default(now())
+  plot      Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  @@index([plotId, createdAt])
+}
+
+model FromOption {
+  group String
+  label String
+  sort  Int   @default(0)
+
+  @@id([group, label])
+}
+
+model Place {
+  province    String
+  district    String
+  subdistrict String
+  village     String
+
+  @@id([province, district, subdistrict, village])
 }

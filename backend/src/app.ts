@@ -6,6 +6,7 @@ import { accountRouter } from "./routes/account";
 import { fieldRouter } from "./routes/plots";
 import { sessionRouter } from "./routes/session";
 import { syncRouter } from "./routes/sync";
+import { metaRouter } from "./routes/meta";
 
 export function createApp() {
   const app = express();
@@ -20,6 +21,7 @@ export function createApp() {
   app.use(sessionRouter);
   app.use(requireAuth);
   app.use(accountRouter);
+  app.use(metaRouter);
   app.use(fieldRouter);
   app.use(syncRouter);
   app.use((_req, res) => {

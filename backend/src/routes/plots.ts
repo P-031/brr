@@ -10,7 +10,11 @@ import { blockingOverlaps, overlapError } from "../overlap";
 import { farmerIdsForList, ownedPlot, requireFarmer, summarySelect, toDetail, visiblePlot } from "../plotAccess";
 import { prisma } from "../prisma";
 import { areaFields, plotSummary, surveyJson, taskJson, taskKindByName, yieldJson } from "../serialize";
-import { measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
+import { randomUUID } from "node:crypto";
+import { normalizeRing, polygonAreaSqm, ringCenter, type LatLng } from "../area";
+import { readBoundaries } from "../boundary";
+import { firstCrossingEdge, measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
+import { plotMeta } from "../serialize"
 
 const isoTime = z
   .string()
@@ -33,24 +37,65 @@ const surveySchema = z.object({
 
 const seasonText = z.string().trim().min(1).max(80);
 
-const createPlotBody = z.object({
-  id: clientId,
+const optionalText = (max: number) => z.string().trim().max(max).optional();
+
+const pointSchema = z.object({
+  latitude: z.number().finite().gte(-90).lte(90),
+  longitude: z.number().finite().gte(-180).lte(180),
+});
+
+const formFields = {
+  officerName: optionalText(120),
+  project: optionalText(120),
+  caneGroup: optionalText(120),
+  zone: optionalText(120),
+  province: optionalText(120),
+  district: optionalText(120),
+  subdistrict: optionalText(120),
+  village: optionalText(120),
+  rootNo: optionalText(40),
+  sequenceNo: optionalText(40),
+  prevPlotNo: optionalText(120),
+  caneType: optionalText(120),
+  caneVariety: optionalText(120),
+  ownership: optionalText(120),
+  terrain: optionalText(120),
+  hasLoss: optionalText(200),
+  lossRai: z.number().finite().nonnegative().optional(),
+  targetYield: z.number().finite().nonnegative().max(30).optional(),
+  note: optionalText(2000),
+  groupKind: z.enum(["harvest", "maintain"]).optional(),
+};
+
+const createPlotBody = z
+.object({
+  id: clientId.optional(),
   name: z.string().trim().min(1).max(120),
   variety: z.string().trim().max(120).default(""),
-  season: seasonText,
-  survey: surveySchema,
+  season: seasonText.optional(),
+  productionYear: seasonText.optional(),
+  farmerId: z.string().trim().min(1).max(64).optional(),
+  ...formFields,
+  survey: surveySchema.optional(),
+  points: z.array(pointSchema).min(surveyRules.minCorners).max(surveyRules.maxCorners).optional(),
+})
+.refine((value) => value.survey !== undefined || value.points !== undefined, {
+  message: "ต้องมีจุดมุมของแปลง",
 });
 
 const updatePlotBody = z
-  .object({
-    version: baseVersion,
-    name: z.string().trim().min(1).max(120).optional(),
-    variety: z.string().trim().max(120).optional(),
-    survey: surveySchema.optional(),
-  })
-  .refine((value) => value.name !== undefined || value.variety !== undefined || value.survey !== undefined, {
-    message: "ไม่มีข้อมูลให้แก้",
-  });
+.object({
+  version: baseVersion.optional(),
+  name: z.string().trim().min(1).max(120).optional(),
+  variety: z.string().trim().max(120).optional(),
+  season: seasonText.optional(),
+  productionYear: seasonText.optional(),
+  ...formFields,
+  survey: surveySchema.optional(),
+})
+.refine((value) => Object.entries(value).some(([key, item]) => key !== "version" && item !== undefined), {
+  message: "ไม่มีข้อมูลให้แก้",
+});
 
 const overlapCheckBody = z.object({
   survey: surveySchema,
@@ -177,92 +222,182 @@ fieldRouter.get(
   }),
 );
 
+function csv(value: unknown): string[] {
+  const text = queryText(value);
+  if (!text) return [];
+  return text.split(",").map((item) => item.trim()).filter((item) => item !== "");
+}
+
+function measurePoints(points: LatLng[]): MeasuredSurvey {
+  const ring = normalizeRing(points);
+  if (ring.length < surveyRules.minCorners) {
+    throw new HttpError(400, `ต้องมีจุดมุมอย่างน้อย ${surveyRules.minCorners} จุด`, { code: "SURVEY_INVALID"});
+  }
+  const crossing = firstCrossingEdge(ring);
+  if (crossing >= 0) {
+    throw new HttpError(400, `ขอบแปลงตัดกันเองที่ช่วงมุม ${crossing}`, {
+       code: "SURVEY_CROSSING",
+       corner: crossing + 1,      
+      });
+  }
+  const areaSqm = polygonAreaSqm(ring);
+  if (areaSqm < surveyRules.minAreaSqm) {
+    throw new HttpError(400, `แปลงต้องใหญ่อย่างน้อย ${surveyRules.minAreaSqm} ตารางเมตร`, { code: "SURVEY_INVALID"});
+  }
+  const capturedAt = new Date();
+  return {
+    ring,
+    areaSqm,
+    center: ringCenter(ring),
+    corners: ring.map((point) => ({...point, accuracyM: 0, capturedAt})),
+  };
+  };
+
+fieldRouter.get(
+  "/plots/years",
+  route(async (req, res) => {
+    const farmerIds =await farmerIdsForList(currentUser(req), queryText(req.query.farmerId));
+    if (farmerIds.length === 0) {
+      res.json({ items: [] });
+      return;
+    }
+    const rows =await prisma.plot.groupBy({
+      by: ["season"],
+      where: { farmerId: { in: farmerIds } },
+      _count: {_all: true},
+      orderBy: { season: "desc"},
+    });
+    res.json({
+      items: rows.map((row) => ({
+        year: row.season === "" ? null : row.season,
+        count: row._count._all,
+      })),
+    });
+  }),
+);
+
 fieldRouter.get(
   "/plots",
   route(async (req, res) => {
     const user = currentUser(req);
-    const query = z
-      .object({
-        limit: z.coerce.number().int().min(1).max(50).default(20),
-        cursor: z.string().min(1).optional(),
-        farmerId: z.string().min(1).optional(),
-        season: seasonText,
-      })
-      .parse({
-        limit: queryText(req.query.limit),
-        cursor: queryText(req.query.cursor),
-        farmerId: queryText(req.query.farmerId),
-        season: queryText(req.query.season),
-      });
-
-    const farmerIds = await farmerIdsForList(user, query.farmerId);
-    if (farmerIds.length === 0) {
-      res.json({ items: [], nextCursor: null });
+    const limit = z.coerce.number().int().min(1).max(50).default(30).parse(queryText(req.query.limit));
+    const cursorText = queryText(req.query.cursor);
+    const season = queryText(req.query.season);
+    const years = csv(req.query.years);
+    const includeBlank = queryText(req.query.nullYear) === "1";
+    const zones = csv(req.query.zone);
+    const caneTypes = csv(req.query.caneType);
+    const planted = queryText(req.query.planted);
+    const groupKind = queryText(req.query.groupKind);
+    const search = queryText(req.query.search);
+    const farmerIds = await farmerIdsForList(user, queryText(req.query.farmerId));
+    if (farmerIds.length === 0 ) {
+      res.json ({ items: [], nextCursor: null , total: 0});
       return;
     }
 
-    const cursor = query.cursor ? decodeCursor(query.cursor) : undefined;
-    const plots = await prisma.plot.findMany({
-      where: {
-        farmerId: { in: farmerIds },
-        season: query.season,
-        ...(cursor
-          ? {
-              OR: [
-                { createdAt: { lt: cursor.createdAt } },
-                { AND: [{ createdAt: cursor.createdAt }, { id: { lt: cursor.id } }] },
-              ],
-            }
-          : {}),
-      },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: query.limit + 1,
-      select: summarySelect,
-    });
+    const and: Prisma.PlotWhereInput[] = [{ farmerId: { in: farmerIds } }];
+    if (season) and.push({ season });
+    else if (years.length > 0 || includeBlank) {
+      const yearOr: Prisma.PlotWhereInput[] = [];
+      if (years.length > 0 ) yearOr.push({ season: { in: years } } );
+      if (includeBlank) yearOr.push({ season: "" });
+      and.push({ OR: yearOr });
+    }
+    if (zones.length > 0) and.push({ zone: { in: zones } });
+    if (caneTypes.length > 0) and.push({ caneType: { in: caneTypes } });
+    if (planted === "1") and.push({ caneType: { not: ""} });
+    if (planted === "0") and.push({ OR: [{ caneType: null },  { caneType: "" }] });
+    if (groupKind === "harvest" || groupKind === "maintain") and.push({ groupKind });
+    if (search) {
+      and.push({
+        OR: [
+          { name: { contains: search, mode: "insensitive" } },
+          { rootNo: { contains: search, mode: "insensitive" } },
+          { sequenceNo: { contains: search, mode: "insensitive" } },
+          { farmer: { displayName: { contains: search, mode: "insensitive"} } },
+        ],
+      });
+    } 
 
-    const page = plots.slice(0, query.limit);
+    const filtered: Prisma.PlotWhereInput = { AND: and };
+    const cursor = cursorText ? decodeCursor(cursorText) : undefined;
+    const where: Prisma.PlotWhereInput =  cursor
+     ? {
+        AND: [
+          filtered,
+         {
+          OR: [
+            { createdAt: { lt: cursor.createdAt } },
+            { AND: [{ createdAt: cursor.createdAt }, { id: { lt: cursor.id } }] },
+          ],
+         },
+        ],
+     }
+     : filtered;
+
+    const [ total, plots ] = await Promise.all ([
+      prisma.plot.count({ where: filtered }),
+      prisma.plot.findMany ({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: limit + 1,
+        select: summarySelect,
+      }),
+    ]);
+    const page = plots.slice(0, limit);
+    const outlines = await readBoundaries(page.map((plot) => plot.id));
     const last = page[page.length - 1];
     res.json({
-      items: page.map(plotSummary),
-      nextCursor: plots.length > query.limit && last ? encodeCursor(last.createdAt, last.id) : null,
-    });
-  }),
-);
-
-fieldRouter.get(
-  "/plots/map",
-  route(async (req, res) => {
-    const user = currentUser(req);
-    const box = {
-      west: coordinate(req.query.west, -180, 180),
-      south: coordinate(req.query.south, -90, 90),
-      east: coordinate(req.query.east, -180, 180),
-      north: coordinate(req.query.north, -90, 90),
-    };
-    if (box.west >= box.east || box.south >= box.north) {
-      throw new HttpError(400, "กรอบแผนที่ไม่ถูกต้อง");
-    }
-    const limit = z.coerce.number().int().min(1).max(500).default(200).parse(queryText(req.query.limit));
-    const season = seasonText.parse(queryText(req.query.season));
-    const farmerIds = await farmerIdsForList(user, queryText(req.query.farmerId));
-    if (farmerIds.length === 0) {
-      res.json({ items: [], truncated: false });
-      return;
-    }
-
-    const rows = await plotsInBox(farmerIds, box, season, limit + 1);
-    res.json({
-      items: rows.slice(0, limit).map((row) => ({
-        ...plotSummary({
-          ...row,
-          farmer: { id: row.farmerId, username: row.username, displayName: row.displayName },
-        }),
-        outline: ringFromGeoJson(row.outline),
+      items: page.map((plot) => ({
+        ...plotSummary(plot),
+        meta: plotMeta(plot),
+        outline: outlines.get(plot.id) ?? [],
       })),
-      truncated: rows.length > limit,
-    });
-  }),
-);
+      nextCursor: plots.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
+      total,
+      });
+    }),
+  );
+
+  fieldRouter.get(
+    "/plots/map",
+    route(async (req, res) => {
+      const user = currentUser(req);
+      const box = {
+        west: coordinate(req.query.west, -180, 180),
+        south: coordinate(req.query.south, -90, 90),
+        east: coordinate(req.query.east, -180, 180),
+        north: coordinate(req.query.north, -90, 90),
+      };
+      if (box.west >= box.east || box.south >= box.north) {
+        throw new HttpError(400, "กรอบแผนที่ไม่ถูกต้อง");
+      }
+      const limit = z.coerce.number().int().min(1).max(50_000).default(200).parse(queryText(req.query.limit));
+      const season = queryText(req.query.season);
+      const years = csv(req.query.years);
+      const includeBlank = queryText(req.query.nullYear) === "1";
+      const farmerIds = await farmerIdsForList(user, queryText(req.query.farmerId));
+      if (farmerIds.length === 0) {
+        res.json({ items: [], truncated: false });
+        return;
+      }
+      const rows = await plotsInBox(farmerIds, box, limit+1, {
+        seasons: season ? [season] : years,
+        includeBlank: season ? false : includeBlank,
+      });
+      res.json({
+        items: rows.slice(0, limit).map((row) => ({
+            ...plotSummary({
+              ...row,
+              farmer: { id:row.farmerId, username: row.username, displayName: row.displayName },
+            }),
+            outline: ringFromGeoJson(row.outline),
+        })),
+        truncated: rows.length > limit,
+      });
+    }),
+  );
 
 /** Same checks as saving, without saving. Lets the app warn while the farmer is still in the field. */
 fieldRouter.post(
@@ -287,39 +422,79 @@ fieldRouter.post(
   "/plots",
   route(async (req, res) => {
     const user = currentUser(req);
-    if (user.role !== "FARMER") throw new HttpError(403, "เฉพาะชาวไร่ที่สร้างแปลงได้");
     const body = createPlotBody.parse(req.body);
+    const season = body.season ?? body.productionYear ?? "";
 
-    const existing = await prisma.plot.findUnique({ where: { id: body.id }, select: { farmerId: true } });
-    if (existing) {
-      if (existing.farmerId !== user.id) throw new HttpError(409, "รหัสแปลงนี้ถูกใช้แล้ว");
-      res.json(await toDetail(await visiblePlot(user, body.id)));
-      return;
+    let farmerId = user.id;
+    if (user.role === "OFFICER") {
+      if (!body.farmerId) throw new HttpError(400, "ต้องเลือกชาวไร่");
+      const link = await prisma.farmerCare.findUnique({
+        where: {officerId_farmerId: {officerId: user.id, farmerId: body.farmerId } },
+      });
+      if (!link) throw new HttpError(404, "ไม่พบชาวไร่");
+      farmerId = body.farmerId;
+    } else if (user.role !== "FARMER") {
+      throw new HttpError(403, "เฉพาะชาวไร่ที่สร้างแปลงได้");
+    } else if (body.farmerId && body.farmerId !== user.id) {
+      throw new HttpError(403, "บันทึกแปลงได้เฉพาะตัวคุณเอง");
     }
-    await refuseDeleted("PLOT", body.id);
 
-    const measured = measureSurvey(body.survey, new Date());
+    const plotId = body.id ?? randomUUID();
+    if (body.id) {
+      const existing = await prisma.plot.findUnique({ where: { id: plotId }, select: { farmerId: true } });
+      if (existing) {
+        if (existing.farmerId !== farmerId) throw new HttpError(409, "รหัสแปลงนี้ถูกใช้แล้ว");
+        res.json(await toDetail(await visiblePlot(user, plotId)));
+        return;
+      }
+      await refuseDeleted("PLOT", plotId);
+    }
+
+    const measured = body.survey ? measureSurvey(body.survey, new Date()) : measurePoints(body.points!);
+    const surveyedAt = body.survey?.finishedAt ?? new Date();
     await prisma.$transaction(async (tx) => {
       await lockBoundaries(tx);
-      await assertFits(tx, measured, user.id, body.season);
+      await assertFits(tx, measured, farmerId, season);
       await tx.plot.create({
         data: {
-          id: body.id,
-          farmerId: user.id,
+          id: plotId,
+          farmerId,
           name: body.name,
-          variety: body.variety,
-          season: body.season,
+          variety: body.caneVariety || body.variety,
+          season,
+          officerName: body.officerName,
+          project: body.project,
+          caneGroup: body.caneGroup,
+          zone: body.zone,
+          province: body.province,
+          district: body.district,
+          subdistrict: body.subdistrict,
+          village: body.village,
+          rootNo: body.rootNo,
+          sequenceNo: body.sequenceNo,
+          prevPlotNo: body.prevPlotNo,
+          caneType: body.caneType,
+          caneVariety: body.caneVariety,
+          ownership: body.ownership,
+          terrain: body.terrain,
+          hasLoss: body.hasLoss,
+          lossRai: body.lossRai,
+          targetYield: body.targetYield,
+          note: body.note,
+          groupKind: body.groupKind,
           areaSqm: measured.areaSqm,
           centerLat: measured.center.latitude,
           centerLng: measured.center.longitude,
-          surveyedAt: body.survey.finishedAt,
+          surveyedAt,
         },
       });
-      await writeBoundary(tx, body.id, measured.ring);
-      await tx.plotSurvey.create({ data: surveyRecord(body.id, body.survey, measured) });
+      await writeBoundary(tx, plotId, measured.ring);
+      if (body.survey) {
+        await tx.plotSurvey.create({ data: surveyRecord(plotId, body.survey, measured) });
+      }
     }, boundaryTx);
 
-    res.status(201).json(await toDetail(await visiblePlot(user, body.id)));
+    res.status(201).json(await toDetail(await visiblePlot(user, plotId)));
   }),
 );
 
@@ -331,33 +506,77 @@ fieldRouter.get(
   }),
 );
 
+fieldRouter.post(
+  "/plots/:plotId/requests",
+  route(async (req, res) => {
+    const user = currentUser(req);
+    const plotId = pathId(req.params.plotId);
+    await visiblePlot(user, plotId);
+    const body = z
+      .object({
+        kind: z.enum(["status", "edit"]),
+        value: z.string().trim().min(1).max(200),
+      })
+      .parse(req.body);
+    await prisma.plotRequest.create({ data: { plotId, kind: body.kind, value: body.value } });
+    if (body.kind === "status") {
+      await prisma.plot.update({ where: { id: plotId }, data: { status: body.value } });
+    }
+    res.status(201).json({ kind: body.kind, value: body.value });
+  }),
+);
+
 fieldRouter.patch(
   "/plots/:plotId",
   route(async (req, res) => {
     const user = currentUser(req);
     const plotId = pathId(req.params.plotId);
-    const plot = await ownedPlot(user, plotId);
+    const plot = await visiblePlot(user, plotId);
     const body = updatePlotBody.parse(req.body);
     const survey = body.survey;
     const measured = survey ? measureSurvey(survey, new Date()) : undefined;
+    const season = body.season ?? body.productionYear;
 
     const saved = await prisma.$transaction(async (tx) => {
       if (measured) await lockBoundaries(tx);
-      const updated = await tx.plot.updateMany({
-        where: { id: plotId, version: body.version },
-        data: {
-          name: body.name,
-          variety: body.variety,
-          areaSqm: measured?.areaSqm,
-          centerLat: measured?.center.latitude,
-          centerLng: measured?.center.longitude,
-          surveyedAt: survey?.finishedAt,
-          version: { increment: 1 },
-        },
-      });
-      if (updated.count === 0) return false;
+      const data = {
+        name: body.name,
+        variety: body.caneVariety || body.variety,
+        season,
+        officerName: body.officerName,
+        project: body.project,
+        caneGroup: body.caneGroup,
+        zone: body.zone,
+        province: body.province,
+        district: body.district,
+        subdistrict: body.subdistrict,
+        village: body.village,
+        rootNo: body.rootNo,
+        sequenceNo: body.sequenceNo,
+        prevPlotNo: body.prevPlotNo,
+        caneType: body.caneType,
+        caneVariety: body.caneVariety,
+        ownership: body.ownership,
+        terrain: body.terrain,
+        hasLoss: body.hasLoss,
+        lossRai: body.lossRai,
+        targetYield: body.targetYield,
+        note: body.note,
+        groupKind: body.groupKind,
+        areaSqm: measured?.areaSqm,
+        centerLat: measured?.center.latitude,
+        centerLng: measured?.center.longitude,
+        surveyedAt: survey?.finishedAt,
+        version: { increment: 1 },
+      };
+      if (body.version === undefined) {
+        await tx.plot.update({ where: { id: plotId }, data });
+      } else {
+        const updated = await tx.plot.updateMany({ where: { id: plotId, version: body.version }, data });
+        if (updated.count === 0) return false;
+      }
       if (survey && measured) {
-        await assertFits(tx, measured, user.id, plot.season, plotId);
+        await assertFits(tx, measured, plot.farmerId, season ?? plot.season, plotId);
         await writeBoundary(tx, plotId, measured.ring);
         await tx.plotSurvey.create({ data: surveyRecord(plotId, survey, measured) });
       }
