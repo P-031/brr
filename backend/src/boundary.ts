@@ -114,23 +114,33 @@ export async function overlappingPlots(
 export async function plotsInBox(
   farmerIds: string[],
   box: Box,
-  season: string,
   limit: number,
+  years?: { seasons: string[]; includeBlank: boolean },
 ): Promise<MapPlotRow[]> {
-  const tolerance = Math.max(box.east - box.west, box.north - box.south) / 2000;
-  return prisma.$queryRaw<MapPlotRow[]>`
-    SELECT p.id, p.name, p.variety, p."areaSqm", p."centerLat", p."centerLng", p.version,
-           p."surveyedAt", p."createdAt", p."updatedAt", p."farmerId", p.season,
-           u.username, u."displayName",
-           ST_AsGeoJSON(ST_SimplifyPreserveTopology(p.boundary, ${tolerance}::float8)) AS outline
-    FROM "Plot" p
-    JOIN "User" u ON u.id = p."farmerId"
-    WHERE p.season = ${season}
-      AND p."farmerId" IN (${Prisma.join(farmerIds)})
-      AND p.boundary && ST_MakeEnvelope(
-        ${box.west}::float8, ${box.south}::float8, ${box.east}::float8, ${box.north}::float8, 4326
-      )
-    ORDER BY p."areaSqm" DESC, p.id
-    LIMIT ${limit}
+  const seasons = years?.seasons ?? [];
+  const includeBlank = years?.includeBlank ?? false;
+  const yearSql =
+    seasons.length > 0 && includeBlank
+    ? Prisma.sql`AND (p.season IN (${Prisma.join(seasons)}) OR p.season = '')`
+    : seasons.length > 0 
+      ? Prisma.sql`AND p.season IN (${Prisma.join(seasons)})`
+      : includeBlank
+        ? Prisma.sql`AND p.season = ''`
+        : Prisma.empty;
+const tolerance = Math.max(box.east - box.west, box.north - box.south) / 2000;
+return prisma.$queryRaw<MapPlotRow[]>`
+  SELECT p.id, p.name, p.variety, p."areaSqm", p."centerLat", p."centerLng", p.version,
+         p."surveyedAt", p."createdAt", p."updatedAt", p."farmerId", p.season, p.status,
+         u.username, u."displayName",
+         ST_AsGeoJSON(ST_SimplifyPreserveTopology(p.boundary, ${tolerance}::float8)) AS outline
+  FROM "Plot" p
+  JOIN "User" u ON u.id = p."farmerId"
+  WHERE p."farmerId" IN (${Prisma.join(farmerIds)})
+    ${yearSql}
+    AND p.boundary && ST_MakeEnvelope(
+      ${box.west}::float8, ${box.south}::float8, ${box.east}::float8, ${box.north}::float8, 4326
+    )
+      ORDER BY p."areaSqm" DESC, p.id
+      LIMIT ${limit}
   `;
 }

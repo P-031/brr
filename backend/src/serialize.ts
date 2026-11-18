@@ -54,6 +54,27 @@ export function plotSummary(plot: {
   createdAt: Date;
   updatedAt: Date;
   season: string;
+  officerName?: string | null;
+  project?: string | null;
+  caneGroup?: string | null;
+  zone?: string | null;
+  province?: string | null;
+  district?: string | null;
+  subdistrict?: string | null;
+  village?: string | null;
+  rootNo?: string | null;
+  sequenceNo?: string | null;
+  prevPlotNo?: string | null;
+  caneType?: string | null;
+  caneVariety?: string | null;
+  ownership?: string | null;
+  terrain?: string | null;
+  hasLoss?: string | null;
+  lossRai?: number | null;
+  targetYield?: number | null;
+  note?: string | null;
+  groupKind?: string | null;
+  status?: string | null;
   farmer: { id: string; username: string; displayName: string };
 }) {
   return {
@@ -72,7 +93,36 @@ export function plotSummary(plot: {
       username: plot.farmer.username,
       displayName: plot.farmer.displayName,
     },
+    productionYear: plot.season === "" ? null : plot.season,
+    status: plot.status ?? null,
   };
+}
+
+export function plotMeta(plot: Parameters<typeof plotSummary>[0]) {
+  const year = plot.season === "" ? null : plot.season;
+  return {
+    productionYear: year,
+    officerName: plot.officerName ?? null,
+    project: plot.project ?? null,
+    caneGroup: plot.caneGroup ?? null,
+    zone: plot.zone ?? null,
+    province: plot.province ?? null,
+    district: plot.district ?? null,
+    subdistrict: plot.subdistrict ?? null,
+    village: plot.village ?? null,
+    rootNo: plot.rootNo ?? null,
+    sequenceNo: plot.sequenceNo ?? null,
+    prevPlotNo: plot.prevPlotNo ?? null,
+    caneType: plot.caneType ?? null,
+    caneVariety: plot.caneVariety ?? null,
+    ownership: plot.ownership ?? null,
+    terrain: plot.terrain ?? null,
+    hasLoss: plot.hasLoss ?? null,
+    lossRai: plot.lossRai ?? null,
+    targetYield: plot.targetYield ?? null,
+    note: plot.note ?? null,
+    groupKind: plot.groupKind ?? null,
+  }
 }
 
 export function plotDetail(
@@ -80,7 +130,7 @@ export function plotDetail(
     points: LatLng[];
   },
 ) {
-  return { ...plotSummary(plot), points: plot.points };
+  return { ...plotSummary(plot), points: plot.points, meta:plotMeta(plot) };
 }
 
 export function yieldJson(record: {

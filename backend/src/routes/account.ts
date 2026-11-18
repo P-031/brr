@@ -25,6 +25,17 @@ accountRouter.get(
 );
 
 accountRouter.get(
+  "/officers",
+  route(async (_req, res) => {
+    const officers = await prisma.user.findMany({
+      where: { role: "OFFICER"},
+      orderBy: { displayName: "asc" },
+    });
+    res.json({ items: officers.map(publicProfile) });
+  }),
+);
+
+accountRouter.get(
   "/farmers",
   route(async (req, res) => {
     const user = currentUser(req);
