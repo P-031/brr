@@ -226,26 +226,6 @@ class AuthViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Alternative browser-based OIDC flow (kept for future use).
-  Future<void> signInWithBrowser() async {
-    if (isBusy) return;
-    _error = null;
-    _status = AuthStatus.authenticating;
-    notifyListeners();
-    try {
-      _session = await _attachPhoto(await _auth.login());
-      _status = AuthStatus.authenticated;
-      await _store.save(_session!);
-      await _remember(_session!);
-    } on AuthCancelledException {
-      _status = AuthStatus.unauthenticated;
-    } catch (e) {
-      _status = AuthStatus.unauthenticated;
-      _error = 'เข้าสู่ระบบไม่สำเร็จ: $e';
-    }
-    notifyListeners();
-  }
-
   /// Signs in with an account picked from the saved list — uses its
   /// stored refresh token, no password needed.
   Future<void> signInWithSaved(SavedAccount account) async {

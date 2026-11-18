@@ -38,7 +38,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
     VoidCallback toggle,
   ) => InputDecoration(
     labelText: label,
-    labelStyle: const TextStyle(fontSize: 16),
+    labelStyle: const TextStyle(fontSize: 19),
     prefixIcon: const Icon(Iconsax.lock, color: AppColors.green),
     suffixIcon: IconButton(
       icon: Icon(show ? Icons.visibility : Iconsax.eye_slash),
@@ -74,7 +74,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
             TextFormField(
               controller: _oldCtrl,
               obscureText: !_showOld,
-              style: const TextStyle(fontSize: 17),
+              style: const TextStyle(fontSize: 19),
               decoration: _deco(
                 'รหัสผ่านเดิม',
                 _showOld,
@@ -87,7 +87,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
             TextFormField(
               controller: _newCtrl,
               obscureText: !_showNew,
-              style: const TextStyle(fontSize: 17),
+              style: const TextStyle(fontSize: 19),
               decoration: _deco(
                 'รหัสผ่านใหม่',
                 _showNew,
@@ -101,7 +101,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
             TextFormField(
               controller: _confirmCtrl,
               obscureText: !_showConfirm,
-              style: const TextStyle(fontSize: 17),
+              style: const TextStyle(fontSize: 19),
               decoration: _deco(
                 'ยืนยันรหัสผ่านใหม่',
                 _showConfirm,

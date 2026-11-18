@@ -6,7 +6,9 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:brr/features/map/viewmodels/drafts_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
+import 'package:brr/features/map/views/drafts_view.dart';
 import 'package:brr/features/map/views/map_view.dart';
 import 'package:brr/features/notifications/views/notifications_view.dart';
 import 'package:brr/features/plot_activities/views/plot_activities_view.dart';
@@ -138,12 +140,23 @@ class HomeView extends StatelessWidget {
                   icon: Iconsax.rulerpen,
                   title: 'วัดพื้นที่',
                   subtitle: 'เดินวัดหรือแตะวาดขอบแปลงจากพิกัด GPS',
+                  // คั่นหน้าฉบับร่างก่อน — ร่างค้างอยู่จัดการต่อได้
+                  // (แก้ไข/ยืนยัน/ลบ) หรือกดเริ่มวัดใหม่จากปุ่มล่าง
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => MapView(
-                        createViewModel: () => MapViewModel(
-                          api: vm.api,
-                          canDrawManually: vm.user?.role == 'OFFICER',
+                      builder: (_) => DraftsView(
+                        vm: DraftsViewModel.forApi(vm.api),
+                        isOfficer: vm.user?.role == 'OFFICER',
+                        onStartMeasure: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MapView(
+                              createViewModel: () => MapViewModel(
+                                api: vm.api,
+                                canDrawManually:
+                                    vm.user?.role == 'OFFICER',
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ),

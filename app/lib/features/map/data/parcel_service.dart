@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,8 +11,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:brr/core/config/api_config.dart';
 import 'package:brr/core/config/api_endpoints.dart';
 import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/features/parcel_status/models/plot_request.dart';
 import 'package:brr/features/plot_activities/models/plot_list_item.dart';
 import 'package:brr/core/services/api_client.dart';
+
+/// ข้อความ error จาก body ของ backend — ตอบเป็น
+/// `{error: "...", details: [{path, message}]}` (zod) หรือ
+/// `{error: "..."}` ธรรมดา ถ้า parse ไม่ได้คืน status code
+String _errorDetail(http.Response res) {
+  try {
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    final error = '${body['error'] ?? ''}';
+    final details = [
+      for (final d in body['details'] as List? ?? const [])
+        '${(d as Map<String, dynamic>)['path']}: ${d['message']}',
+    ];
+    if (details.isNotEmpty) return '$error (${details.join(', ')})';
+    if (error.isNotEmpty) return error;
+  } catch (_) {}
+  return 'HTTP ${res.statusCode}';
+}
 
 /// Data layer for land parcels.
 ///
@@ -53,6 +72,10 @@ class ParcelService {
     }
   }
 
+  /// แปลงฉบับร่างที่บันทึกลงเครื่องทั้งหมด — ใช้โดยหน้า
+  /// "ข้อมูลฉบับร่าง" และ merge เข้าชุดแปลงตอนโหลดแผนที่
+  Future<List<Parcel>> fetchDrafts() => _loadDrafts();
+
   Future<List<Parcel>> _loadDrafts() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_draftsKey);
@@ -75,6 +98,125 @@ class ParcelService {
       _draftsKey,
       jsonEncode([for (final d in drafts) d.toJson()]),
     );
+  }
+
+  /// ยืนยันร่างสำเร็จ — ไม่ลบ แต่ stamp `status = 'confirmed'` ไว้
+  /// ให้หน้าฉบับร่างกรอง "ยืนยันแล้ว/ยังไม่ยืนยัน" ได้
+  Future<void> markDraftConfirmed(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final drafts = await _loadDrafts();
+    final i = drafts.indexWhere((d) => d.id == id);
+    if (i < 0) return;
+    final d = drafts[i];
+    drafts[i] = Parcel(
+      id: d.id,
+      name: d.name,
+      variety: d.variety,
+      owner: d.owner,
+      productionYear: d.productionYear,
+      meta: d.meta,
+      status: 'confirmed',
+      points: d.points,
+      isDraft: d.isDraft,
+      savedAt: d.savedAt,
+      centerOverride: d.centerOverride,
+    );
+    await prefs.setString(
+      _draftsKey,
+      jsonEncode([for (final d in drafts) d.toJson()]),
+    );
+  }
+
+  // ---- กิจกรรมแปลง — บันทึกลงเครื่องก่อน รอ endpoint นำส่ง backend ----
+
+  static const _activityKey = 'activity_drafts_v1';
+
+  Future<List<Map<String, dynamic>>> _loadActivities() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_activityKey);
+    if (raw == null) return [];
+    try {
+      return [
+        for (final j in jsonDecode(raw) as List)
+          Map<String, dynamic>.from(j as Map),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// บันทึกกิจกรรมลงเครื่อง — `detailPending` = บันทึกเฉพาะรูปไว้ก่อน
+  /// รอกรอกรายละเอียด ("นำส่งกิจกรรมในเครื่อง" จะหยิบ list นี้ต่อ)
+  Future<void> saveActivityDraft({
+    required String plotId,
+    required List<String> photoPaths,
+    bool detailPending = false,
+    String? plantedAt,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = await _loadActivities();
+    items.add({
+      'id': 'act-${DateTime.now().millisecondsSinceEpoch}',
+      'plotId': plotId,
+      'photos': photoPaths,
+      'detailPending': detailPending,
+      'plantedAt': ?plantedAt,
+      'createdAt': DateTime.now().toIso8601String(),
+    });
+    await prefs.setString(_activityKey, jsonEncode(items));
+  }
+
+  /// จำนวนกิจกรรมในเครื่องของแปลง — ใช้ตั้งชื่อ "ครั้งที่ N"
+  Future<int> activityDraftCount(String plotId) async =>
+      (await _loadActivities()).where((a) => a['plotId'] == plotId).length;
+
+  // ---- จุดเสี่ยงภัยพิบัติ — เก็บลงเครื่องก่อน รอ endpoint backend ----
+
+  static const _riskKey = 'risk_points_v1';
+
+  Future<List<Map<String, dynamic>>> _loadRiskPoints() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_riskKey);
+    if (raw == null) return [];
+    try {
+      return [
+        for (final j in jsonDecode(raw) as List)
+          Map<String, dynamic>.from(j as Map),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// จุดเสี่ยงล่าสุดของแปลง (เก็บทับรายการเดิมต่อ plotId)
+  Future<Map<String, dynamic>?> riskPointFor(String plotId) async {
+    for (final r in await _loadRiskPoints()) {
+      if (r['plotId'] == plotId) return r;
+    }
+    return null;
+  }
+
+  /// บันทึก/อัปเดตจุดเสี่ยงของแปลง — type จาก backend riskLevels,
+  /// severity 1-5, name/note พิมพ์เอง
+  Future<void> saveRiskPoint({
+    required String plotId,
+    required String type,
+    String? name,
+    int? severity,
+    String? note,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = await _loadRiskPoints();
+    items.removeWhere((r) => r['plotId'] == plotId);
+    items.add({
+      'plotId': plotId,
+      'type': type,
+      'name': ?name,
+      'severity': ?severity,
+      'note': ?note,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    await prefs.setString(_riskKey, jsonEncode(items));
   }
 
   /// Removes a stored draft by id (e.g. after it's pushed to the backend).
@@ -303,7 +445,7 @@ class ParcelService {
         },
       );
       if (res.statusCode >= 300) {
-        throw Exception('บันทึกแปลงไม่สำเร็จ (${res.statusCode})');
+        throw Exception('บันทึกแปลงไม่สำเร็จ: ${_errorDetail(res)}');
       }
       return Parcel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
     }
@@ -312,7 +454,38 @@ class ParcelService {
       name: name,
       points: points,
       productionYear: productionYear,
+      owner: farmerName,
+      variety: variety.isEmpty ? null : variety,
       isDraft: draft,
+      savedAt: draft ? DateTime.now() : null,
+      // เก็บ payload ฟอร์มครบไว้ใน meta — หน้าฉบับร่างใช้แสดง +
+      // replay เป็น POST จริงตอน "ยืนยัน" / prefill ตอน "แก้ไข"
+      meta: {
+        'productionYear': ?productionYear,
+        'officerName': ?officerName,
+        'project': ?project,
+        'farmerName': ?farmerName,
+        'farmerId': ?farmerId,
+        'caneGroup': ?caneGroup,
+        'zone': ?zone,
+        'province': ?province,
+        'district': ?district,
+        'subdistrict': ?subdistrict,
+        'village': ?village,
+        'rootNo': ?rootNo,
+        'sequenceNo': ?sequenceNo,
+        'prevPlotNo': ?prevPlotNo,
+        'caneType': ?caneType,
+        'caneVariety': ?caneVariety,
+        'ownership': ?ownership,
+        'terrain': ?terrain,
+        'hasLoss': ?hasLoss,
+        'lossRai': ?lossRai,
+        'targetYield': ?targetYield,
+        'note': ?note,
+        // path รูปถ่ายตอนบันทึก — หน้าร่างใช้แสดง + ฟอร์ม prefill
+        if (photos.isNotEmpty) 'photos': photos,
+      },
     );
     if (draft) await _saveDraft(local);
     return local;
@@ -361,28 +534,58 @@ class ParcelService {
     if (res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
-    throw Exception('บันทึกไม่สำเร็จ (${res.statusCode})');
+    throw Exception('บันทึกไม่สำเร็จ: ${_errorDetail(res)}');
   }
 
-  /// ส่งคำขออัปเดตแปลง (เมนู ⋮ → คำขอ1/2) — `POST /plots/:id/requests`
+  /// ส่งคำขออัปเดตแปลง (เมนู ⋮ → คำขอ1/2/กลุ่ม) —
+  /// `POST /plots/:id/requests` body = {kind, value?, ...fields}
   /// TODO(backend): endpoint ยังไม่มี — shape ตาม
   /// docs/API_CONTRACT.md; ตอนนี้ call แล้วจะเจอ 404 โชว์บน UI
   /// ซื่อสัตย์ เมื่อ backend เขียนเสร็จใช้ได้ทันที ไม่ต้องแก้แอป
-  Future<void> submitPlotRequest(
+  /// คืน status ที่ backend บันทึกจริง (เช่น "รออนุมัติ") ให้ UI แจ้งผู้ใช้
+  Future<String> submitPlotRequest(
     String id, {
     required String kind,
-    required String value,
+    String? value,
+    Map<String, String?>? fields,
   }) async {
     if (!ApiConfig.enabled || _api == null) {
       throw Exception('ออฟไลน์อยู่ — ส่งคำขอไม่ได้');
     }
     final res = await _api.postJson('${ApiEndpoints.plot(id)}/requests', {
       'kind': kind,
-      'value': value,
+      'value': ?value,
+      if (fields != null)
+        for (final e in fields.entries)
+          if (e.value != null) e.key: e.value,
     });
     if (res.statusCode != 200 && res.statusCode != 201) {
-      throw Exception('ส่งคำขอไม่สำเร็จ (${res.statusCode})');
+      throw Exception('ส่งคำขอไม่สำเร็จ: ${_errorDetail(res)}');
     }
+    try {
+      final status = jsonDecode(res.body)['status'];
+      if (status is String && status.isNotEmpty) return status;
+    } catch (_) {}
+    return 'รออนุมัติ';
+  }
+
+  /// ดาวน์โหลด/อัปเดตข้อมูลจุดเสี่ยงภัยพิบัติล่าสุด — GET /risk-points
+  /// แล้วเก็บ payload ลงเครื่อง (ออฟไลน์ใช้ต่อได้) คืนจำนวนจุดที่ได้
+  /// TODO(backend): endpoint ยังไม่มี — ตอนนี้จะเจอ 404 โชว์ซื่อสัตย์
+  Future<int> downloadRiskPoints() async {
+    if (!ApiConfig.enabled || _api == null) {
+      throw Exception('ออฟไลน์อยู่ — ดาวน์โหลดไม่ได้');
+    }
+    final res = await _api.get(ApiEndpoints.riskPoints);
+    if (res.statusCode != 200) {
+      throw Exception('ดาวน์โหลดไม่สำเร็จ: ${_errorDetail(res)}');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('risk_points', res.body);
+    final items = jsonDecode(res.body);
+    if (items is List) return items.length;
+    final list = (items as Map<String, dynamic>)['items'];
+    return list is List ? list.length : 0;
   }
 
   /// Extension officers for the caretaker dropdown.
@@ -451,6 +654,21 @@ class ParcelService {
       }
     }
     return const FormOptions();
+  }
+
+  /// คำขอแปลงทั้งหมดที่ผู้ใช้มองเห็น — `GET /plot-requests`
+  /// (หน้าสถานะแปลง); ออฟไลน์คืน list ว่าง ไม่โยน
+  Future<List<PlotRequestEntry>> fetchPlotRequests() async {
+    if (!ApiConfig.enabled || _api == null) return const [];
+    final res = await _api.get(ApiEndpoints.plotRequests);
+    if (res.statusCode != 200) {
+      throw Exception('โหลดรายการคำขอไม่สำเร็จ: ${_errorDetail(res)}');
+    }
+    final items = jsonDecode(res.body)['items'] as List? ?? const [];
+    return [
+      for (final j in items)
+        PlotRequestEntry.fromJson(j as Map<String, dynamic>),
+    ];
   }
 }
 

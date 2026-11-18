@@ -606,8 +606,13 @@ class _MapBottomBarState extends State<MapBottomBar>
       photos: result.photos,
       draft: result.draft,
     );
-    if (err != null && context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    }
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          err ?? (result.draft ? 'บันทึกฉบับร่างแล้ว' : 'บันทึกแปลงสำเร็จ'),
+        ),
+      ),
+    );
   }
 }

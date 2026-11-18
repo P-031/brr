@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
-import 'package:brr/features/auth/models/saved_account.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/auth/views/auth_scaffold.dart';
 
@@ -134,24 +134,47 @@ class _LoginViewState extends State<LoginView> {
                 ),
                 const SizedBox(height: 32),
                 if (vm.savedAccounts.isNotEmpty) ...[
-                  DropdownButtonFormField<SavedAccount>(
-                    decoration: _decoration(
-                      label:
-                          'เลือกบัญชีที่บันทึกไว้ (${vm.savedAccounts.length})',
-                      icon: Iconsax.people,
-                    ),
-                    items: [
-                      for (final a in vm.savedAccounts)
-                        DropdownMenuItem(
-                          value: a,
-                          child: Text('${a.displayName} (${a.username})'),
-                        ),
-                    ],
-                    onChanged: vm.isBusy
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: vm.isBusy
                         ? null
-                        : (a) {
-                            if (a != null) vm.signInWithSaved(a);
-                          },
+                        : () async {
+                              final accounts = vm.savedAccounts;
+                              final i = await showOptionPopup(
+                                context,
+                                labels: [
+                                  for (final a in accounts)
+                                    '${a.displayName} (${a.username})',
+                                ],
+                              );
+                              if (i != null) {
+                                vm.signInWithSaved(accounts[i]);
+                              }
+                            },
+                    child: InputDecorator(
+                      decoration: _decoration(
+                        label:
+                            'เลือกบัญชีที่บันทึกไว้ (${vm.savedAccounts.length})',
+                        icon: Iconsax.people,
+                      ),
+                      child: const Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'แตะเพื่อเลือกบัญชี',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.black45,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Iconsax.arrow_down,
+                            color: Colors.black45,
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                 ],
@@ -231,37 +254,6 @@ class _LoginViewState extends State<LoginView> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                const Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12),
-                      child: Text('หรือ'),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: vm.isBusy ? null : vm.signInWithBrowser,
-                    icon: Image.asset(
-                      'assets/images/google_logo.png',
-                      width: 22,
-                      height: 22,
-                    ),
-                    label: const Text(
-                      'เข้าสู่ระบบด้วย Google',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
                 if (vm.error != null) ...[
                   const SizedBox(height: 8),
                   Text(

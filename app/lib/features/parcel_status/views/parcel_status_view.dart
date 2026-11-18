@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/theme/app_theme.dart';
-import 'package:brr/features/map/data/parcel_service.dart';
-import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/core/widgets/skeleton.dart';
+import 'package:brr/features/map/widgets/parcel_outline.dart';
+import 'package:brr/features/map/widgets/satellite_thumb.dart';
+import 'package:brr/features/parcel_status/models/plot_request.dart';
 import 'package:brr/features/parcel_status/viewmodels/parcel_status_viewmodel.dart';
 
 /// สถานะแปลง — scrollable status tabs + filtered parcel list.
@@ -20,8 +22,7 @@ class ParcelStatusView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) =>
-          ParcelStatusViewModel(api == null ? null : ParcelService(api)),
+      create: (_) => ParcelStatusViewModel.forApi(api),
       child: const _Body(),
     );
   }
@@ -47,8 +48,8 @@ class _BodyState extends State<_Body> {
       _keys = List.generate(tabs.length, (_) => GlobalKey());
     }
     final items = tabs.isEmpty
-        ? const <Parcel>[]
-        : vm.parcelsOf(tabs[_tab]);
+        ? const <PlotRequestEntry>[]
+        : vm.requestsOf(tabs[_tab]);
     return Column(
       children: [
         Container(
@@ -66,14 +67,21 @@ class _BodyState extends State<_Body> {
           child: Column(
             children: [
               if (vm.loading)
-                const Padding(
-                  padding: EdgeInsets.all(14),
-                  child: SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: AppColors.green,
+                // skeleton แถว tab — เส้นข้อความเทาแนวนอน ตัวแรก
+                // มีเส้นใต้เหมือน tab ที่กำลังเลือก
+                const SkeletonPulse(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 10),
+                    child: Row(
+                      children: [
+                        _TabSkeleton(selected: true, width: 86),
+                        SizedBox(width: 22),
+                        _TabSkeleton(width: 64),
+                        SizedBox(width: 22),
+                        _TabSkeleton(width: 74),
+                        SizedBox(width: 22),
+                        _TabSkeleton(width: 58),
+                      ],
                     ),
                   ),
                 )
@@ -115,26 +123,8 @@ class _BodyState extends State<_Body> {
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: items.length,
-                  itemBuilder: (context, i) {
-                    final p = items[i];
-                    return Card(
-                      child: ListTile(
-                        leading: const Icon(
-                          Iconsax.map_1,
-                          color: AppColors.green,
-                        ),
-                        title: Text(p.name),
-                        subtitle: Text(p.areaThai),
-                        trailing: Chip(
-                          label: Text(
-                            tabs[_tab],
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          backgroundColor: AppColors.goldLight,
-                        ),
-                      ),
-                    );
-                  },
+                  itemBuilder: (context, i) =>
+                      _RequestCard(r: items[i], status: tabs[_tab]),
                 ),
         ),
       ],
@@ -195,6 +185,113 @@ class _BodyState extends State<_Body> {
         transform: Matrix4.translationValues(0, selected ? -8 : 0, 0),
         child: _inner(i, label),
       ),
+    );
+  }
+}
+
+/// การ์ดคำขอแปลง 1 รายการ — ชื่อแปลง + ประเภทคำขอ + ค่าที่ขอ +
+/// ผู้ส่ง/วันที่ + chip สถานะ (ตรง tab ที่เลือก)
+class _RequestCard extends StatelessWidget {
+  const _RequestCard({required this.r, required this.status});
+
+  final PlotRequestEntry r;
+  final String status;
+
+  String _thaiDate(DateTime? d) {
+    if (d == null) return '';
+    final l = d.toLocal();
+    return '${l.day}/${l.month}/${l.year + 543} '
+        '${l.hour.toString().padLeft(2, '0')}:'
+        '${l.minute.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // รูปแปลงดาวเทียมกรอบมน — outline จาก backend จริง;
+            // โหลด tile ไม่ได้ fallback เป็น polygon วาดเอง
+            // (เหมือนการ์ดกิจกรรมแปลง)
+            SatelliteThumb(
+              points: r.points,
+              cacheKey: 'req-${r.id}',
+              fallback: ParcelOutline(points: r.points),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    r.plotName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${r.kindLabel}${r.detail.isEmpty ? '' : ' — ${r.detail}'}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [
+                      if (r.requester != null) 'โดย ${r.requester}',
+                      if (r.productionYear != null)
+                        'ปีการผลิต ${r.productionYear}',
+                      _thaiDate(r.createdAt),
+                    ].where((s) => s.isNotEmpty).join('  •  '),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Chip(
+              label: Text(status, style: const TextStyle(fontSize: 12)),
+              backgroundColor: AppColors.goldLight,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// เส้นเทาเลียน tab สถานะ — [selected] = มีเส้นใต้ทองเหมือน
+/// tab ที่กำลังเลือกอยู่จริง
+class _TabSkeleton extends StatelessWidget {
+  const _TabSkeleton({this.selected = false, required this.width});
+
+  final bool selected;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(bottom: 6),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(
+            color: selected
+                ? const Color(0xFFFFD54F)
+                : Colors.transparent,
+            width: 3,
+          ),
+        ),
+      ),
+      child: SkelLine(width: width, height: selected ? 18 : 15),
     );
   }
 }

@@ -18,6 +18,10 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+  errors:
+    # material.dart → material_ui: deprecation ของ SDK pre-release
+    # ยังไม่ migrate จนกว่า package ใหม่จะเสถียร — ปิดเสียงเตือนชั่วคราว
+    deprecated_member_use: ignore
 
 linter:
   # The lint rules applied to this project can be customized in the

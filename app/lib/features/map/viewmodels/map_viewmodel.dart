@@ -8,6 +8,7 @@ import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/location_service.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/viewmodels/drafts_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/plot_download_viewmodel.dart';
 
@@ -20,10 +21,9 @@ class MapViewModel extends ChangeNotifier {
     LocationService? location,
     this.canDrawManually = true,
     List<Parcel>? initialParcels,
-    Set<String?>? yearAllowlist,
+    this._yearAllowlist,
     bool initialCoverageComplete = false,
   }) : _service = service ?? ParcelService(api),
-       _yearAllowlist = yearAllowlist,
        _location = location ?? LocationService() {
     // ขอตำแหน่งตั้งแต่ต้น — ระหว่างที่ยังเป็น skeleton อยู่ userPos
     // จะพร้อมก่อน GoogleMap mount → initialCamera ชี้ตำแหน่งจริง
@@ -96,13 +96,16 @@ class MapViewModel extends ChangeNotifier {
     return ys;
   }
 
-  /// แปลงที่วาดบนแผนที่ตาม filter — draft แสดงเสมอ
+  /// แปลงที่วาดบนแผนที่ตาม filter — draft แสดงเสมอจนกว่าจะถูกลบ
+  /// หรือยืนยันขึ้น server (confirmed ซ่อน — แปลงจริงจาก backend
+  /// มาวาดแทน ไม่งั้นซ้อนทับกัน)
   List<Parcel> get visibleParcels => [
     for (final p in _parcels)
-      if (p.isDraft ||
-          ((yearAllowlist == null ||
+      if (p.isDraft
+          ? p.status != 'confirmed'
+          : (yearAllowlist == null ||
                   yearAllowlist!.contains(p.productionYear)) &&
-              (_yearFilter == null || p.productionYear == _yearFilter)))
+              (_yearFilter == null || p.productionYear == _yearFilter))
         p,
   ];
 
@@ -196,14 +199,15 @@ class MapViewModel extends ChangeNotifier {
         // กรองปีฝั่ง server ด้วย — ไม่ต้องรับข้อมูลที่จะทิ้ง
         years: yearAllowlist,
       );
+      // ร่างเอาจาก page.items ที่ fetchParcels merge สดจาก storage
+      // เสมอ — ห้าม reuse ของเดิมใน _parcels เพราะร่างที่ลบไปแล้ว
+      // จะยังค้างวาดบนแผนที่ (drafts ต้องโชว์ตลอดจนกว่าจะลบจริง)
       _parcels = [
-        ...page.items.where(
-          (p) =>
-              !p.isDraft &&
-              (yearAllowlist == null ||
-                  yearAllowlist!.contains(p.productionYear)),
-        ),
-        ..._parcels.where((p) => p.isDraft),
+        for (final p in page.items)
+          if (p.isDraft ||
+              yearAllowlist == null ||
+              yearAllowlist!.contains(p.productionYear))
+            p,
       ];
       _invalidateRender();
       // จำ coverage เฉพาะ fetch ที่ครบ — truncated มีหลุมในกรอบนี้
@@ -238,6 +242,9 @@ class MapViewModel extends ChangeNotifier {
   /// VM ของหน้าดาวน์โหลด — แชร์ service เดียวกัน ไม่สร้างใหม่
   PlotDownloadViewModel createDownloadVm() =>
       PlotDownloadViewModel(_service);
+
+  /// VM หน้า "ข้อมูลฉบับร่าง" — แปลงที่บันทึกลงเครื่องเท่านั้น
+  DraftsViewModel createDraftsVm() => DraftsViewModel(_service);
 
   /// รับผลจากหน้าดาวน์โหลด — เก็บเฉพาะปีที่ติ๊ก + draft ทั้งหมด
   /// แล้วตั้ง coverage/allowlist ให้ viewport fetch กรองตามปีนั้นต่อ
@@ -277,6 +284,10 @@ class MapViewModel extends ChangeNotifier {
       if (!page.truncated) _coverage = _parseBox(ParcelService.fullBox);
     } catch (e) {
       _error = '$e';
+      // server ดึงไม่ได้ก็ยังโชว์ร่างในเครื่อง — ร่างต้องอยู่บน
+      // แผนที่ตลอดจนกว่าจะลบหรือยืนยันขึ้น server
+      _parcels = await _service.fetchDrafts();
+      _invalidateRender();
     }
     _loading = false;
     notifyListeners();

@@ -15,6 +15,7 @@ class Parcel {
     this.centerOverride,
     this.isDraft = false,
     this.meta,
+    this.savedAt,
   });
 
   final String id;
@@ -35,6 +36,10 @@ class Parcel {
   /// Device-only draft saved with "บันทึกร่าง" — never posted to the
   /// backend; persisted in SharedPreferences so it survives restarts.
   final bool isDraft;
+
+  /// เวลาที่บันทึกร่างลงเครื่อง — แสดงบนการ์ดหน้าฉบับร่าง; null สำหรับ
+  /// ร่างเก่าที่เซฟก่อนมีฟิลด์นี้ (view fallback ถอดจาก id `local-ms`)
+  final DateTime? savedAt;
 
   /// Backend-supplied centroid — preferred over averaging when set.
   final LatLng? centerOverride;
@@ -71,6 +76,7 @@ class Parcel {
       points: points,
       isDraft: json['isDraft'] == true,
       meta: json['meta'] as Map<String, dynamic>?,
+      savedAt: DateTime.tryParse('${json['savedAt'] ?? ''}'),
       centerOverride: center == null
           ? null
           : LatLng(
@@ -90,11 +96,19 @@ class Parcel {
     'productionYear': productionYear,
     'isDraft': isDraft,
     'meta': ?meta,
+    'savedAt': ?savedAt?.toIso8601String(),
     'points': [
       for (final p in points)
         {'latitude': p.latitude, 'longitude': p.longitude},
     ],
   };
+
+  /// ชื่อแปลงล้วน — ตัดเลข `#NNN` ท้ายชื่อออก (seed ต่อรหัสไว้ท้ายชื่อ)
+  String get landNo => name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+
+  /// รหัสแปลง = เลข `#NNN` ท้ายชื่อ (schema ไม่มีฟิลด์ code แยก)
+  String? get plotCode =>
+      RegExp(r'#\s*(\d+)\s*$').firstMatch(name)?.group(1);
 
   LatLng get center {
     if (centerOverride != null) return centerOverride!;
@@ -180,6 +194,9 @@ class FormOptions {
     this.lossOptions = const [],
     this.plotStatuses = const [],
     this.plotRequestTypes = const [],
+    this.statusReasons = const {},
+    this.canePlantModes = const [],
+    this.caneTypesByMode = const {},
     this.parcelStatuses = const [],
     this.riskLevels = const [],
     this.prevPlots = const [],
@@ -188,6 +205,13 @@ class FormOptions {
   factory FormOptions.fromJson(Map<String, dynamic> j) {
     List<String> names(String k) =>
         [for (final v in j[k] as List? ?? const []) '$v'];
+    Map<String, List<String>> mapList(String k) => {
+      if (j[k] is Map)
+        for (final e in (j[k] as Map).entries)
+          '${e.key}': [
+            for (final v in e.value as List? ?? const []) '$v',
+          ],
+    };
     return FormOptions(
       zones: names('zones'),
       provinces: names('provinces'),
@@ -201,6 +225,9 @@ class FormOptions {
       lossOptions: names('lossOptions'),
       plotStatuses: names('plotStatuses'),
       plotRequestTypes: names('plotRequestTypes'),
+      canePlantModes: names('canePlantModes'),
+      statusReasons: mapList('statusReasons'),
+      caneTypesByMode: mapList('caneTypesByMode'),
       parcelStatuses: names('parcelStatuses'),
       riskLevels: names('riskLevels'),
       prevPlots: [
@@ -260,6 +287,18 @@ class FormOptions {
   /// สถานะแปลง1/2" (มาจาก /meta/options เหมือนตัวเลือกอื่น)
   final List<String> plotStatuses;
   final List<String> plotRequestTypes;
+
+  /// เหตุผลประกอบสถานะแปลงต่อสถานะ — dropdown ที่สองหน้าคำขอ1
+  /// โผล่เฉพาะสถานะที่ backend กำหนดเหตุผลไว้ (เช่น LY)
+  final Map<String, List<String>> statusReasons;
+
+  /// ตัวเลือก "ประเภทอ้อยหลักใหม่" (ไว้ตอ/ปลูกใหม่) — คำขอ2
+  /// แก้ไขประเภทอ้อย
+  final List<String> canePlantModes;
+
+  /// ประเภทอ้อยละเอียดแยกตามโหมด — key = ค่าใน [canePlantModes]
+  /// (ไว้ตอ → อ้อยตอ1..; ปลูกใหม่ → อ้อยปลูก)
+  final Map<String, List<String>> caneTypesByMode;
   final List<String> parcelStatuses;
   final List<String> riskLevels;
   final List<OptionItem> prevPlots;

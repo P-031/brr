@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 
 /// หน้าในเมนู ⋮ ของรายละเอียดแปลง — ตาม ref แอปจริง สีตามธีมแอป
-/// (navy card + ปุ่มเขียว)
+/// (dark green card + ปุ่มเขียว)
 ///
 /// - [EditRouteSeqView] แก้ไข รูท & ลำดับ — PATCH /plots/:id จริง
 /// - [StatusRequestView] ยื่นคำขออัปเดตสถานะแปลง1 — dropdown จาก
@@ -17,6 +18,7 @@ import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 class _ParcelCtx {
   const _ParcelCtx({
     required this.landNo,
+    required this.plotCode,
     required this.meta,
     required this.farmerName,
     required this.farmerCode,
@@ -25,6 +27,9 @@ class _ParcelCtx {
   });
 
   final String landNo;
+
+  /// รหัสแปลง = เลข #NNN ท้ายชื่อ (schema ไม่มีฟิลด์ code แยก)
+  final String? plotCode;
   final Map meta;
   final String? farmerName;
   final String? farmerCode;
@@ -38,7 +43,8 @@ class _ParcelCtx {
     final areaMap = detail?['area'] as Map<String, dynamic>?;
     final rai = (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
     return _ParcelCtx(
-      landNo: p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), ''),
+      landNo: p.landNo,
+      plotCode: p.plotCode,
       meta: meta,
       farmerName: _str(farmer?['displayName']) ?? p.owner,
       farmerCode: _str(farmer?['username']) ?? _str(farmer?['id']),
@@ -55,7 +61,7 @@ class _ParcelCtx {
   String? metaStr(String k) => _str(meta[k]);
 }
 
-/// แถบ navy สรุปแปลงเหมือน ref — label ซ้าย / value ขวา
+/// แถบเทาสรุปแปลง — label ซ้าย / value ขวา (เดิมเขียวเข้ม)
 class _HeaderCard extends StatelessWidget {
   const _HeaderCard({required this.ctx});
 
@@ -72,7 +78,7 @@ class _HeaderCard extends StatelessWidget {
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: Colors.black54,
             ),
           ),
           Expanded(
@@ -81,7 +87,7 @@ class _HeaderCard extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 16.5,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.black87,
               ),
             ),
           ),
@@ -92,13 +98,14 @@ class _HeaderCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.navy,
+        color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         children: [
           line('ปีการผลิต', ctx.metaStr('productionYear')),
-          line('หมายเลขแปลง', ctx.landNo),
+          line('ชื่อแปลง', ctx.landNo),
+          line('หมายเลขแปลง', ctx.plotCode),
           line('พื้นที่สำรวจ(ไร่)', ctx.areaText),
           line('ประเภทอ้อย', ctx.metaStr('caneType')),
         ],
@@ -155,7 +162,7 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
       appBar: AppBar(
-        backgroundColor: AppColors.navy,
+        backgroundColor: AppColors.green,
         title: const Text('แก้ไข รูท & ลำดับ'),
       ),
       body: FutureBuilder<Map<String, dynamic>?>(
@@ -190,7 +197,7 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
               ),
               const SizedBox(height: 18),
               FilledButton.icon(
-                style: FilledButton.styleFrom(backgroundColor: AppColors.navy),
+                style: FilledButton.styleFrom(backgroundColor: AppColors.green),
                 onPressed: _saving ? null : _save,
                 icon: _saving
                     ? const SizedBox(
@@ -279,15 +286,35 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
   /// ส่งตรงไป backend ตาม docs/API_CONTRACT.md
   String get requestKind;
 
-  /// ส่งคำขอจริงผ่าน VM — endpoint รอ backend; ล้มเหลว (เช่น 404
-  /// ตอน endpoint ยังไม่มี) โชว์ error บนจอ ไม่แสร้งว่าสำเร็จ
+  /// ฟิลด์เพิ่มเติมที่ส่งพ่วง body (เช่น reason ของคำขอ1) —
+  /// null = ไม่มี
+  Map<String, String?>? get requestFields => null;
+
+  /// เช็กก่อนส่ง — คืนข้อความเตือนถ้ายังขาดข้อมูล
+  String? get submitBlocker => null;
+
+  /// ส่งคำขอจริงผ่าน VM — สำเร็จส่งสถานะจาก backend กลับให้หน้าแม่
+  /// แจ้งผล; ล้มเหลวโชว์ error บนจอ ไม่แสร้งว่าสำเร็จ
   Future<void> _submit() async {
     final value = _selected;
     if (value == null || _sending) return;
+    final blocker = submitBlocker;
+    if (blocker != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(blocker)));
+      return;
+    }
     setState(() => _sending = true);
     try {
-      await widget.vm.submitRequest(kind: requestKind, value: value);
-      if (mounted) Navigator.of(context).pop(true);
+      final status = await widget.vm.submitRequest(
+        kind: requestKind,
+        value: value,
+        fields: requestFields,
+      );
+      if (mounted) {
+        Navigator.of(context).pop('ส่งคำขอสำเร็จ — สถานะ: $status');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -300,11 +327,15 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
   }
 
   /// dropdown ในกรอบขาวแบบ ref — options จาก backend เท่านั้น
+  /// [bindSelected] false = ช่องอิสระ (เช่น เหตุผลประกอบ) ไม่ผูก
+  /// กับ [_selected] ของ dropdown หลัก — ค่า null โชว์ [hint]
   Widget dropdown(
     List<String> options, {
     List<String>? display,
     String? value,
     ValueChanged<String?>? onChanged,
+    bool bindSelected = true,
+    String? hint,
   }) {
     if (options.isEmpty) {
       return Container(
@@ -321,22 +352,46 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
       );
     }
     final shown = display ?? options;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.gold),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value ?? _selected,
-          isExpanded: true,
-          items: [
-            for (var i = 0; i < options.length; i++)
-              DropdownMenuItem(value: options[i], child: Text(shown[i])),
+    final current = value ?? (bindSelected ? _selected : null);
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () async {
+        final i = await showOptionPopup(
+          context,
+          title: hint,
+          labels: shown,
+          selectedIndex: current == null
+              ? null
+              : options.indexOf(current),
+        );
+        if (i == null) return;
+        (onChanged ?? (v) => setState(() => _selected = v))(options[i]);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 14,
+        ),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.gold),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                current ?? hint ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: current == null ? Colors.black45 : Colors.black87,
+                ),
+              ),
+            ),
+            const Icon(Iconsax.arrow_down, color: Colors.black54),
           ],
-          onChanged: onChanged ?? (v) => setState(() => _selected = v),
         ),
       ),
     );
@@ -347,7 +402,7 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
       appBar: AppBar(
-        backgroundColor: AppColors.navy,
+        backgroundColor: AppColors.green,
         title: Text(widget.title),
       ),
       body: FutureBuilder<Map<String, dynamic>?>(
@@ -377,8 +432,21 @@ class StatusRequestView extends _RequestViewBase {
 
 class _StatusRequestViewState
     extends _RequestViewBaseState<StatusRequestView> {
+  String? _reason;
+  List<String> _activeReasons = const [];
+
   @override
   String get requestKind => 'status';
+
+  @override
+  Map<String, String?>? get requestFields =>
+      _reason == null ? null : {'reason': _reason};
+
+  /// สถานะที่มีเหตุผลประกอบต้องเลือกเหตุผลก่อนส่ง
+  @override
+  String? get submitBlocker => _activeReasons.isNotEmpty && _reason == null
+      ? 'กรุณาเลือกเหตุผลประกอบสถานะแปลง'
+      : null;
 
   @override
   List<Widget> body(_ParcelCtx ctx) => [
@@ -392,12 +460,59 @@ class _StatusRequestViewState
         _selected ??= opts.contains(ctx.status)
             ? ctx.status
             : (opts.isNotEmpty ? opts.first : null);
-        return dropdown(opts);
+        final reasons =
+            snap.data?.statusReasons[_selected] ?? const <String>[];
+        _activeReasons = reasons;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            dropdown(
+              opts,
+              onChanged: (v) => setState(() {
+                _selected = v;
+                _reason = null;
+              }),
+            ),
+            // สถานะที่ backend กำหนดเหตุผลไว้ → dropdown ที่สอง
+            if (reasons.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.gold),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'เหตุผลประกอบสถานะแปลง',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    dropdown(
+                      reasons,
+                      value: _reason,
+                      bindSelected: false,
+                      hint: 'เลือกเหตุผลประกอบสถานะแปลง',
+                      onChanged: (v) => setState(() => _reason = v),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        );
       },
     ),
     const SizedBox(height: 16),
     FilledButton.icon(
-      style: FilledButton.styleFrom(backgroundColor: AppColors.navy),
+      style: FilledButton.styleFrom(backgroundColor: AppColors.green),
       onPressed: _sending ? null : _submit,
       icon: const Icon(Iconsax.send_2, size: 20),
       label: const Text(
@@ -419,8 +534,149 @@ class EditRequestView extends _RequestViewBase {
 }
 
 class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
+  // การ์ด "แก้ไขประเภทอ้อย"
+  String? _caneMode;
+  String? _caneTypeNew;
+  // การ์ด "แก้ไขชาวไร"
+  final _plotCodeCtrl = TextEditingController();
+  FarmerRef? _newFarmer;
+  List<FarmerRef>? _farmers;
+
+  @override
+  void dispose() {
+    _plotCodeCtrl.dispose();
+    super.dispose();
+  }
+
   @override
   String get requestKind => 'edit';
+
+  /// payload เพิ่มเติมตามประเภทคำขอ — backend เก็บลง PlotRequest.payload
+  @override
+  Map<String, String?>? get requestFields {
+    if (_selected == 'แก้ไขประเภทอ้อย') {
+      return {'canePlantMode': _caneMode, 'caneTypeNew': _caneTypeNew};
+    }
+    if (_selected == 'แก้ไขชาวไร') {
+      final code = _plotCodeCtrl.text.trim();
+      return {
+        'newPlotCode': code.isEmpty ? null : code,
+        'newFarmer': _newFarmer?.name,
+        'newFarmerId': _newFarmer?.id,
+      };
+    }
+    return null;
+  }
+
+  /// การ์ดที่โผล่แล้วต้องกรอกครบก่อนส่ง
+  @override
+  String? get submitBlocker {
+    if (_selected == 'แก้ไขประเภทอ้อย') {
+      if (_caneMode == null) return 'กรุณาเลือกประเภทอ้อยหลักใหม่';
+      if (_caneTypeNew == null) {
+        return 'กรุณาเลือกประเภทอ้อย$_caneMode';
+      }
+    }
+    if (_selected == 'แก้ไขชาวไร') {
+      if (_plotCodeCtrl.text.trim().isEmpty) {
+        return 'กรุณากรอกรหัสแปลงใหม่';
+      }
+      if (_newFarmer == null) return 'กรุณาเลือกชาวไร่คนใหม่';
+    }
+    return null;
+  }
+
+  /// เปลี่ยนประเภทคำขอ → ล้างค่าการ์ดย่อยที่เคยกรอก
+  void _resetSub() {
+    _caneMode = null;
+    _caneTypeNew = null;
+    _newFarmer = null;
+    _plotCodeCtrl.clear();
+  }
+
+  /// การ์ดย่อยสีขาวกรอบทอง — หัวข้อใหญ่ + children (หัวข้อย่อย/ช่อง)
+  Widget _subCard(String title, List<Widget> children) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.gold),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 10),
+        ...children,
+      ],
+    ),
+  );
+
+  Widget _subLabel(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+    ),
+  );
+
+  /// ช่องเลือกชาวไร่คนใหม่ — popup ค้นหาได้ ข้อมูลจาก backend
+  Widget _farmerField() => InkWell(
+    borderRadius: BorderRadius.circular(10),
+    onTap: () async {
+      List<FarmerRef> farmers;
+      try {
+        farmers = _farmers ??= await widget.vm.loadFarmers();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('$e')));
+        }
+        return;
+      }
+      if (!mounted) return;
+      final i = await showOptionPopup(
+        context,
+        title: 'เลือกชาวไร่คนใหม่',
+        labels: [for (final f in farmers) f.name],
+        selectedIndex: _newFarmer == null
+            ? null
+            : farmers.indexWhere((f) => f.id == _newFarmer!.id),
+        searchHint: 'ค้นหาชาวไร่',
+      );
+      if (i != null) setState(() => _newFarmer = farmers[i]);
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.black26),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              _newFarmer?.name ?? 'ค้นหา/เลือกชาวไร่คนใหม่',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                color: _newFarmer == null
+                    ? Colors.black45
+                    : Colors.black87,
+              ),
+            ),
+          ),
+          const Icon(Iconsax.search_normal, size: 18, color: Colors.black45),
+        ],
+      ),
+    ),
+  );
 
   @override
   List<Widget> body(_ParcelCtx ctx) {
@@ -433,7 +689,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: Colors.black54,
             ),
           ),
           Expanded(
@@ -442,7 +698,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
               style: const TextStyle(
                 fontSize: 16.5,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: Colors.black87,
               ),
             ),
           ),
@@ -450,12 +706,12 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
       ),
     );
     return [
-      // การ์ด navy ข้อมูลแปลงปัจจุบัน — ละเอียดกว่าหน้าแรกตาม ref
+      // การ์ดเทา ข้อมูลแปลงปัจจุบัน — ละเอียดกว่าหน้าแรกตาม ref
       Container(
         width: double.infinity,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
         decoration: BoxDecoration(
-          color: AppColors.navy,
+          color: Colors.grey.shade200,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -465,7 +721,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                 const Icon(
                   Iconsax.document_text,
                   size: 20,
-                  color: Colors.white,
+                  color: Colors.black54,
                 ),
                 const SizedBox(width: 8),
                 const Expanded(
@@ -474,7 +730,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: Colors.black87,
                     ),
                   ),
                 ),
@@ -485,7 +741,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.18),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(color: AppColors.gold),
                     ),
@@ -493,14 +749,15 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                       'ปีการผลิต ${ctx.metaStr('productionYear')}',
                       style: const TextStyle(
                         fontSize: 11.5,
-                        color: Colors.white,
+                        color: Colors.black87,
                       ),
                     ),
                   ),
               ],
             ),
-            const Divider(height: 18, color: Colors.white24),
-            line('รหัสแปลง (Land No.)', ctx.landNo),
+            const Divider(height: 18, color: Colors.black12),
+            line('ชื่อแปลง', ctx.landNo),
+            line('รหัสแปลง (Land No.)', ctx.plotCode),
             line('ประเภทอ้อย', ctx.metaStr('caneType')),
             line('พื้นที่', '${ctx.areaText} ไร่'),
             line(
@@ -527,15 +784,80 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
         builder: (context, snap) {
           final opts = snap.data?.plotRequestTypes ?? const [];
           _selected ??= opts.isNotEmpty ? opts.first : null;
-          return dropdown(
-            opts,
-            display: [for (var i = 0; i < opts.length; i++) '${i + 1}. ${opts[i]}'],
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              dropdown(
+                opts,
+                display: [
+                  for (var i = 0; i < opts.length; i++)
+                    '${i + 1}. ${opts[i]}',
+                ],
+                onChanged: (v) => setState(() {
+                  _selected = v;
+                  _resetSub();
+                }),
+              ),
+              if (_selected == 'แก้ไขประเภทอ้อย') ...[
+                const SizedBox(height: 14),
+                _subCard('กรอกข้อมูลประเภทอ้อยใหม่', [
+                  _subLabel('ประเภทอ้อยหลักใหม่'),
+                  dropdown(
+                    snap.data?.canePlantModes ?? const [],
+                    value: _caneMode,
+                    bindSelected: false,
+                    hint: 'เลือกประเภทอ้อยหลักใหม่',
+                    onChanged: (v) => setState(() {
+                      _caneMode = v;
+                      _caneTypeNew = null;
+                    }),
+                  ),
+                  if (_caneMode != null) ...[
+                    const SizedBox(height: 12),
+                    _subLabel('ประเภทอ้อย$_caneMode'),
+                    dropdown(
+                      snap.data?.caneTypesByMode[_caneMode] ??
+                          snap.data?.caneTypes ??
+                          const [],
+                      value: _caneTypeNew,
+                      bindSelected: false,
+                      hint: 'เลือกประเภทอ้อย$_caneMode',
+                      onChanged: (v) =>
+                          setState(() => _caneTypeNew = v),
+                    ),
+                  ],
+                ]),
+              ],
+              if (_selected == 'แก้ไขชาวไร') ...[
+                const SizedBox(height: 14),
+                _subCard('แก้ไขข้อมูลชาวไร่และแปลง', [
+                  _subLabel('รหัสแปลงใหม่'),
+                  TextField(
+                    controller: _plotCodeCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'กรอกรหัสแปลงใหม่',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _subLabel('ชาวไร่คนใหม่'),
+                  _farmerField(),
+                ]),
+              ],
+            ],
           );
         },
       ),
       const SizedBox(height: 14),
-      // การ์ดเตือนตามประเภทคำขอ — เหมือน ref
-      if (_selected != null)
+      // การ์ดเตือน — เฉพาะคำขอยกเลิกแปลง (ผลกระทบหนักสุด)
+      if (_selected == 'ยกเลิกแปลง')
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(14),
@@ -584,7 +906,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
         ),
       const SizedBox(height: 16),
       FilledButton.icon(
-        style: FilledButton.styleFrom(backgroundColor: AppColors.navy),
+        style: FilledButton.styleFrom(backgroundColor: AppColors.green),
         onPressed: _sending ? null : _submit,
         icon: const Icon(Iconsax.send_2, size: 20),
         label: const Text(
@@ -594,4 +916,127 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
       ),
     ];
   }
+}
+
+/// หน้า "กลุ่มบำรุง / ตัด" — header card เหมือนคำขอ1 + dropdown 2 ชุด
+/// (กลุ่มสร้างอ้อย(บำรุง) / กลุ่มตัด) + ปุ่มส่งคำขอ
+/// ตัวเลือกแยกจาก caneGroups ของ backend ตามคำในชื่อกลุ่ม
+/// ("บำรุง"/"ตัด" — convention เดียวกับ seed/filter)
+class GroupRequestView extends _RequestViewBase {
+  const GroupRequestView({super.key, required super.vm})
+    : super(title: 'กลุ่มบำรุง / ตัด');
+
+  @override
+  State<GroupRequestView> createState() => _GroupRequestViewState();
+}
+
+class _GroupRequestViewState
+    extends _RequestViewBaseState<GroupRequestView> {
+  String? _maintain;
+  String? _harvest;
+
+  @override
+  String get requestKind => 'group';
+
+  /// ส่งทั้ง 2 ฟิลด์ใน request เดียว — เลือกอย่างน้อย 1 กลุ่ม
+  Future<void> _submitGroup() async {
+    if ((_maintain == null && _harvest == null) || _sending) return;
+    setState(() => _sending = true);
+    try {
+      final status = await widget.vm.submitRequest(
+        kind: requestKind,
+        fields: {
+          'maintainGroup': _maintain,
+          'harvestGroup': _harvest,
+        },
+      );
+      if (mounted) {
+        Navigator.of(context).pop('ส่งคำขอสำเร็จ — สถานะ: $status');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  List<Widget> body(_ParcelCtx ctx) => [
+    _HeaderCard(ctx: ctx),
+    const SizedBox(height: 14),
+    FutureBuilder<FormOptions>(
+      future: _options,
+      builder: (context, snap) {
+        final groups = snap.data?.caneGroups ?? const <String>[];
+        final maintain = [
+          for (final g in groups)
+            if (g.contains('บำรุง')) g,
+        ];
+        final harvest = [
+          for (final g in groups)
+            if (g.contains('ตัด')) g,
+        ];
+        // ค่าเดิมจาก backend — meta.maintainGroup/harvestGroup
+        // (อนาคต) ไม่งั้นเดาจาก caneGroup ตามคำ
+        _maintain ??= _pick(
+          maintain,
+          ctx.metaStr('maintainGroup') ??
+              _matchKind(ctx.metaStr('caneGroup'), 'บำรุง'),
+        );
+        _harvest ??= _pick(
+          harvest,
+          ctx.metaStr('harvestGroup') ??
+              _matchKind(ctx.metaStr('caneGroup'), 'ตัด'),
+        );
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'กลุ่มสร้างอ้อย (กลุ่มบำรุง)',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            dropdown(
+              maintain,
+              value: _maintain,
+              onChanged: (v) => setState(() => _maintain = v),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'กลุ่มตัด',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            dropdown(
+              harvest,
+              value: _harvest,
+              onChanged: (v) => setState(() => _harvest = v),
+            ),
+          ],
+        );
+      },
+    ),
+    const SizedBox(height: 16),
+    FilledButton.icon(
+      style: FilledButton.styleFrom(backgroundColor: AppColors.green),
+      onPressed: _sending ? null : _submitGroup,
+      icon: const Icon(Iconsax.send_2, size: 20),
+      label: const Text(
+        'ส่งคำขอ',
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      ),
+    ),
+  ];
+
+  /// caneGroup เดิมที่มีคำ kw → ใช้ prefill
+  static String? _matchKind(String? group, String kw) =>
+      group != null && group.contains(kw) ? group : null;
+
+  /// เลือกเฉพาะค่าที่อยู่ใน options เท่านั้น (กันค่าเดิมไม่ตรง list)
+  static String? _pick(List<String> options, String? want) =>
+      want != null && options.contains(want) ? want : null;
 }
