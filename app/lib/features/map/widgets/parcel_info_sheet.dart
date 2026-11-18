@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
+import 'package:brr/features/map/views/activity_record_view.dart';
 import 'package:brr/features/map/views/parcel_detail_view.dart';
 import 'package:brr/features/map/views/parcel_edit_views.dart';
+import 'package:brr/features/map/widgets/risk_point_sheet.dart';
 
 /// Sheet ข้อมูลแปลง (ตาม ref แอปจริง) — header เลขแปลง + ตารางข้อมูล
 /// + เมนูทางลัด + กิจกรรม — ปุ่มทุกตัวยังเป็น stub (_todo) รอนิยาม
@@ -68,7 +72,13 @@ class _ParcelInfoSheet extends StatefulWidget {
 }
 
 class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
-  String? _risk;
+  /// จุดเสี่ยงที่บันทึกไว้ในเครื่องของแปลง — การ์ด preview ใช้โชว์
+  /// สถานะ; refresh หลัง sheet ฟอร์มบันทึกกลับมา
+  late Future<Map<String, dynamic>?> _riskPoint = widget.vm.riskPoint();
+
+  /// meta/farmer ล่าสุดที่ build เตรียมไว้ — ปุ่มเมนูอ่านตอนกด
+  Map<String, dynamic> _meta = const {};
+  Map<String, dynamic>? _farmer;
 
   /// ตัวเลือกจุดเสี่ยงจาก backend (/meta/options → riskLevels)
   late final Future<FormOptions> _options = widget.vm.loadOptions();
@@ -82,10 +92,10 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
     (Iconsax.send_2, 'นำทาง', AppColors.sky),
     (Iconsax.home_2, 'บ้านชาวไร่', AppColors.gold),
     (Iconsax.call, 'เบอร์โทร', AppColors.green),
-    (Iconsax.edit_2, 'แก้ไข รูท & ลำดับ', AppColors.navy),
-    (Iconsax.refresh, 'คำขออัปเดตสถานะแปลง1', AppColors.navy),
-    (Iconsax.clock, 'คำขออัปเดตสถานะแปลง2', AppColors.navy),
-    (Iconsax.more, 'กลุ่มบำรุง / ตัด', AppColors.navy),
+    (Iconsax.edit_2, 'แก้ไข รูท & ลำดับ', AppColors.green),
+    (Iconsax.refresh, 'คำขออัปเดตสถานะแปลง1', AppColors.green),
+    (Iconsax.clock, 'คำขออัปเดตสถานะแปลง2', AppColors.green),
+    (Iconsax.more, 'กลุ่มบำรุง / ตัด', AppColors.green),
   ];
 
   static const _thaiMonths = [
@@ -123,13 +133,17 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   void _pushFullScreen(Widget page) {
     widget.onCovered?.call(true);
     Navigator.of(context)
-        .push(MaterialPageRoute<bool>(builder: (_) => page))
+        .push(MaterialPageRoute<Object>(builder: (_) => page))
         .then((saved) {
           if (!mounted) return;
           widget.onCovered?.call(_extent >= 0.99);
-          if (saved == true) {
+          if (saved != null) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('บันทึกข้อมูลแล้ว')),
+              SnackBar(
+                content: Text(
+                  saved is String ? saved : 'บันทึกสำเร็จ',
+                ),
+              ),
             );
           }
         });
@@ -139,16 +153,138 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   /// PATCH จากหน้าลูกแล้ว sheet/detail เห็นค่าใหม่ทันที)
   void _openDetail() => _pushFullScreen(ParcelDetailView(vm: widget.vm));
 
+  /// นำทาง — เปิด Google Maps เส้นทางไปยังพิกัดกึ่งกลางแปลงที่บันทึกไว้
+  /// google.navigation = turn-by-turn ในแอป Maps โดยตรง (Android);
+  /// ไม่มีแอป → fallback https เปิดใน browser/chooser
+  Future<void> _navigate() async {
+    final c = widget.vm.parcel.center;
+    final latLng = '${c.latitude},${c.longitude}';
+    for (final raw in [
+      'google.navigation:q=$latLng',
+      'https://www.google.com/maps/dir/?api=1&destination=$latLng',
+    ]) {
+      try {
+        if (await launchUrl(
+          Uri.parse(raw),
+          mode: LaunchMode.externalApplication,
+        )) {
+          return;
+        }
+      } catch (_) {
+        // plugin channel ยังไม่ขึ้น (hot reload หลังเพิ่ม package)
+        // → ลอง fallback ถัดไป
+      }
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่สามารถเปิด Google Maps ได้')),
+      );
+    }
+  }
+
+  /// บ้านชาวไร่ — dialog ข้อมูลที่อยู่ที่เกี่ยวข้องจาก backend
+  /// (หมู่บ้าน/ตำบล/อำเภอ/จังหวัด) เฉพาะฟิลด์ที่มีค่าจริง
+  void _farmerHome() {
+    final name = _str(_farmer?['displayName']);
+    final rows = <(String, String)>[
+      if (name != null) ('ชาวไร่', name),
+      for (final (k, label) in const [
+        ('village', 'หมู่บ้าน'),
+        ('subdistrict', 'ตำบล'),
+        ('district', 'อำเภอ'),
+        ('province', 'จังหวัด'),
+      ])
+        if (_str(_meta[k]) != null) (label, _str(_meta[k])!),
+    ];
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        icon: const Icon(Iconsax.home_2, color: AppColors.gold, size: 28),
+        title: const Text('บ้านชาวไร่'),
+        content: rows.isEmpty
+            ? const Text('ยังไม่มีข้อมูลที่อยู่')
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final (label, value) in rows)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Text.rich(
+                        TextSpan(
+                          text: '$label : ',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: value,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.normal,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('ปิด'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// เบอร์โทร — เด้ง dialer พร้อมเบอร์ที่บันทึกไว้ (farmer.phone /
+  /// meta.phone… — schema ยังไม่มีฟิลด์นี้ แสดงข้อความแทนจนกว่า
+  /// backend จะมี)
+  Future<void> _call() async {
+    final phone =
+        _str(_farmer?['phone']) ??
+        _str(_meta['phone']) ??
+        _str(_meta['farmerPhone']) ??
+        _str(_meta['tel']);
+    if (phone == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่มีเบอร์โทรที่บันทึกไว้')),
+      );
+      return;
+    }
+    var ok = false;
+    try {
+      ok = await launchUrl(
+        Uri.parse('tel:$phone'),
+        mode: LaunchMode.externalApplication,
+      );
+    } catch (_) {}
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่สามารถเปิดแอปโทรศัพท์ได้')),
+      );
+    }
+  }
+
   /// ปุ่มเมนูที่ต่อหน้าจริงแล้ว — ที่เหลือยัง stub
   VoidCallback _menuAction(String label) {
     final vm = widget.vm;
     return switch (label) {
+      'นำทาง' => () => _navigate(),
+      'บ้านชาวไร่' => _farmerHome,
+      'เบอร์โทร' => () => _call(),
       'แก้ไข รูท & ลำดับ' => () => _pushFullScreen(EditRouteSeqView(vm: vm)),
       'คำขออัปเดตสถานะแปลง1' => () => _pushFullScreen(
         StatusRequestView(vm: vm),
       ),
       'คำขออัปเดตสถานะแปลง2' => () => _pushFullScreen(
         EditRequestView(vm: vm),
+      ),
+      'กลุ่มบำรุง / ตัด' => () => _pushFullScreen(
+        GroupRequestView(vm: vm),
       ),
       _ => () => _todo(label),
     };
@@ -166,6 +302,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
         final meta =
             (detail?['meta'] as Map<String, dynamic>?) ?? p.meta ?? const {};
         final farmer = detail?['farmer'] as Map<String, dynamic>?;
+        _meta = meta;
+        _farmer = farmer;
         final farmerName = _str(farmer?['displayName']) ?? p.owner;
         final farmerCode = _str(farmer?['username']) ?? _str(farmer?['id']);
         final loadingDetail =
@@ -186,11 +324,14 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
         final status = p.isDraft
             ? 'แปลงร่าง (ยังไม่บันทึก)'
             : _str(p.status) ?? _str(detail?['status']);
-        final landNo = p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+        final landNo = p.landNo;
+        // รหัสแปลง = เลข #NNN ท้ายชื่อ (schema ไม่มีฟิลด์แยก)
+        final plotCode = p.plotCode;
 
         // (label, value, ไฮไลต์ฟ้า) — แถวหลักโชว์เสมอ ค่าว่างแสดง '—'
         // (รองรับอนาคตที่ backend จะมีฟิลด์พวกนี้ครบ)
         final rows = <(String, String?, bool)>[
+          ('ชื่อแปลง', landNo, false),
           ('ปีการผลิต', _str(meta['productionYear']) ?? p.productionYear, false),
           ('ประเภทอ้อย', _str(meta['caneType']), false),
           ('รหัสชาวไร่', farmerCode, true),
@@ -232,19 +373,19 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             ),
             const SizedBox(height: 14),
             const Text(
-              'Land No',
-              style: TextStyle(fontSize: 12, color: Colors.black45),
+              'ชื่อแปลง',
+              style: TextStyle(fontSize: 14.5, color: Colors.black45),
             ),
             const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Iconsax.crop, color: AppColors.navy, size: 30),
+                const Icon(Iconsax.crop, color: AppColors.green, size: 34),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     landNo,
                     style: const TextStyle(
-                      fontSize: 21,
+                      fontSize: 26,
                       fontWeight: FontWeight.bold,
                       color: AppColors.green,
                     ),
@@ -264,7 +405,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                     child: Text(
                       'อายุ $ageDays วัน',
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: AppColors.green,
                       ),
@@ -279,31 +420,63 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                 ),
               ],
             ),
-            if (grade != null) ...[
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.only(left: 40),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 5,
+            const SizedBox(height: 4),
+            // หมายเลขแปลง + ปุ่มก็อป + เกรด — ไม่มีเลขโชว์ '—'
+            // (รองรับอนาคต backend มีฟิลด์รหัส/เกรดจริงแยก)
+            Row(
+              children: [
+                const SizedBox(width: 44),
+                Text(
+                  'หมายเลขแปลง : ${plotCode ?? '—'}',
+                  style: const TextStyle(
+                    fontSize: 16.5,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.gold, width: 1.4),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'แปลงเกรด $grade',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.gold,
+                ),
+                if (plotCode != null)
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'คัดลอกหมายเลขแปลง',
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: plotCode));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('คัดลอกหมายเลขแปลงแล้ว'),
+                        ),
+                      );
+                    },
+                    icon: const Icon(
+                      Iconsax.copy,
+                      size: 20,
+                      color: AppColors.green,
                     ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                margin: const EdgeInsets.only(left: 40),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.gold, width: 1.4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'แปลงเกรด ${grade ?? '—'}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.gold,
                   ),
                 ),
               ),
-            ],
+            ),
             const SizedBox(height: 14),
             if (loadingDetail)
               const Padding(
@@ -321,7 +494,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                     SizedBox(width: 8),
                     Text(
                       'กำลังโหลดรายละเอียด…',
-                      style: TextStyle(fontSize: 13, color: Colors.black54),
+                      style: TextStyle(fontSize: 15, color: Colors.black54),
                     ),
                   ],
                 ),
@@ -353,14 +526,14 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                             Text(
                               'เพิ่มเติม',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.black54,
                               ),
                             ),
                             Icon(
                               Iconsax.arrow_right_3,
-                              size: 16,
+                              size: 18,
                               color: Colors.black54,
                             ),
                           ],
@@ -374,7 +547,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             const SizedBox(height: 36),
             const Text(
               'เมนู',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             GridView.count(
@@ -383,7 +556,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               physics: const NeverScrollableScrollPhysics(),
               mainAxisSpacing: 14,
               crossAxisSpacing: 12,
-              childAspectRatio: 0.9,
+              childAspectRatio: 0.78,
               children: [
                 for (final m in _menus)
                   _menuTile(m.$1, m.$2, m.$3, _menuAction(m.$2)),
@@ -392,16 +565,17 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             const SizedBox(height: 10),
             const Text(
               'กิจกรรม',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             _actionCard(
               color: Colors.white,
               border: Border.all(color: Colors.grey.shade300),
-              leading: _iconBox(AppColors.navy, Iconsax.clipboard_text),
+              leading: _iconBox(AppColors.green, Iconsax.clipboard_text),
               title: 'บันทึกกิจกรรม',
               subtitle: 'เก็บข้อมูล',
-              onTap: () => _todo('บันทึกกิจกรรม'),
+              onTap: () =>
+                  _pushFullScreen(ActivityRecordView(vm: widget.vm)),
             ),
             const SizedBox(height: 10),
             _actionCard(
@@ -409,7 +583,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               leading: const Icon(
                 Iconsax.menu_1,
                 color: Colors.black87,
-                size: 22,
+                size: 30,
               ),
               title: 'ประวัติการบันทึกกิจกรรม',
               onTap: () => _todo('ประวัติการบันทึกกิจกรรม'),
@@ -421,7 +595,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               leading: const Icon(
                 Iconsax.cloud_plus,
                 color: AppColors.sky,
-                size: 28,
+                size: 36,
               ),
               title: 'นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง',
               subtitle: 'ส่งข้อมูลครบแล้ว (ไม่มีข้อมูลค้าง)',
@@ -429,17 +603,17 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               trailing: const Icon(
                 Iconsax.arrow_right_3,
                 color: Colors.black38,
-                size: 20,
+                size: 24,
               ),
               onTap: () => _todo('นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง'),
             ),
             const SizedBox(height: 10),
             _actionCard(
-              color: AppColors.navy,
+              color: AppColors.green,
               leading: const Icon(
                 Iconsax.calendar_edit,
                 color: Colors.white,
-                size: 28,
+                size: 36,
               ),
               title: 'อัปเดตสถานะแปลงตัด',
               subtitle: 'เปิดแปลง->ตัดอ้อย->ปิดแปลง',
@@ -447,8 +621,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               subtitleColor: Colors.white70,
               trailing: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                  horizontal: 12,
+                  vertical: 8,
                 ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
@@ -459,13 +633,13 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   children: [
                     const Icon(
                       Icons.help_outline,
-                      size: 14,
+                      size: 18,
                       color: Colors.white,
                     ),
-                    const SizedBox(width: 4),
+                    const SizedBox(width: 6),
                     Text(
                       _str(meta['cutStatus']) ?? 'ยังไม่ระบุ',
-                      style: const TextStyle(fontSize: 12, color: Colors.white),
+                      style: const TextStyle(fontSize: 14, color: Colors.white),
                     ),
                   ],
                 ),
@@ -476,12 +650,12 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             _actionCard(
               color: AppColors.green,
               leading: CircleAvatar(
-                radius: 16,
+                radius: 23,
                 backgroundColor: Colors.white.withValues(alpha: 0.25),
                 child: const Icon(
                   Iconsax.star_1,
                   color: Colors.white,
-                  size: 18,
+                  size: 26,
                 ),
               ),
               title: 'ข้อมูลโครงการส่งเสริมแปลง',
@@ -493,8 +667,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 5,
+                      horizontal: 12,
+                      vertical: 7,
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.gold,
@@ -503,17 +677,17 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                     child: Text(
                       _str(meta['project']) ?? 'ยังไม่ระบุ',
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   const Icon(
                     Iconsax.arrow_right_3,
                     color: Colors.white70,
-                    size: 20,
+                    size: 24,
                   ),
                 ],
               ),
@@ -525,7 +699,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               leading: const Icon(
                 Iconsax.tick_circle,
                 color: Colors.white,
-                size: 40,
+                size: 54,
               ),
               title: 'ยืนยันแปลง',
               subtitle: 'ยืนยันแปลงข้ามปี',
@@ -534,52 +708,79 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               onTap: () => _todo('ยืนยันแปลง'),
             ),
             const SizedBox(height: 10),
-            // กำหนดจุดเสี่ยง — เลือกได้ 1 ค่า (ยังไม่ส่ง backend)
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Row(
-                    children: [
-                      Icon(Iconsax.flash_1, size: 18, color: AppColors.gold),
-                      SizedBox(width: 6),
-                      Text(
-                        'กำหนดเป็นจุดเสี่ยงจากแปลงนี้:',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+            // การ์ดจุดเสี่ยง — preview สถานะที่บันทึกไว้ แตะเปิด
+            // sheet ฟอร์มกำหนดจุดเสี่ยง (ประเภท/ชื่อ/ระดับ/หมายเหตุ)
+            FutureBuilder<FormOptions>(
+              future: _options,
+              builder: (context, snap) {
+                final levels = snap.data?.riskLevels ?? const <String>[];
+                if (levels.isEmpty) return const SizedBox.shrink();
+                return FutureBuilder<Map<String, dynamic>?>(
+                  future: _riskPoint,
+                  builder: (context, r) {
+                    final saved = r.data;
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: _openRiskSheet,
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'กำหนดเป็นจุดเสี่ยงภัยพิบัติ',
+                                    style: TextStyle(
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  Iconsax.arrow_right_3,
+                                  size: 20,
+                                  color: Colors.black38,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                for (var i = 0; i < levels.length; i++) ...[
+                                  _riskPreviewChip(
+                                    levels[i],
+                                    '${saved?['type']}' == levels[i],
+                                  ),
+                                  if (i < levels.length - 1)
+                                    const SizedBox(width: 10),
+                                ],
+                              ],
+                            ),
+                            if (saved != null) ...[
+                              const SizedBox(height: 10),
+                              Text(
+                                'ระดับ ${saved['severity'] ?? '—'}'
+                                '${'${saved['note'] ?? ''}'.isEmpty ? '' : ' • ${saved['note']}'}',
+                                style: const TextStyle(
+                                  fontSize: 14.5,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // ตัวเลือกจุดเสี่ยงจาก backend — ว่าง/โหลดไม่ได้
-                  // → ไม่แสดงแถว chip
-                  FutureBuilder<FormOptions>(
-                    future: _options,
-                    builder: (context, snap) {
-                      final levels =
-                          snap.data?.riskLevels ?? const <String>[];
-                      if (levels.isEmpty) return const SizedBox.shrink();
-                      return Row(
-                        children: [
-                          for (var i = 0; i < levels.length; i++) ...[
-                            _riskChip(levels[i]),
-                            if (i < levels.length - 1)
-                              const SizedBox(width: 10),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
-                ],
-              ),
+                    );
+                  },
+                );
+              },
             ),
           ],
           ),
@@ -593,7 +794,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   Widget _infoRow((String, String?, bool) row, bool shaded) {
     return Container(
       color: shaded ? const Color(0xFFF6F6F6) : Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -601,7 +802,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             flex: 5,
             child: Text(
               row.$1,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              style: const TextStyle(fontSize: 16, color: Colors.black87),
             ),
           ),
           Expanded(
@@ -609,7 +810,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             child: Text(
               row.$2 == null || row.$2!.isEmpty ? '—' : row.$2!,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: row.$3 ? AppColors.sky : Colors.black87,
               ),
@@ -647,13 +848,17 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                 ),
               ],
             ),
-            child: Icon(icon, color: color, size: 30),
+            child: Icon(icon, color: color, size: 34),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12.5, height: 1.25),
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              height: 1.25,
+            ),
           ),
         ],
       ),
@@ -679,7 +884,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
           decoration: BoxDecoration(
             border: border,
             borderRadius: BorderRadius.circular(14),
@@ -687,7 +892,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
           child: Row(
             children: [
               leading,
-              const SizedBox(width: 12),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -695,7 +900,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                     Text(
                       title,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
                         color: titleColor,
                       ),
@@ -703,7 +908,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                     if (subtitle != null)
                       Text(
                         subtitle,
-                        style: TextStyle(fontSize: 12.5, color: subtitleColor),
+                        style: TextStyle(fontSize: 15, color: subtitleColor),
                       ),
                   ],
                 ),
@@ -719,68 +924,64 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   /// กล่อง icon มุมมนพื้นสี — leading ของการ์ดขาว
   Widget _iconBox(Color bg, IconData icon) {
     return Container(
-      width: 42,
-      height: 42,
+      width: 54,
+      height: 54,
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(icon, color: Colors.white, size: 22),
+      child: Icon(icon, color: Colors.white, size: 28),
     );
   }
 
-  /// (icon, พื้น, ตัวหนังสือ) ต่อระดับจุดเสี่ยง — map จากชื่อที่
-  /// backend ส่งมา; ชื่อใหม่ที่ยังไม่รู้จักได้ icon/สี generic
-  static (IconData, Color, Color) _riskStyle(String name) {
-    if (name.contains('น้ำ')) {
-      return (
-        Iconsax.cloud_drizzle,
-        const Color(0xFFFCE4EC),
-        const Color(0xFFC2185B),
-      );
-    }
-    if (name.contains('แล้ง')) {
-      return (
-        Iconsax.sun_1,
-        const Color(0xFFFFF8E1),
-        const Color(0xFF9C6B00),
-      );
-    }
-    return (
-      Iconsax.cloud_sunny,
-      const Color(0xFFFFF8E1),
-      const Color(0xFF9C6B00),
+  /// เปิด sheet ฟอร์มจุดเสี่ยง — บันทึกสำเร็จ refresh preview +
+  /// แจ้ง snackbar; [type] = ประเภทที่เลือกมาจาก chip บนการ์ด
+  Future<void> _openRiskSheet({String? type}) async {
+    final saved = await showRiskPointSheet(
+      context,
+      vm: widget.vm,
+      initialType: type,
     );
+    if (!mounted) return;
+    setState(() => _riskPoint = widget.vm.riskPoint());
+    if (saved != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('บันทึกจุดเสี่ยงภัยแล้ว')),
+      );
+    }
   }
 
-  /// chip จุดเสี่ยง — เลือกได้ทีละอัน แตะซ้ำเพื่อยกเลิก
-  Widget _riskChip(String label) {
-    final (icon, bg, fg) = _riskStyle(label);
-    final selected = _risk == label;
+  /// chip preview ในการ์ด — แตะเลือกประเภทแล้วเปิด sheet ฟอร์ม
+  /// พร้อมประเภทนั้น; ตัวที่บันทึกไว้ = พื้นเข้ม + ขอบสีชัด
+  Widget _riskPreviewChip(String label, bool selected) {
+    final (icon, bg, fg) = riskChipStyle(label);
     return Expanded(
       child: GestureDetector(
-        onTap: () => setState(() => _risk = selected ? null : label),
+        onTap: () => _openRiskSheet(type: label),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 9),
+          padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
-            color: bg,
+            color: selected ? bg : bg.withValues(alpha: 0.35),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? fg : Colors.transparent,
-              width: 1.6,
+              color: selected ? fg : Colors.grey.shade300,
+              width: selected ? 2.2 : 1,
             ),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: fg),
-              const SizedBox(width: 5),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: fg,
+              Icon(icon, size: 21, color: fg),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: fg,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
@@ -22,6 +23,13 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'BRR',
       theme: AppTheme.theme,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('th'), Locale('en')],
+      locale: const Locale('th'),
       home: const AuthGate(),
       // Scale UI density with screen width — design baseline is
       // ~390 logical px (typical phone). Text scales up on tablets /

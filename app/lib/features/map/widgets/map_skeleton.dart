@@ -1,77 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:brr/core/widgets/skeleton.dart';
 
 /// Skeleton เลียนแบบหน้าแผนที่จริง — พื้นเทาเต็มจอเหมือน tile กำลัง
-/// โหลด + วงกลมขาวตำแหน่งเดียวกับปุ่มจริง (ย้อนกลับ/ชั้นแผนที่/GPS)
-/// + แถบขาวล่างพร้อมช่องปุ่มสองอันเหมือน "เดินวัด/แตะวาด"
-/// ใช้ทั้งตอนโหลดแปลงใน MapView และตอนเตรียมข้อมูลหลังดาวน์โหลด
-class MapSkeleton extends StatefulWidget {
-  const MapSkeleton({super.key});
+/// โหลด + วงกลมตำแหน่งเดียวกับปุ่มจริง + pill ฟิลเตอร์ปี
+///
+/// โหมดวัด ([parcelBrowser] = false): ปุ่มขวา 2 อัน (ชั้นแผนที่/GPS)
+/// + แถบขาวล่างปุ่มสองอันเหมือน "เดินวัด/แตะวาด"
+/// โหมดแผนที่แปลง (true): ปุ่มขวา 4 อัน (ชั้นแผนที่/ดาวน์โหลด/
+/// ฉบับร่าง/GPS) ไม่มีแถบล่าง
+class MapSkeleton extends StatelessWidget {
+  const MapSkeleton({super.key, this.parcelBrowser = false});
 
-  @override
-  State<MapSkeleton> createState() => _MapSkeletonState();
-}
-
-class _MapSkeletonState extends State<MapSkeleton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  final bool parcelBrowser;
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.of(context).padding.top;
-    return AnimatedBuilder(
-      animation: _c,
-      builder: (_, _) => Opacity(
-        opacity: 0.55 + 0.35 * _c.value,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // พื้นแผนที่ — เต็มจอเหมือน GoogleMap จริง
-            Container(color: Colors.grey.shade300),
-            // ปุ่มย้อนกลับ (ซ้ายบน — ตำแหน่งเดียวกับของจริง)
-            Positioned(
-              top: top + 12,
-              left: 16,
-              child: const _Circle(),
-            ),
-            // คอลัมน์ปุ่มขวาล่าง — ชั้นแผนที่ + GPS ตำแหน่งเดียวกับ
-            // ของจริง (right:16,bottom:16 เหนือแถบล่าง ~84px)
-            const Positioned(
-              right: 16,
-              bottom: 100,
-              child: Column(
-                children: [
-                  _Circle(),
-                  SizedBox(height: 10),
-                  _Circle(),
+    return SkeletonPulse(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // พื้นแผนที่ — เต็มจอเหมือน GoogleMap จริง
+          Container(color: Colors.grey.shade300),
+          // ปุ่มย้อนกลับ (ซ้ายบน — ตำแหน่งเดียวกับของจริง)
+          Positioned(top: top + 12, left: 16, child: const _Circle()),
+          // pill ฟิลเตอร์ปีการผลิต — ตำแหน่งเดียวกับของจริง
+          Positioned(
+            top: top + 12,
+            left: 76,
+            child: const SkelBox(width: 150, height: 48, radius: 24),
+          ),
+          // คอลัมน์ปุ่มขวา — โหมดแปลงมี 4 อัน (ชั้น/GPS/ดาวน์โหลด/
+          // ร่าง) ล่างสุดชิดขอบ; โหมดวัด 3 อัน (ชั้น/GPS/ร่าง)
+          // เหนือแถบล่าง
+          Positioned(
+            right: 16,
+            bottom: parcelBrowser ? 16 : 116,
+            child: Column(
+              children: [
+                const _Circle(),
+                const SizedBox(height: 10),
+                const _Circle(),
+                if (parcelBrowser) ...[
+                  const SizedBox(height: 10),
+                  const _Circle(),
                 ],
-              ),
+                const SizedBox(height: 10),
+                const _Circle(),
+              ],
             ),
-            // แถบล่าง — ขาวเต็มจอเหมือนแถบปุ่มจริง + ช่องปุ่มสองอัน
+          ),
+          // แถบล่างโหมดวัด — ขาวเต็มจอเหมือนแถบปุ่มจริง + ช่อง
+          // ปุ่มสองอัน (โหมดแปลงไม่มีแถบนี้)
+          if (!parcelBrowser)
             Align(
               alignment: Alignment.bottomCenter,
               child: Container(
                 color: Colors.white,
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                child: Row(
+                child: const Row(
                   children: [
                     Expanded(child: _ButtonSlot()),
-                    const SizedBox(width: 12),
+                    SizedBox(width: 12),
                     Expanded(child: _ButtonSlot()),
                   ],
                 ),
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -97,6 +93,8 @@ class _Circle extends StatelessWidget {
 
 /// ช่องปุ่มเทาในแถบล่าง — รูปทรงเดียวกับปุ่มเดินวัด/แตะวาดจริง
 class _ButtonSlot extends StatelessWidget {
+  const _ButtonSlot();
+
   @override
   Widget build(BuildContext context) {
     return Container(

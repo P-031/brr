@@ -10,11 +10,17 @@ import 'package:flutter/foundation.dart';
 class KeycloakConfig {
   static const String lanBaseUrl = 'http://192.168.1.50:8080';
 
-  static String get baseUrl => switch (defaultTargetPlatform) {
-    TargetPlatform.android =>
-      _isPhysicalDevice ? lanBaseUrl : 'http://10.0.2.2:8080',
-    _ => 'http://localhost:8080',
-  };
+  /// เปลี่ยน auth server โดยไม่แก้โค้ด — ส่งตอน build/run:
+  /// `flutter run --dart-define=KEYCLOAK_BASE_URL=http://x.x.x.x:8080`
+  static String get baseUrl {
+    const fromEnv = String.fromEnvironment('KEYCLOAK_BASE_URL');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.android =>
+        _isPhysicalDevice ? lanBaseUrl : 'http://10.0.2.2:8080',
+      _ => 'http://localhost:8080',
+    };
+  }
 
   // flip to true when testing on a physical Android device
   static const bool _isPhysicalDevice = false;

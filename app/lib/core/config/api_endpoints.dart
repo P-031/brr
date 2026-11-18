@@ -18,6 +18,9 @@ class ApiEndpoints {
   /// Single parcel — GET detail, PATCH metadata.
   static String plot(String id) => '/plots/$id';
 
+  /// คำขอแปลงทั้งหมดที่ผู้ใช้มองเห็น — หน้าสถานะแปลง
+  static const String plotRequests = '/plot-requests';
+
   /// Master option lists for pickers/dropdowns — extend this payload
   /// server-side instead of hardcoding lists in the app.
   static const String metaOptions = '/meta/options';
@@ -27,4 +30,9 @@ class ApiEndpoints {
 
   /// Farmers under this officer's care.
   static const String farmers = '/farmers';
+
+  /// จุดเสี่ยงภัยพิบัติล่าสุด — หน้าฉบับร่างดาวน์โหลดมาเก็บในเครื่อง
+  /// TODO(backend): endpoint ยังไม่มี — call แล้วจะเจอ 404
+  /// เมื่อ backend เขียนเสร็จใช้ได้ทันที
+  static const String riskPoints = '/risk-points';
 }

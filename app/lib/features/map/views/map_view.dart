@@ -8,9 +8,11 @@ import 'package:latlong2/latlong.dart' as ll;
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/plot_download_viewmodel.dart';
+import 'package:brr/features/map/views/drafts_view.dart';
 import 'package:brr/features/map/views/plot_download_view.dart';
 import 'package:brr/features/map/widgets/map_bottom_bar.dart';
 import 'package:brr/features/map/widgets/map_skeleton.dart';
@@ -123,7 +125,31 @@ class _MapBodyState extends State<_MapBody> {
     _fitParcels(vm);
   }
 
-  /// Numbered gold-pin bitmaps for draft points, keyed by 1-based index.
+  /// Push หน้า "ข้อมูลฉบับร่าง" — unmount GoogleMap ระหว่างถูกคลุม;
+  /// ถ้ามีร่างถูกลบ (pop คืน true) → refetch กรอบปัจจุบันให้
+  /// แปลงร่างที่ถูกลบหายจากแผนที่ทันที
+  Future<void> _openDrafts(MapViewModel vm) async {
+    setState(() => _formOpen = true);
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => DraftsView(vm: vm.createDraftsVm()),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _formOpen = false);
+    if (changed != true) return;
+    final r = await _controller?.getVisibleRegion();
+    if (r == null || !mounted) return;
+    vm.loadViewport(
+      r.southwest.longitude,
+      r.southwest.latitude,
+      r.northeast.longitude,
+      r.northeast.latitude,
+    );
+  }
+
+  /// Numbered sky-pin bitmaps for draft points — สีเดียวกับเส้น
+  /// polygon ที่กำลังวาด (ฟ้า=กำลังวาด/ทอง=ร่าง/แดง=บันทึกแล้ว)
   final _pinIcons = <int, BitmapDescriptor>{};
 
   /// Green-ringed variants shown while a pin is selected for moving.
@@ -132,14 +158,13 @@ class _MapBodyState extends State<_MapBody> {
   /// Draft pin index currently armed for tap-to-move (0-based).
   int? _movingIndex;
 
-  /// Save form is pushed over the map — the platform view is
-  /// unmounted while covered so the native map stops compositing
-  /// entirely (biggest emulator-jank source). Camera is restored
-  /// from [_camera] when the form closes.
+  /// ฟอร์ม/route ทับแผนที่เต็มจอ — แผนที่ยัง mount อยู่แต่ถูกคลุม
+  /// ด้วยพื้นทึบ (ไม่ unmount: สร้าง platform view ใหม่ขณะ
+  /// transition แล้ว render ดำค้างบน emulator)
   bool _formOpen = false;
 
-  /// info sheet ลากขึ้นทับเต็มจอ — unmount แผนที่แบบเดียวกับ
-  /// [_formOpen] แล้ว mount กลับตอน sheet หด/ปิด
+  /// info sheet ลากขึ้นทับเต็มจอ — คลุมแผนที่แบบเดียวกับ [_formOpen]
+  /// แล้วเปิดออกตอน sheet หด/ปิด
   bool _infoSheetCovered = false;
 
   /// GPS auto-locate runs only on the first map creation — a
@@ -169,7 +194,7 @@ class _MapBodyState extends State<_MapBody> {
     final canvas = ui.Canvas(recorder);
     const c = ui.Offset(size / 2, size / 2);
     canvas
-      ..drawCircle(c, size / 2 - 2 * ratio, ui.Paint()..color = AppColors.gold)
+      ..drawCircle(c, size / 2 - 2 * ratio, ui.Paint()..color = AppColors.sky)
       ..drawCircle(
         c,
         size / 2 - 2 * ratio,
@@ -204,7 +229,7 @@ class _MapBodyState extends State<_MapBody> {
   }
 
   /// Lazily creates pin bitmaps for new draft indexes (async — markers
-  /// fall back to a plain gold pin until their numbered icon is ready).
+  /// fall back to a plain blue pin until their numbered icon is ready).
   void _ensurePinIcons(int count) {
     for (var i = _pinIcons.length + 1; i <= count; i++) {
       final n = i;
@@ -443,8 +468,8 @@ class _MapBodyState extends State<_MapBody> {
         Polygon(
           polygonId: const PolygonId('draft'),
           points: [for (final x in vm.draft) _ll(x)],
-          fillColor: AppColors.gold.withValues(alpha: 0.3),
-          strokeColor: AppColors.gold,
+          fillColor: AppColors.sky.withValues(alpha: 0.3),
+          strokeColor: AppColors.sky,
           strokeWidth: 3,
         ),
     };
@@ -518,7 +543,10 @@ class _MapBodyState extends State<_MapBody> {
         body: AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           child: vm.loading || !_locateReady
-              ? const MapSkeleton(key: ValueKey('skel'))
+              ? MapSkeleton(
+                  key: const ValueKey('skel'),
+                  parcelBrowser: widget.parcelBrowser,
+                )
               : vm.error != null
               ? Center(
                   child: Column(
@@ -535,13 +563,11 @@ class _MapBodyState extends State<_MapBody> {
                 )
               : Stack(
                   children: [
-                    if (_formOpen || _infoSheetCovered)
-                      // ฟอร์มบันทึก/info sheet ทับอยู่ — แผนที่ถูก
-                      // unmount เพื่อหยุดงาน platform view ทั้งหมด
-                      // จนกว่าจะปิด/หดออก
-                      const ColoredBox(color: Color(0xFFE8E6E1))
-                    else
-                      GoogleMap(
+                    // GoogleMap อยู่ใน tree ตลอด — ตอนฟอร์ม/sheet ทับ
+                    // ให้คลุมด้วยพื้นทึบแทน unmount: การทำลาย platform
+                    // view แล้วสร้างใหม่ขณะ transition ทำให้บน
+                    // emulator/เครื่องบางรุ่น render ดำค้าง
+                    GoogleMap(
                         // ตำแหน่งจริงเฉพาะ mount แรกที่ locate() เสร็จ
                         // แล้ว — remount หลังปิดฟอร์มใช้ _camera เดิม
                         // เพื่อไม่กระโดดกลับจุดผู้ใช้ทิ้งตำแหน่งที่เลื่อนไว้
@@ -635,10 +661,18 @@ class _MapBodyState extends State<_MapBody> {
                                       ? _pinSelIcons[i + 1] ?? _pinIcons[i + 1]
                                       : _pinIcons[i + 1]) ??
                                   BitmapDescriptor.defaultMarkerWithHue(
-                                    BitmapDescriptor.hueYellow,
+                                    BitmapDescriptor.hueAzure,
                                   ),
                             ),
                         },
+                      ),
+                    // พื้นทึบคลุมแผนที่ตอนฟอร์ม/sheet ทับอยู่ — กันแตะ
+                    // แผนที่รอดผ่าน + หน้าจอไม่ดำตอน remount
+                    if (_formOpen || _infoSheetCovered)
+                      const Positioned.fill(
+                        child: AbsorbPointer(
+                          child: ColoredBox(color: Color(0xFFE8E6E1)),
+                        ),
                       ),
                     // แถบโหลดบางๆ ขณะดึงแปลงของกรอบจอใหม่
                     if (vm.loadingViewport)
@@ -681,37 +715,48 @@ class _MapBodyState extends State<_MapBody> {
                               BoxShadow(color: Colors.black26, blurRadius: 6),
                             ],
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(
-                                Iconsax.calendar_1,
-                                size: 18,
-                                color: AppColors.green,
-                              ),
-                              const SizedBox(width: 8),
-                              DropdownButtonHideUnderline(
-                                child: DropdownButton<String?>(
-                                  value: vm.yearFilter,
-                                  icon: const Icon(
-                                    Iconsax.arrow_down_1,
-                                    size: 18,
-                                    color: AppColors.green,
-                                  ),
-                                  items: [
-                                    const DropdownMenuItem<String?>(
-                                      child: Text('ทุกปีการผลิต'),
-                                    ),
-                                    for (final y in vm.years)
-                                      DropdownMenuItem<String?>(
-                                        value: y,
-                                        child: Text(y),
-                                      ),
-                                  ],
-                                  onChanged: vm.setYearFilter,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(24),
+                            onTap: () async {
+                              final labels = [
+                                'ทุกปีการผลิต',
+                                ...vm.years,
+                              ];
+                              final i = await showOptionPopup(
+                                context,
+                                title: 'ปีการผลิต',
+                                labels: labels,
+                                selectedIndex: vm.yearFilter == null
+                                    ? 0
+                                    : vm.years.indexOf(vm.yearFilter!) + 1,
+                              );
+                              if (i != null) {
+                                vm.setYearFilter(
+                                  i == 0 ? null : vm.years[i - 1],
+                                );
+                              }
+                            },
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Iconsax.calendar_1,
+                                  size: 18,
+                                  color: AppColors.green,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 8),
+                                Text(
+                                  vm.yearFilter ?? 'ทุกปีการผลิต',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                  Iconsax.arrow_down_1,
+                                  size: 18,
+                                  color: AppColors.green,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -739,6 +784,14 @@ class _MapBodyState extends State<_MapBody> {
                           if (_camera.bearing.abs() > 0.5)
                             const SizedBox(height: 10),
                           GestureDetector(
+                            onTap: _locating ? null : () => _locate(vm),
+                            child: MapButton(
+                              icon: Iconsax.gps,
+                              loading: _locating,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          GestureDetector(
                             onTap: _pickMapType,
                             child: const MapButton(
                               icon: Iconsax.layer,
@@ -757,19 +810,29 @@ class _MapBodyState extends State<_MapBody> {
                             ),
                             const SizedBox(height: 10),
                           ],
-                          GestureDetector(
-                            onTap: _locating ? null : () => _locate(vm),
-                            child: MapButton(
-                              icon: Iconsax.gps,
-                              loading: _locating,
+                          // ร่างในเครื่อง — โชว์เฉพาะตอนมีร่างจริง
+                          // (ไม่มีก็ไม่ต้องมีปุ่มให้กดเปล่า)
+                          if (vm.parcels.any((p) => p.isDraft))
+                            GestureDetector(
+                              onTap: () => _openDrafts(vm),
+                              child: const MapButton(
+                                icon: Iconsax.document_text,
+                                loading: false,
+                              ),
                             ),
-                          ),
                         ],
                       ),
                     ),
                     // โหมดแผนที่แปลง + แผนที่ว่าง — ชวนกดดาวน์โหลด
-                    // (ผู้ใช้อาจกดกลับจากหน้าเลือกปีมือเปล่า)
-                    if (widget.parcelBrowser && vm.parcels.isEmpty)
+                    // เฉพาะเข้าจากเมนูหลัก (autoPrompt) — เข้าจาก
+                    // หน้าอื่น (กิจกรรมแปลง) ปุ่มนี้ไม่โชว์ มีไอคอน
+                    // ดาวน์โหลดลอยอยู่แล้ว; รอจน fetch แรกจบก่อน
+                    // ค่อยตัดสินว่าว่างจริง
+                    if (widget.parcelBrowser &&
+                        widget.autoPromptDownload &&
+                        vm.parcels.isEmpty &&
+                        !vm.loading &&
+                        !vm.loadingViewport)
                       Center(
                         child: FilledButton.icon(
                           style: FilledButton.styleFrom(

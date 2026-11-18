@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/skeleton.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/parcel_edit_views.dart';
 
@@ -44,7 +45,7 @@ class ParcelDetailView extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
       appBar: AppBar(
-        backgroundColor: AppColors.navy,
+        backgroundColor: AppColors.green,
         title: const Text('รายละเอียด'),
         actions: [
           IconButton(
@@ -59,15 +60,16 @@ class ParcelDetailView extends StatelessWidget {
           future: vm.detail,
           builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done && !p.isDraft) {
-            return const Center(
-              child: CircularProgressIndicator(color: AppColors.green),
-            );
+            // skeleton เลียนหน้าจริง — บล็อกรูปถ่าย + การ์ด
+            // section (หัวข้อ + แถว label:value)
+            return const _DetailSkeleton();
           }
           final detail = snap.data;
           final meta =
               (detail?['meta'] as Map<String, dynamic>?) ?? p.meta ?? const {};
           final farmer = detail?['farmer'] as Map<String, dynamic>?;
-          final landNo = p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+          final landNo = p.landNo;
+          final plotCode = p.plotCode;
           final variety =
               _str(detail?['variety']) ??
               _str(meta['caneVariety']) ??
@@ -133,7 +135,8 @@ class ParcelDetailView extends StatelessWidget {
               _Section(
                 rows: [
                   _row('ปีการผลิต', _str(meta['productionYear'])),
-                  _row('รหัสแปลง', landNo, blue: true),
+                  _row('ชื่อแปลง', landNo),
+                  _row('รหัสแปลง', plotCode, blue: true),
                   _row('ประเภทอ้อย', _str(meta['caneType'])),
                   _row('พื้นที่(ไร่)', areaText, blue: true),
                   _row('พันธุ์อ้อย', variety),
@@ -240,18 +243,20 @@ class ParcelDetailView extends StatelessWidget {
     Widget item(IconData icon, String label, Widget page) => ListTile(
       leading: CircleAvatar(
         radius: 20,
-        backgroundColor: AppColors.navy.withValues(alpha: 0.12),
-        child: Icon(icon, color: AppColors.navy, size: 20),
+        backgroundColor: AppColors.green.withValues(alpha: 0.12),
+        child: Icon(icon, color: AppColors.green, size: 20),
       ),
       title: Text(label, style: const TextStyle(fontSize: 15)),
       onTap: () async {
         Navigator.of(context).pop();
-        final saved = await Navigator.of(context).push<bool>(
+        final saved = await Navigator.of(context).push<Object>(
           MaterialPageRoute(builder: (_) => page),
         );
-        if (saved == true && context.mounted) {
+        if (saved != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('บันทึกข้อมูลแล้ว')),
+            SnackBar(
+              content: Text(saved is String ? saved : 'บันทึกสำเร็จ'),
+            ),
           );
         }
       },
@@ -387,7 +392,6 @@ class ParcelDetailView extends StatelessWidget {
             flex: 7,
             child: Text(
               value == null || value.isEmpty ? '—' : value,
-              textAlign: TextAlign.right,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
@@ -431,6 +435,67 @@ class _Section extends StatelessWidget {
           ],
           ...rows,
           ?child,
+        ],
+      ),
+    );
+  }
+}
+
+/// skeleton หน้ารายละเอียด — เลียนโครงจริง: บล็อกรูปถ่ายสูง 170
+/// + การ์ด section หลายใบ (หัวข้อ + แถว label:value)
+class _DetailSkeleton extends StatelessWidget {
+  const _DetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return SkeletonPulse(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+        children: const [
+          SkelBox(height: 190, radius: 14),
+          SizedBox(height: 10),
+          _SectionSkeleton(rows: 5),
+          _SectionSkeleton(rows: 4),
+          _SectionSkeleton(rows: 3),
+        ],
+      ),
+    );
+  }
+}
+
+/// การ์ด section เทา — หัวข้อ + เส้นคั่น + แถว label:value
+/// สัดส่วนเดียวกับ _Section จริง
+class _SectionSkeleton extends StatelessWidget {
+  const _SectionSkeleton({required this.rows});
+
+  final int rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SkelLine(width: 120, height: 15),
+          const Divider(height: 16, color: Colors.black12),
+          for (var i = 0; i < rows; i++)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  SkelLine(width: 100),
+                  SizedBox(width: 14),
+                  Expanded(child: SkelLine()),
+                ],
+              ),
+            ),
         ],
       ),
     );

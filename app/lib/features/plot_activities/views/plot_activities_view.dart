@@ -7,11 +7,12 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/theme/app_theme.dart';
-import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/core/widgets/skeleton.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
 import 'package:brr/features/map/widgets/map_widgets.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
+import 'package:brr/features/map/widgets/satellite_thumb.dart';
 import 'package:brr/features/map/views/map_view.dart';
 import 'package:brr/features/plot_activities/models/plot_list_item.dart';
 import 'package:brr/features/plot_activities/viewmodels/plot_activities_viewmodel.dart';
@@ -25,7 +26,7 @@ class PlotActivitiesView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (_) => PlotActivitiesViewModel(ParcelService(api)),
+    create: (_) => PlotActivitiesViewModel.forApi(api),
     child: _Body(api: api),
   );
 }
@@ -41,9 +42,11 @@ class _Body extends StatefulWidget {
 
 class _BodyState extends State<_Body> {
   GoogleMapController? _mapCtrl;
+  final _listCtrl = ScrollController();
   List<PlotListItem>? _fittedItems;
   String? _lastFocusedId;
   MapType _mapType = MapType.satellite;
+  bool _locating = false;
   CameraPosition _miniCam = const CameraPosition(
     target: LatLng(15.2, 103.1),
     zoom: 10,
@@ -111,7 +114,8 @@ class _BodyState extends State<_Body> {
     );
   }
 
-  /// เลือกการ์ด → กล้องแผนที่ย่อบินไปที่กลางแปลงนั้น
+  /// เลือกการ์ด → กล้องแผนที่ย่อบินไปหาแปลงนั้น — มี polygon
+  /// ให้ fit bounds เห็นทั้งแปลง ไม่งั้นซูมเข้ากลางแปลง
   void _maybeFocusSelected(PlotActivitiesViewModel vm) {
     final sel = vm.selected;
     if (sel == null ||
@@ -123,13 +127,47 @@ class _BodyState extends State<_Body> {
     _lastFocusedId = sel.id;
     final ctrl = _mapCtrl;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ctrl?.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(sel.centerLat!, sel.centerLng!),
-          17,
-        ),
-      );
+      if (ctrl == null || !mounted) return;
+      double minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+      for (final p in sel.points) {
+        if (p.latitude < minLat) minLat = p.latitude;
+        if (p.latitude > maxLat) maxLat = p.latitude;
+        if (p.longitude < minLng) minLng = p.longitude;
+        if (p.longitude > maxLng) maxLng = p.longitude;
+      }
+      if (sel.points.length >= 3) {
+        ctrl.animateCamera(
+          CameraUpdate.newLatLngBounds(
+            LatLngBounds(
+              southwest: LatLng(minLat, minLng),
+              northeast: LatLng(maxLat, maxLng),
+            ),
+            48, // padding รอบ polygon (px)
+          ),
+        );
+      } else {
+        ctrl.animateCamera(
+          CameraUpdate.newLatLngZoom(
+            LatLng(sel.centerLat!, sel.centerLng!),
+            17,
+          ),
+        );
+      }
+      // การ์ดแปลงที่เลือกถูกย้ายขึ้นอันแรก — เลื่อน list ขึ้นให้เห็น
+      if (_listCtrl.hasClients && _listCtrl.offset > 0) {
+        _listCtrl.animateTo(
+          0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     });
+  }
+
+  @override
+  void dispose() {
+    _listCtrl.dispose();
+    super.dispose();
   }
 
   /// ปรับกล้องให้เห็นแปลงที่โหลดมาทั้งหมด — refit เมื่อชุด items เปลี่ยน
@@ -165,6 +203,27 @@ class _BodyState extends State<_Body> {
         ),
       );
     });
+  }
+
+  /// ปุ่มโฟกัส — บินกล้องไปตำแหน่งผู้ใช้ปัจจุบัน (GPS)
+  Future<void> _locateMe(PlotActivitiesViewModel vm) async {
+    if (_locating) return;
+    setState(() => _locating = true);
+    try {
+      final pos = await vm.currentPosition();
+      if (!mounted) return;
+      if (pos == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('ไม่พบตำแหน่งปัจจุบัน — เปิด GPS แล้วลองใหม่')),
+        );
+        return;
+      }
+      _mapCtrl?.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(pos.latitude, pos.longitude), 16),
+      );
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
   }
 
   /// ปุ่ม "แสดงผลบนแผนที่" → MapView เต็มจอโหมดแผนที่แปลง
@@ -362,6 +421,7 @@ class _BodyState extends State<_Body> {
         decoration: InputDecoration(
           labelText: label,
           labelStyle: TextStyle(
+            fontSize: 19,
             color: active ? AppColors.green : null,
             fontWeight: active ? FontWeight.w600 : FontWeight.w400,
           ),
@@ -538,10 +598,36 @@ class _BodyState extends State<_Body> {
                             position: LatLng(p.centerLat!, p.centerLng!),
                             icon: vm.selectedId == p.id
                                 ? BitmapDescriptor.defaultMarkerWithHue(
-                                    BitmapDescriptor.hueAzure,
+                                    BitmapDescriptor.hueYellow,
                                   )
                                 : BitmapDescriptor.defaultMarker,
                             infoWindow: InfoWindow(title: p.name),
+                            onTap: () {
+                              // แตะหมุด = เลือกแปลงเหมือนแตะการ์ด —
+                              // reset guard ให้ซูมใหม่ได้แม้แปลงเดิม
+                              _lastFocusedId = null;
+                              vm.select(p.id);
+                            },
+                          ),
+                    },
+                    // polygon แปลงที่วัดจริง — เห็นขอบแปลงตอนซูม
+                    // แปลงที่เลือกเขียวหนา แปลงอื่นเส้นบางจางๆ
+                    polygons: {
+                      for (final p in vm.items)
+                        if (p.points.length >= 3)
+                          Polygon(
+                            polygonId: PolygonId(p.id),
+                            points: [
+                              for (final pt in p.points)
+                                LatLng(pt.latitude, pt.longitude),
+                            ],
+                            strokeColor: vm.selectedId == p.id
+                                ? AppColors.gold
+                                : const Color(0x66FFFFFF),
+                            strokeWidth: vm.selectedId == p.id ? 3 : 1,
+                            fillColor: vm.selectedId == p.id
+                                ? AppColors.gold.withValues(alpha: 0.3)
+                                : const Color(0x22FFFFFF),
                           ),
                     },
                     // เลื่อนดู + ซูม + หมุนได้ตามปกติ
@@ -592,6 +678,15 @@ class _BodyState extends State<_Body> {
                           ),
                         if (_miniCam.bearing.abs() > 0.5)
                           const SizedBox(height: 10),
+                        // โฟกัสตำแหน่งผู้ใช้ — เหนือปุ่มประเภทแผนที่
+                        GestureDetector(
+                          onTap: () => _locateMe(vm),
+                          child: MapButton(
+                            icon: Iconsax.gps,
+                            loading: _locating,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
                         GestureDetector(
                           onTap: _pickMapType,
                           child: const MapButton(
@@ -679,7 +774,11 @@ class _BodyState extends State<_Body> {
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: () => _openFullMap(vm),
-                icon: const Icon(Iconsax.global, size: 22),
+                icon: Image.asset(
+                  'assets/images/map_cute.png',
+                  width: 24,
+                  height: 24,
+                ),
                 label: Text(
                   'แสดงผลบนแผนที่ จำนวน [${vm.total}] รายการ',
                   style: const TextStyle(
@@ -703,7 +802,15 @@ class _BodyState extends State<_Body> {
 
   Widget _listBody(PlotActivitiesViewModel vm) {
     if (vm.loading) {
-      return const Center(child: CircularProgressIndicator());
+      // skeleton รูปการ์ดจริง — thumb ซ้าย + ข้อความ + ปุ่ม
+      // เลือกขวา ตำแหน่งเดียวกับ _PlotCard
+      return SkeletonPulse(
+        child: ListView.builder(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+          itemCount: 4,
+          itemBuilder: (_, _) => const _PlotCardSkeleton(),
+        ),
+      );
     }
     if (vm.items.isEmpty) {
       if (vm.error != null) {
@@ -716,9 +823,21 @@ class _BodyState extends State<_Body> {
         ),
       );
     }
+    // แปลงที่เลือกขึ้นการ์ดแรกของ list — เรียงเฉพาะชั้นแสดงผล
+    // (ไม่ยุ่งลำดับ items จริงที่ backend ใช้ cursor แบ่งหน้า)
+    final selIdx = vm.selectedId == null
+        ? -1
+        : vm.items.indexWhere((p) => p.id == vm.selectedId);
+    int displayIndex(int i) {
+      if (selIdx <= 0) return i;
+      if (i == 0) return selIdx;
+      return i <= selIdx ? i - 1 : i;
+    }
+
     return RefreshIndicator(
       onRefresh: vm.refresh,
       child: ListView.builder(
+        controller: _listCtrl,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         itemCount: vm.items.length + 1,
@@ -766,11 +885,16 @@ class _BodyState extends State<_Body> {
               ),
             );
           }
-          final item = vm.items[i];
+          final item = vm.items[displayIndex(i)];
           return _PlotCard(
             item: item,
             selected: vm.selectedId == item.id,
             onSelect: () => _openParcelMap(item, vm),
+            onTap: () {
+              // แตะการ์ดเดิมซ้ำก็ซูมใหม่ — reset guard ก่อน select
+              _lastFocusedId = null;
+              vm.select(item.id);
+            },
           );
         },
       ),
@@ -830,11 +954,15 @@ class _PlotCard extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.onSelect,
+    required this.onTap,
   });
 
   final PlotListItem item;
   final bool selected;
   final VoidCallback onSelect;
+
+  /// แตะตัวการ์ด — เลือกแปลงให้แผนที่ย่อซูมไปหา
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -845,16 +973,24 @@ class _PlotCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: selected ? AppColors.green : const Color(0xFFE0E0E0),
+          color: selected ? AppColors.gold : const Color(0xFFE0E0E0),
           width: selected ? 1.5 : 1,
         ),
       ),
-      child: Padding(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
         padding: const EdgeInsets.all(12),
         child: Row(
           children: [
-            // รูปแปลงกรอบมน กึ่งกลางแนวตั้งของการ์ด
-            ParcelOutline(points: p.points),
+            // รูปแปลงดาวเทียมกรอบมน กึ่งกลางแนวตั้งของการ์ด —
+            // โหลด tile ไม่ได้ fallback เป็น outline วาดเอง
+            SatelliteThumb(
+              points: p.points,
+              cacheKey: p.id,
+              fallback: ParcelOutline(points: p.points),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -897,12 +1033,12 @@ class _PlotCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   const SizedBox(height: 8),
-                  // พื้นที่ชิดขวา (ย่อตัวเองถ้าแคบ)
+                  // พื้นที่ชิดซ้ายเหมือนข้อมูลบรรทัดอื่น (ย่อตัวเองถ้าแคบ)
                   Align(
-                    alignment: Alignment.centerRight,
+                    alignment: Alignment.centerLeft,
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
+                      alignment: Alignment.centerLeft,
                       child: Text(
                         'พื้นที่ ${p.areaThai}',
                         style: const TextStyle(
@@ -919,6 +1055,56 @@ class _PlotCard extends StatelessWidget {
             const SizedBox(width: 10),
             // ปุ่มเลือกกึ่งกลางขวา
             _SelectButton(onPressed: onSelect),
+          ],
+        ),
+        ),
+      ),
+    );
+  }
+}
+
+/// skeleton การ์ดแปลง — รูปทรง/ตำแหน่งเดียวกับ _PlotCard จริง:
+/// thumb 92×92 ซ้าย / ชื่อ + 3 บรรทัดข้อมูล + พื้นที่ชิดขวา /
+/// ปุ่มเลือกกึ่งกลางขวา
+class _PlotCardSkeleton extends StatelessWidget {
+  const _PlotCardSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE0E0E0)),
+      ),
+      child: const Padding(
+        padding: EdgeInsets.all(12),
+        child: Row(
+          children: [
+            SkelBox(width: 92, height: 92, radius: 10),
+            SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SkelLine(width: 120, height: 16),
+                  SizedBox(height: 9),
+                  SkelLine(width: 90),
+                  SizedBox(height: 6),
+                  SkelLine(width: 110),
+                  SizedBox(height: 6),
+                  SkelLine(width: 140),
+                  SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: SkelLine(width: 90),
+                  ),
+                ],
+              ),
+            ),
+            SizedBox(width: 10),
+            SkelBox(width: 62, height: 38, radius: 19),
           ],
         ),
       ),

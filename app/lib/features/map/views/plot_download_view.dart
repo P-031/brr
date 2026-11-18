@@ -66,7 +66,7 @@ class _DownloadBody extends StatelessWidget {
               // รับ bytes ครบแล้วกำลัง parse+เปิดแผนที่ — skeleton
               // รูปแผนที่ดูเป็นธรรมชาติกว่าวงหมุนค้างที่ 100%
               : vm.processing
-              ? const MapSkeleton()
+              ? const MapSkeleton(parcelBrowser: true)
               : _progressView(vm)
           : years == null
           ? vm.error != null

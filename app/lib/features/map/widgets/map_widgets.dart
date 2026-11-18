@@ -136,22 +136,22 @@ class MapTypeThumb extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 88,
-            height: 88,
+            width: 112,
+            height: 112,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
                 color: selected ? AppColors.gold : Colors.black12,
                 width: selected ? 3 : 1,
               ),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(selected ? 11 : 13),
+              borderRadius: BorderRadius.circular(selected ? 13 : 15),
               child: Image.asset(
                 asset,
                 fit: BoxFit.cover,
-                width: 88,
-                height: 88,
+                width: 112,
+                height: 112,
               ),
             ),
           ),
@@ -159,7 +159,7 @@ class MapTypeThumb extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 17,
               fontWeight: selected ? FontWeight.bold : FontWeight.w500,
             ),
           ),

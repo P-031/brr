@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:latlong2/latlong.dart';
 
+import 'package:brr/core/services/api_client.dart';
+import 'package:brr/features/map/data/location_service.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
 import 'package:brr/features/plot_activities/models/plot_list_item.dart';
 
@@ -14,7 +17,15 @@ class PlotActivitiesViewModel extends ChangeNotifier {
     unawaited(refresh());
   }
 
+  /// สร้างจาก session api — view ส่งแค่นี้ ไม่ต้องเห็น ParcelService
+  PlotActivitiesViewModel.forApi(ApiClient? api)
+    : this(ParcelService(api));
+
   final ParcelService _service;
+  final LocationService _location = LocationService();
+
+  /// ตำแหน่งผู้ใช้ปัจจุบัน (ปุ่มโฟกัส GPS บนแผนที่ย่อ)
+  Future<LatLng?> currentPosition() => _location.currentPosition();
 
   // ---------- ตัวเลือกฟิลเตอร์ (จาก backend) ----------
   List<String> _yearOptions = const [];

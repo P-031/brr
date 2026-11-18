@@ -146,6 +146,7 @@ class MeasurementSaveView extends StatefulWidget {
     required this.farmers,
     required this.options,
     required this.isOfficer,
+    this.initial,
     super.key,
   });
 
@@ -159,6 +160,10 @@ class MeasurementSaveView extends StatefulWidget {
   /// Officers must pick which farmer the plot belongs to; farmers
   /// own their plots so the picker is hidden for them.
   final bool isOfficer;
+
+  /// ร่างที่กำลังแก้ไข — prefill ทุกช่องจาก meta ที่บันทึกไว้
+  /// (หน้าฉบับร่าง → แก้ไข; เส้นขอบแปลงคงเดิม แก้ได้เฉพาะข้อมูล)
+  final Parcel? initial;
 
   @override
   State<MeasurementSaveView> createState() => _MeasurementSaveState();
@@ -191,8 +196,54 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
   String? _terrain;
   // พื้นที่สูญเสียเลือกได้หลายสาเหตุพร้อมกัน (เช่น ต้นไม้ + สระน้ำ).
   final Set<String> _losses = {};
+  // เคยกดบันทึกแล้วยังขาดข้อมูล → ช่องว่างขึ้นกรอบแดงไว้เตือน
+  bool _showErrors = false;
+  // ช่องที่ผู้ใช้เคยพิมพ์แล้ว — autovalidate ขึ้น error หลัง
+  // onChanged แรก ถึงไม่กดบันทึกก็ต้องแดงให้ตรงกัน
+  final Set<TextEditingController> _touched = {};
 
+  @override
+  void initState() {
+    super.initState();
+    // prefill จากร่างที่บันทึกไว้ — meta เก็บ payload ฟอร์มครบ
+    final p = widget.initial;
+    if (p == null) return;
+    String s(String k) => '${p.meta?[k] ?? ''}';
+    String? e(String k) {
+      final v = s(k);
+      return v.isEmpty ? null : v;
+    }
 
+    _nameCtrl.text = p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+    _yearCtrl.text = p.productionYear ?? s('productionYear');
+    _rootCtrl.text = s('rootNo');
+    _seqCtrl.text = s('sequenceNo');
+    _lossCtrl.text = s('lossRai');
+    _targetCtrl.text = s('targetYield');
+    _noteCtrl.text = s('note');
+    _project = e('project');
+    _zone = e('zone');
+    _province = e('province');
+    _district = e('district');
+    _subdistrict = e('subdistrict');
+    _village = e('village');
+    _prevPlot = e('prevPlotNo');
+    _officer = e('officerName');
+    _farmer = e('farmerName');
+    _farmerId = e('farmerId');
+    _caneGroup = e('caneGroup');
+    _caneType = e('caneType');
+    _caneVariety = e('caneVariety');
+    _ownership = e('ownership');
+    _terrain = e('terrain');
+    final loss = s('hasLoss');
+    if (loss.isNotEmpty) _losses.addAll(loss.split(', '));
+    // รูปที่ถ่ายไว้ตอนบันทึกร่าง — prefill กลับกันรูปหายตอนแก้ไข
+    for (final path in p.meta?['photos'] as List? ?? const []) {
+      if (_photos.length >= 3) break;
+      _photos.add(XFile('$path'));
+    }
+  }
 
   @override
   void dispose() {
@@ -206,15 +257,41 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     super.dispose();
   }
 
+  /// picker ที่ยังไม่ได้เลือก — Form validator จับได้เฉพาะ
+  /// TextFormField เลยเช็กช่องเลือกเองแล้วขึ้นกรอบแดงผ่าน
+  /// `_showErrors` (ทุกช่องบังคับ ยกเว้นข้อเสนอแนะ)
+  List<String> get _missing => [
+    if (_officer == null) 'นักส่งเสริมผู้ดูแล',
+    if (_project == null) 'โครงการส่งเสริม',
+    if (widget.isOfficer && _farmerId == null) 'ชาวไร่',
+    if (_caneGroup == null) 'กลุ่มสร้างอ้อย',
+    if (_zone == null) 'เขต',
+    if (_province == null) 'จังหวัด',
+    if (_district == null) 'อำเภอ',
+    if (_subdistrict == null) 'ตำบล',
+    if (_village == null) 'หมู่บ้าน',
+    if (_caneType == null) 'ประเภทอ้อย',
+    if (_caneVariety == null) 'พันธุ์อ้อย',
+    if (_ownership == null) 'การถือครอง',
+    if (_terrain == null) 'ระดับพื้นที่',
+    if (_losses.isEmpty) 'มีพื้นที่สูญเสีย',
+  ];
+
   void _save({bool draft = false}) {
-    if (!_formKey.currentState!.validate()) return;
-    if (widget.isOfficer && _farmerId == null && !draft) {
+    setState(() => _showErrors = true);
+    final formOk = _formKey.currentState!.validate();
+    final missing = _missing;
+    if (!formOk || missing.isNotEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('เลือกชาวไร่เจ้าของแปลง')),
+        const SnackBar(
+          content: Text(
+            'กรุณากรอกข้อมูลให้ครบทุกช่อง (ยกเว้นข้อเสนอแนะ)',
+          ),
+        ),
       );
       return;
     }
-    final year = _yearCtrl.text.trim().isEmpty ? null : _yearCtrl.text.trim();
+    final year = _yearCtrl.text.trim();
     Navigator.pop(
       context,
       MeasurementResult(
@@ -275,8 +352,10 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     IconData icon,
     Future<List<PickerItem>> Function() source,
     String? selected,
-    void Function(String) onPick,
-  ) {
+    void Function(String) onPick, {
+    bool required = true,
+  }) {
+    final invalid = required && _showErrors && selected == null;
     return InkWell(
       onTap: () async {
         final item = await showDialog<PickerItem>(
@@ -285,13 +364,39 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
         );
         if (item != null) onPick(item.name);
       },
-      child: InputDecorator(
-        decoration: _deco(label, icon, filled: selected != null).copyWith(
-          suffixIcon: const Icon(Iconsax.arrow_down),
-        ),
-        child: Text(
-          selected ?? 'แตะเพื่อเลือก',
-          style: const TextStyle(fontSize: 16),
+      child: _fieldCard(
+        label,
+        icon,
+        filled: selected != null,
+        invalid: invalid,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+          decoration: _innerBoxDeco,
+          child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                selected ?? 'แตะเพื่อเลือก',
+                style: TextStyle(
+                  fontSize: 19,
+                  color: invalid
+                      ? Colors.redAccent
+                      : selected == null
+                      ? Colors.black38
+                      : null,
+                ),
+              ),
+            ),
+            Icon(
+              Iconsax.arrow_down,
+              color: invalid ? Colors.redAccent : Colors.black45,
+            ),
+          ],
+          ),
         ),
       ),
     );
@@ -324,13 +429,43 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
         );
         if (picked != null) onPick(picked);
       },
-      child: InputDecorator(
-        decoration: _deco(label, icon, filled: selected.isNotEmpty).copyWith(
-          suffixIcon: const Icon(Iconsax.arrow_down),
-        ),
-        child: Text(
-          selected.isEmpty ? 'แตะเพื่อเลือก' : selected.join(', '),
-          style: const TextStyle(fontSize: 16),
+      child: _fieldCard(
+        label,
+        icon,
+        filled: selected.isNotEmpty,
+        invalid: _showErrors && selected.isEmpty,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+          decoration: _innerBoxDeco,
+          child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                selected.isEmpty
+                    ? 'แตะเพื่อเลือก'
+                    : selected.join(', '),
+                style: TextStyle(
+                  fontSize: 19,
+                  color: _showErrors && selected.isEmpty
+                      ? Colors.redAccent
+                      : selected.isEmpty
+                      ? Colors.black38
+                      : null,
+                ),
+              ),
+            ),
+            Icon(
+              Iconsax.arrow_down,
+              color: _showErrors && selected.isEmpty
+                  ? Colors.redAccent
+                  : Colors.black45,
+            ),
+          ],
+          ),
         ),
       ),
     );
@@ -352,10 +487,42 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
           });
         }
       },
-      child: InputDecorator(
-        decoration: _deco('ชาวไร่', Iconsax.user, filled: _farmer != null)
-            .copyWith(suffixIcon: const Icon(Iconsax.arrow_down)),
-        child: Text(_farmer ?? 'แตะเพื่อเลือก', style: const TextStyle(fontSize: 16)),
+      child: _fieldCard(
+        'ชาวไร่',
+        Iconsax.user,
+        filled: _farmer != null,
+        invalid: _showErrors && _farmerId == null,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 12,
+          ),
+          decoration: _innerBoxDeco,
+          child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _farmer ?? 'แตะเพื่อเลือก',
+                style: TextStyle(
+                  fontSize: 19,
+                  color: _showErrors && _farmerId == null
+                      ? Colors.redAccent
+                      : _farmer == null
+                      ? Colors.black38
+                      : null,
+                ),
+              ),
+            ),
+            Icon(
+              Iconsax.arrow_down,
+              color: _showErrors && _farmerId == null
+                  ? Colors.redAccent
+                  : Colors.black45,
+            ),
+          ],
+          ),
+        ),
       ),
     );
   }
@@ -370,51 +537,141 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
       PickerItem(code: p.code, name: p.name),
   ];
 
-  /// [filled] → green border + soft gold tint once data is set.
-  InputDecoration _deco(
+  /// การ์ดช่องข้อมูล — หัวข้อ (icon+label) อยู่ในการ์ด ตามด้วย
+  /// ตัวกรอก/เลือกของแต่ละช่อง
+  /// [filled] → กรอบเขียวเมื่อมีข้อมูล
+  /// [invalid] → กรอบแดงตอนกดบันทึกแล้วยังว่าง
+  Widget _fieldCard(
     String label,
     IconData? icon, {
     bool filled = false,
+    bool invalid = false,
     String? helper,
-  }) => InputDecoration(
-    labelText: label,
-    labelStyle: const TextStyle(fontSize: 16),
-    helperText: helper,
-    prefixIcon: icon != null ? Icon(icon, color: AppColors.green) : null,
-    filled: filled,
-    fillColor: filled ? AppColors.goldLight : null,
-    border: const OutlineInputBorder(),
-    enabledBorder: filled
-        ? const OutlineInputBorder(
-            borderSide: BorderSide(color: AppColors.green, width: 2),
-          )
-        : const OutlineInputBorder(),
+    required Widget child,
+  }) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: invalid
+            ? Colors.redAccent
+            : filled
+            ? AppColors.green
+            : Colors.black26,
+        width: invalid || filled ? 1.5 : 1,
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 22,
+                color: invalid ? Colors.redAccent : AppColors.green,
+              ),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: invalid ? Colors.redAccent : Colors.black87,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        child,
+        if (helper != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Text(
+              helper,
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+          ),
+      ],
+    ),
   );
 
-  /// Text field with the filled-state green border + soft gold fill.
+  /// กรอบช่องย่อยในการ์ด — ช่องพิมพ์/ช่องเลือกดูเป็น "ช่อง" ชัด
+  /// พื้นเทาอ่อน + ขอบมน เหมือน input ทั่วไป
+  static final BoxDecoration _innerBoxDeco = BoxDecoration(
+    color: Colors.grey.shade50,
+    borderRadius: BorderRadius.circular(10),
+    border: Border.all(color: Colors.black12),
+  );
+
+  /// decoration ของช่องพิมพ์ในการ์ด — กรอบเดียวกับ _innerBox
+  static const _innerDeco = InputDecoration(
+    isDense: true,
+    filled: true,
+    fillColor: Color(0xFFFAFAFA), // grey.shade50 (const)
+    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    hintText: 'กรอกข้อมูล',
+    hintStyle: TextStyle(fontSize: 17, color: Colors.black38),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: Colors.black12),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: Colors.black12),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.all(Radius.circular(10)),
+      borderSide: BorderSide(color: AppColors.green, width: 2),
+    ),
+  );
+
+  /// Text field — มีข้อมูล = กรอบเขียว, [required] = ห้ามว่าง
+  /// (validate สดตอนพิมพ์ กรอบแดงหายทันทีที่กรอก)
   Widget _tf(
     TextEditingController ctrl,
     String label,
     IconData? icon, {
     TextInputType? keyboard,
     int maxLines = 1,
+    bool required = false,
     String? helper,
     String? Function(String?)? validator,
     List<TextInputFormatter>? formatters,
   }) => ValueListenableBuilder<TextEditingValue>(
     valueListenable: ctrl,
-    builder: (_, value, _) => TextFormField(
-      controller: ctrl,
-      style: const TextStyle(fontSize: 17),
-      keyboardType: keyboard,
-      maxLines: maxLines,
-      validator: validator,
-      inputFormatters: formatters,
-      decoration: _deco(
-        label,
-        icon,
-        filled: value.text.trim().isNotEmpty,
-        helper: helper,
+    builder: (_, value, _) => _fieldCard(
+      label,
+      icon,
+      filled: value.text.trim().isNotEmpty,
+      // ช่องบังคับที่ว่าง — แดงหลังกดบันทึก หรือหลังเคยพิมพ์
+      // (autovalidate ขึ้นกรอบแดงตั้งแต่ onChanged แรก ให้
+      // ไอคอน/label แดงตามไม่ให้มั่วกัน)
+      invalid: required &&
+          value.text.trim().isEmpty &&
+          (_showErrors || _touched.contains(ctrl)),
+      helper: helper,
+      child: TextFormField(
+        controller: ctrl,
+        style: const TextStyle(fontSize: 19),
+        keyboardType: keyboard,
+        maxLines: maxLines,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        validator: (v) {
+          if (required && (v == null || v.trim().isEmpty)) {
+            return 'กรุณากรอกข้อมูล';
+          }
+          return validator?.call(v);
+        },
+        inputFormatters: formatters,
+        onChanged: (_) => _touched.add(ctrl),
+        decoration: _innerDeco,
       ),
     ),
   );
@@ -429,7 +686,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
           builder: (_) {
             final fields = <Widget>[
             Card(
-              color: AppColors.goldLight,
+              color: Colors.grey.shade200,
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -463,14 +720,14 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               _nameCtrl,
               'ชื่อแปลง',
               Iconsax.edit,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'กรุณากรอกชื่อแปลง' : null,
+              required: true,
             ),
             const SizedBox(height: 16),
             _tf(
               _yearCtrl,
               'ปีการผลิต',
               Iconsax.calendar,
+              required: true,
               keyboard: TextInputType.number,
               formatters: const [_DigitFormatter()],
             ),
@@ -583,6 +840,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               _prevPlotItems,
               _prevPlot,
               (v) => setState(() => _prevPlot = v),
+              required: false,
             ),
             const SizedBox(height: 16),
             _tf(
@@ -665,6 +923,8 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               _lossCtrl,
               'พื้นที่สูญเสีย (ไร่)',
               Iconsax.ruler,
+              // เลือก "ไม่มี" ในช่องสาเหตุ → เว้นว่างได้
+              required: !_losses.contains('ไม่มี'),
               keyboard: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -683,6 +943,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               _targetCtrl,
               'เป้าหมายผลผลิต (ตัน/ไร่)',
               Iconsax.flag,
+              required: true,
               keyboard: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
@@ -699,14 +960,20 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             const SizedBox(height: 16),
             ValueListenableBuilder<TextEditingValue>(
               valueListenable: _targetCtrl,
-              builder: (_, _, _) => InputDecorator(
-                decoration: _deco(
-                  'เป้าหมายผลผลิต (ตันรวม)',
-                  Iconsax.calculator,
-                ),
-                child: Text(
-                  _totalYield,
-                  style: const TextStyle(fontSize: 16),
+              builder: (_, _, _) => _fieldCard(
+                'เป้าหมายผลผลิต (ตันรวม)',
+                Iconsax.calculator,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
+                  decoration: _innerBoxDeco,
+                  child: Text(
+                    _totalYield,
+                    style: const TextStyle(fontSize: 19),
+                  ),
                 ),
               ),
             ),
@@ -795,10 +1062,19 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                       child: OutlinedButton.icon(
                         onPressed:
                             _photos.length < 3 ? _pickPhoto : null,
-                        icon: const Icon(Iconsax.camera),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF1B5E20),
+                          side: const BorderSide(
+                            color: Color(0xFF1B5E20),
+                          ),
+                        ),
+                        icon: const Icon(Iconsax.camera, size: 24),
                         label: const Text(
                           'ถ่ายภาพ',
-                          style: TextStyle(fontSize: 15),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
