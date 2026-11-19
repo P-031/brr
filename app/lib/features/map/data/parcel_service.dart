@@ -196,6 +196,7 @@ class ParcelService {
     bool detailPending = false,
     String? plantedAt,
     String? caneGroup,
+    String? herbicideUsed,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -206,6 +207,7 @@ class ParcelService {
       'detailPending': detailPending,
       'plantedAt': ?plantedAt,
       'caneGroup': ?caneGroup,
+      'herbicideUsed': ?herbicideUsed,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));

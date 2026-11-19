@@ -41,12 +41,14 @@ class ParcelDetailViewModel extends ChangeNotifier {
     bool detailPending = false,
     String? plantedAt,
     String? caneGroup,
+    String? herbicideUsed,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
     detailPending: detailPending,
     plantedAt: plantedAt,
     caneGroup: caneGroup,
+    herbicideUsed: herbicideUsed,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

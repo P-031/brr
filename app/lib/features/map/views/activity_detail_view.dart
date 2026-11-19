@@ -31,6 +31,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   final _dateCtrl = TextEditingController();
   DateTime? _plantedAt;
   String? _caneGroup;
+  String? _herbicide;
   bool _saving = false;
   late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
 
@@ -133,6 +134,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         photoPaths: widget.photoPaths,
         detailPending: false,
         caneGroup: _caneGroup,
+        herbicideUsed: _herbicide,
         plantedAt: planted == null
             ? null
             : '${planted.year.toString().padLeft(4, '0')}-'
@@ -367,6 +369,86 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                                 style: TextStyle(
                                   fontSize: 17,
                                   color: _caneGroup == null
+                                      ? Colors.black38
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Iconsax.arrow_circle_down,
+                              size: 28,
+                              color: Colors.black87,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดการใช้ยาคุม — ใช้/ไม่ใช้
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'การใช้ยาคุม',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () async {
+                        final idx = await showOptionPopup(
+                          context,
+                          title: 'การใช้ยาคุม',
+                          labels: const ['ใช้', 'ไม่ใช้'],
+                          selectedIndex: _herbicide == null
+                              ? null
+                              : _herbicide == 'ใช้'
+                              ? 0
+                              : 1,
+                        );
+                        if (idx != null) {
+                          setState(
+                            () => _herbicide = idx == 0 ? 'ใช้' : 'ไม่ใช้',
+                          );
+                        }
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _herbicide == null
+                                ? Colors.grey.shade300
+                                : AppColors.green,
+                            width: _herbicide == null ? 1 : 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _herbicide ?? 'แตะเพื่อเลือก',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  color: _herbicide == null
                                       ? Colors.black38
                                       : Colors.black87,
                                 ),
