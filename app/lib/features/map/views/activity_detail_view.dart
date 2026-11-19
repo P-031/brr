@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/option_popup.dart';
+import 'package:brr/core/widgets/thai_date_picker.dart';
+import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 
 /// หน้ากรอกรายละเอียดกิจกรรม — เปิดหลังถ่ายรูปแล้วกด
@@ -28,7 +31,16 @@ class ActivityDetailView extends StatefulWidget {
 class _ActivityDetailViewState extends State<ActivityDetailView> {
   final _dateCtrl = TextEditingController();
   DateTime? _plantedAt;
+  String? _caneGroup;
   bool _saving = false;
+  late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
+
+  @override
+  void initState() {
+    super.initState();
+    // prefill กลุ่มอ้อยจากข้อมูลแปลงถ้ามี
+    _caneGroup = widget.vm.parcel.meta?['caneGroup'] as String?;
+  }
 
   @override
   void dispose() {
@@ -58,12 +70,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
+    final picked = await showThaiDatePicker(
+      context,
       initialDate: _plantedAt ?? DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      locale: const Locale('th'),
     );
     if (picked != null) {
       setState(() {
@@ -77,9 +88,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   Future<void> _warnDate() => showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -99,9 +108,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.green,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.green),
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('ตกลง', style: TextStyle(fontSize: 16)),
             ),
@@ -126,6 +133,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
       await widget.vm.saveActivityDraft(
         photoPaths: widget.photoPaths,
         detailPending: false,
+        caneGroup: _caneGroup,
         plantedAt: planted == null
             ? null
             : '${planted.year.toString().padLeft(4, '0')}-'
@@ -135,9 +143,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
       if (mounted) Navigator.of(context).pop('บันทึกกิจกรรมเรียบร้อย');
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -191,8 +198,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
               p.meta ??
               const {};
           final areaMap = snap.data?['area'] as Map<String, dynamic>?;
-          final rai =
-              (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
+          final rai = (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
           return ListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
             children: [
@@ -237,18 +243,20 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'พิมพ์ตัวเลข วัน เดือน ปี (พ.ศ.) ติดกัน\n'
+                      'เช่น 01022569 → 01/02/2569 (ขีด / ใส่ให้อัตโนมัติ)',
+                      style: TextStyle(fontSize: 14, color: Colors.black54),
+                    ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _dateCtrl,
                       keyboardType: TextInputType.datetime,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[0-9/ก-ฮ]'),
-                        ),
-                      ],
+                      inputFormatters: [_DateSlashFormatter()],
                       style: const TextStyle(fontSize: 17),
                       decoration: InputDecoration(
-                        hintText: 'วว/ดด/ปปปป (พ.ศ.)',
+                        hintText: 'วว/ดด/ปปปป',
                         hintStyle: const TextStyle(
                           fontSize: 16,
                           color: Colors.black38,
@@ -266,9 +274,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: Colors.grey.shade300,
-                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -283,6 +289,84 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         ),
                       ),
                       onChanged: (_) => _plantedAt = null,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดกลุ่มสร้างอ้อย — ตัวเลือกจาก /meta/options
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'กลุ่มสร้างอ้อย (กลุ่มบำรุง)',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () async {
+                        final opts = await _optionsFut;
+                        if (!context.mounted) return;
+                        final idx = await showOptionPopup(
+                          context,
+                          title: 'กลุ่มสร้างอ้อย (กลุ่มบำรุง)',
+                          labels: opts.caneGroups,
+                          selectedIndex: _caneGroup == null
+                              ? null
+                              : opts.caneGroups.indexOf(_caneGroup!),
+                          searchHint: 'ค้นหากลุ่มอ้อย',
+                        );
+                        if (idx != null) {
+                          setState(() => _caneGroup = opts.caneGroups[idx]);
+                        }
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _caneGroup == null
+                                ? Colors.grey.shade300
+                                : AppColors.green,
+                            width: _caneGroup == null ? 1 : 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _caneGroup ?? 'แตะเพื่อเลือก',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  color: _caneGroup == null
+                                      ? Colors.black38
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Iconsax.arrow_down,
+                              color: Colors.black45,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -307,6 +391,29 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           );
         },
       ),
+    );
+  }
+}
+
+/// พิมพ์ตัวเลขติดกัน → ใส่ / ให้อัตโนมัติเป็น วว/ดด/ปปปป
+/// (เก็บเฉพาะตัวเลข สูงสุด 8 หลัก)
+class _DateSlashFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final d = digits.length > 8 ? digits.substring(0, 8) : digits;
+    final buf = StringBuffer();
+    for (var i = 0; i < d.length; i++) {
+      if (i == 2 || i == 4) buf.write('/');
+      buf.write(d[i]);
+    }
+    final text = buf.toString();
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

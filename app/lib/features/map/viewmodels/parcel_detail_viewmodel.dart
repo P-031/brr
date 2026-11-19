@@ -32,8 +32,7 @@ class ParcelDetailViewModel extends ChangeNotifier {
 
   /// จำนวนกิจกรรมที่บันทึกในเครื่องของแปลงนี้ — หน้าบันทึกกิจกรรม
   /// ใช้ตั้งชื่อ "ครั้งที่ N"
-  Future<int> activityDraftCount() =>
-      _service.activityDraftCount(parcel.id);
+  Future<int> activityDraftCount() => _service.activityDraftCount(parcel.id);
 
   /// บันทึกกิจกรรมลงเครื่อง — photos = path ไฟล์ที่ถ่าย;
   /// `detailPending` = บันทึกเฉพาะรูปรอกรอกรายละเอียด
@@ -41,16 +40,17 @@ class ParcelDetailViewModel extends ChangeNotifier {
     required List<String> photoPaths,
     bool detailPending = false,
     String? plantedAt,
+    String? caneGroup,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
     detailPending: detailPending,
     plantedAt: plantedAt,
+    caneGroup: caneGroup,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint
-  Future<Map<String, dynamic>?> riskPoint() =>
-      _service.riskPointFor(parcel.id);
+  Future<Map<String, dynamic>?> riskPoint() => _service.riskPointFor(parcel.id);
 
   Future<void> saveRiskPoint({
     required String type,

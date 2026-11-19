@@ -372,15 +372,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
               ),
             ),
             const SizedBox(height: 14),
-            const Text(
-              'ชื่อแปลง',
-              style: TextStyle(fontSize: 14.5, color: Colors.black45),
-            ),
-            const SizedBox(height: 6),
             Row(
               children: [
-                const Icon(Iconsax.crop, color: AppColors.green, size: 34),
-                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     landNo,
@@ -425,7 +418,6 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             // (รองรับอนาคต backend มีฟิลด์รหัส/เกรดจริงแยก)
             Row(
               children: [
-                const SizedBox(width: 44),
                 Text(
                   'หมายเลขแปลง : ${plotCode ?? '—'}',
                   style: const TextStyle(
@@ -458,7 +450,6 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             Align(
               alignment: Alignment.centerLeft,
               child: Container(
-                margin: const EdgeInsets.only(left: 40),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 5,
@@ -544,12 +535,12 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 64),
             const Text(
               'เมนู',
               style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 26),
             GridView.count(
               crossAxisCount: 3,
               shrinkWrap: true,
@@ -609,7 +600,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             ),
             const SizedBox(height: 10),
             _actionCard(
-              color: AppColors.green,
+              color: AppColors.sky,
               leading: const Icon(
                 Iconsax.calendar_edit,
                 color: Colors.white,
@@ -648,7 +639,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             ),
             const SizedBox(height: 10),
             _actionCard(
-              color: AppColors.green,
+              color: const Color(0xFF7B1FA2),
               leading: CircleAvatar(
                 radius: 23,
                 backgroundColor: Colors.white.withValues(alpha: 0.25),
@@ -671,7 +662,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                       vertical: 7,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.gold,
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -679,7 +670,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: Color(0xFF7B1FA2),
                       ),
                     ),
                   ),

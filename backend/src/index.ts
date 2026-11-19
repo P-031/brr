@@ -1,7 +1,9 @@
 import "dotenv/config";
 import { createApp } from "./app";
 import { env } from "./env";
+import { startWorker } from "./jobs";
 
+startWorker();
 const app = createApp();
 const server = app.listen(env.port, "127.0.0.1", () => {
   console.log(`API ready at http://127.0.0.1:${env.port}`);

@@ -70,7 +70,7 @@ class DraftsView extends StatelessWidget {
         icon: const Icon(Iconsax.tick_circle, color: AppColors.green, size: 28),
         title: const Text('ยืนยันบันทึกแปลง'),
         content: Text(
-          'ส่ง "${p.name}" ขึ้น server ด้วยข้อมูลที่บันทึกไว้'
+          'ส่ง "${_landNo(p)}" ขึ้น server ด้วยข้อมูลที่บันทึกไว้'
           ' — ร่างในเครื่องจะถูกลบเมื่อสำเร็จ',
         ),
         actions: [
@@ -98,7 +98,7 @@ class DraftsView extends StatelessWidget {
         icon: const Icon(Iconsax.trash, color: Colors.red, size: 28),
         title: const Text('ลบฉบับร่าง'),
         content: Text(
-          'ลบ "${p.name}" ออกจากเครื่องถาวร — ข้อมูลร่างไม่ได้ส่งขึ้น'
+          'ลบ "${_landNo(p)}" ออกจากเครื่องถาวร — ข้อมูลร่างไม่ได้ส่งขึ้น'
           ' server ลบแล้วกู้ไม่ได้',
         ),
         actions: [
@@ -420,11 +420,14 @@ String _savedText(Parcel p) {
   return '${t.day} ${_thaiMonths[t.month - 1]} ${t.year + 543} $hm น.';
 }
 
-String _landNo(Parcel p) => p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+String _landNo(Parcel p) {
+  final n = p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '').trim();
+  return n.isEmpty ? 'ไม่ระบุชื่อ' : n;
+}
 
-/// การ์ดร่าง 1 ใบ — ชื่อไร่/ขนาดพื้นที่/เวลาบันทึก + ปุ่มยืนยันเขียว
-/// เมนู ⋮ เหลือแก้ไข/ลบ (ยืนยันย้ายออกมาเป็นปุ่มเด่น); แตะการ์ดเปิด
-/// หน้ารายละเอียด; busy = กำลังยิง API อยู่
+/// การ์ดร่าง 1 ใบ — ชื่อไร่/ขนาดพื้นที่/เวลาบันทึก + ปุ่มการกระทำ
+/// 3 ปุ่มล่างการ์ด แก้ไข/ลบ/ยืนยัน; แตะการ์ดเปิดหน้ารายละเอียด;
+/// busy = กำลังยิง API อยู่
 class _DraftCard extends StatelessWidget {
   const _DraftCard(
     this.p, {
@@ -442,55 +445,6 @@ class _DraftCard extends StatelessWidget {
   final VoidCallback? onConfirm;
   final VoidCallback? onDelete;
 
-  /// เมนูการกระทำเด้งจากล่าง — แก้ไข (ทอง) / ลบ (แดง)
-  void _openActions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ยืนยันแล้วข้อมูลขึ้น server ไปแล้ว — แก้ไขไม่ได้อีก
-            if (p.status != 'confirmed') ...[
-              ListTile(
-                leading: const Icon(Iconsax.edit_2, color: AppColors.gold),
-                title: const Text(
-                  'แก้ไข',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onEdit?.call();
-                },
-              ),
-              const Divider(height: 1),
-            ],
-            ListTile(
-              leading: const Icon(Iconsax.trash, color: Colors.redAccent),
-              title: const Text(
-                'ลบ',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                onDelete?.call();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Material(
@@ -500,7 +454,7 @@ class _DraftCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -583,62 +537,101 @@ class _DraftCard extends StatelessWidget {
                           color: AppColors.green,
                         ),
                       ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              // ปุ่มการกระทำ 3 ปุ่มล่างการ์ด — แก้ไข(ทอง)/ลบ(แดง)/
+              // ยืนยัน(เขียว); ยืนยันแล้ว → badge แทนปุ่ม กันกดซ้ำ
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(
+                          color: Colors.redAccent,
+                          width: 1.6,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: onDelete,
+                      icon: const Icon(Iconsax.trash, size: 22),
+                      label: const Text(
+                        'ลบ',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (p.status != 'confirmed') ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFFA000),
+                          side: const BorderSide(
+                            color: Color(0xFFFFA000),
+                            width: 1.6,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onPressed: onEdit,
+                        icon: const Icon(Iconsax.edit_2, size: 22),
+                        label: const Text(
+                          'แก้ไข',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (p.status == 'confirmed')
+                    const Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Iconsax.tick_circle5,
+                            size: 22,
+                            color: AppColors.green,
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'ยืนยันแล้ว',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.green,
+                            ),
+                          ),
+                        ],
+                      ),
                     )
                   else
-                    Column(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.more_vert,
-                            color: Colors.black45,
-                          ),
-                          onPressed: () => _openActions(context),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.green,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
-                        // ยืนยันแล้ว → badge เขียวแทนปุ่ม กันกดส่งซ้ำ
-                        if (p.status == 'confirmed')
-                          const Padding(
-                            padding: EdgeInsets.only(top: 4, right: 6),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Iconsax.tick_circle5,
-                                  size: 16,
-                                  color: AppColors.green,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'ยืนยันแล้ว',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.green,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.green,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 6,
-                              ),
-                            ),
-                            onPressed: onConfirm,
-                            child: const Text(
-                              'ยืนยัน',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
+                        onPressed: onConfirm,
+                        icon: const Icon(Iconsax.tick_circle, size: 22),
+                        label: const Text(
+                          'ยืนยัน',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
                           ),
-                      ],
+                        ),
+                      ),
                     ),
                 ],
               ),

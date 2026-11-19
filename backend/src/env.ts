@@ -16,6 +16,11 @@ export const env = {
   keycloakRealm: realm,
   keycloakIssuer: (process.env.KEYCLOAK_ISSUER?.trim() || `${baseUrl}/realms/${realm}`).replace(/\/$/, ""),
   keycloakClientId: required("KEYCLOAK_CLIENT_ID"),
+  keycloakAdminUsername: required("KEYCLOAK_ADMIN_USERNAME"),
+  keycloakAdminPassword: required("KEYCLOAK_ADMIN_PASSWORD"),
+  // Optional — when unset the API runs without Redis-backed
+  // caching, rate limiting, and job queues.
+  redisUrl: process.env.REDIS_URL?.trim() || undefined,
 };
 
 if (!Number.isInteger(env.port) || env.port < 1 || env.port > 65535) {

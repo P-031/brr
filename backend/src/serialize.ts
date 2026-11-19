@@ -46,6 +46,26 @@ export function plotSummary(plot: {
   id: string;
   name: string;
   variety: string;
+  productionYear?: string | null;
+  officerName?: string | null;
+  project?: string | null;
+  caneGroup?: string | null;
+  zone?: string | null;
+  province?: string | null;
+  district?: string | null;
+  subdistrict?: string | null;
+  village?: string | null;
+  rootNo?: string | null;
+  sequenceNo?: string | null;
+  prevPlotNo?: string | null;
+  caneType?: string | null;
+  caneVariety?: string | null;
+  ownership?: string | null;
+  terrain?: string | null;
+  hasLoss?: string | null;
+  lossRai?: number | null;
+  targetYield?: number | null;
+  note?: string | null;
   areaSqm: number;
   centerLat: number;
   centerLng: number;
@@ -63,6 +83,28 @@ export function plotSummary(plot: {
       id: plot.farmer.id,
       username: plot.farmer.username,
       displayName: plot.farmer.displayName,
+    },
+    meta: {
+      productionYear: plot.productionYear,
+      officerName: plot.officerName,
+      project: plot.project,
+      caneGroup: plot.caneGroup,
+      zone: plot.zone,
+      province: plot.province,
+      district: plot.district,
+      subdistrict: plot.subdistrict,
+      village: plot.village,
+      rootNo: plot.rootNo,
+      sequenceNo: plot.sequenceNo,
+      prevPlotNo: plot.prevPlotNo,
+      caneType: plot.caneType,
+      caneVariety: plot.caneVariety,
+      ownership: plot.ownership,
+      terrain: plot.terrain,
+      hasLoss: plot.hasLoss,
+      lossRai: plot.lossRai,
+      targetYield: plot.targetYield,
+      note: plot.note,
     },
   };
 }
