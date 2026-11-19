@@ -20,7 +20,7 @@ class _WalkStatus extends StatelessWidget {
         ? Colors.grey
         : acc <= 6
         ? AppColors.green
-        : acc <= 20
+        : acc <= 15
         ? Colors.orange
         : Colors.red;
     return Row(
