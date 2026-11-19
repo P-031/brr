@@ -104,7 +104,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   /// หน้ารายละเอียด (onCovered ไม่ refire ถ้า extent ไม่เปลี่ยน)
   double _extent = 0.9;
 
-  /// เมนูทางลัด — (icon, label, color) หน้าที่แต่ละอันรอนิยาม
+  /// เมนูทางลัด — (icon, label, color) ทุกอันต่อหน้าจริงแล้ว
+  /// (ดู _menuAction)
   static const _menus = [
     (Iconsax.send_2, 'นำทาง', AppColors.sky),
     (Iconsax.home_2, 'บ้านชาวไร่', AppColors.gold),
@@ -292,7 +293,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
     }
   }
 
-  /// ปุ่มเมนูที่ต่อหน้าจริงแล้ว — ที่เหลือยัง stub
+  /// ปุ่มเมนูทั้งหมดต่อหน้าจริงแล้ว — `_todo` เป็น fallback
+  /// เผื่อเพิ่ม label ใน _menus แล้วลืม map ที่นี่
   VoidCallback _menuAction(String label) {
     final vm = widget.vm;
     return switch (label) {

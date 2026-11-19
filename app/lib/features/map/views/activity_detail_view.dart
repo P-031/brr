@@ -11,6 +11,7 @@ import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/core/widgets/thai_date_picker.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:brr/features/map/models/activity_calc.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 
@@ -343,14 +344,16 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   );
 
   /// ปริมาณตันรวม = ประเมิน(ตัน/ไร่) × พื้นที่ไร่ของแปลง
-  double _totalTons() =>
-      (double.tryParse(_yieldEstimateCtrl.text) ?? 0) * _areaRai;
+  /// (ตรรก์อยู่ models/activity_calc.dart — view แค่ส่งค่า)
+  double _totalTons() => totalTons(_yieldEstimateCtrl.text, _areaRai);
 
   /// อ้อยเข้าหีบจริง = ตันรวม − หักตัดพันธุ์ − หักสูญเสียจากการตัด
-  double _actualTons() =>
-      _totalTons() -
-      (double.tryParse(_cutVarietyCtrl.text) ?? 0) -
-      (double.tryParse(_cutLossTonCtrl.text) ?? 0);
+  double _actualTons() => actualTons(
+    _yieldEstimateCtrl.text,
+    _areaRai,
+    cutVarietyTons: _cutVarietyCtrl.text,
+    cutLossTons: _cutLossTonCtrl.text,
+  );
 
   /// แถว label + ค่าคำนวณ (ตัวหนาน้ำเงินชิดขวา) — readonly
   Widget _calcRow(String label, double value) => Padding(
@@ -1140,14 +1143,10 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         ),
                         Text(
                           // อัตราฝ่ากอ + รวมอัตราทุกรอบใส่ปุ๋ย
-                          ((double.tryParse(_rateCtrl.text) ?? 0) +
-                                  _rounds.fold<double>(
-                                    0,
-                                    (s, r) =>
-                                        s +
-                                        (double.tryParse(r.rate ?? '') ?? 0),
-                                  ))
-                              .toStringAsFixed(1),
+                          totalFertilizerRate(
+                            _rateCtrl.text,
+                            _rounds.map((r) => r.rate),
+                          ).toStringAsFixed(1),
                           style: const TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.bold,

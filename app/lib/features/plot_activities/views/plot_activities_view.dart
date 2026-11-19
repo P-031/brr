@@ -5,7 +5,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:latlong2/latlong.dart' as ll;
 import 'package:provider/provider.dart';
 
-import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/utils/fuzzy_search.dart';
 import 'package:brr/core/widgets/skeleton.dart';
@@ -21,21 +20,18 @@ import 'package:brr/features/plot_activities/viewmodels/plot_activities_viewmode
 /// กิจกรรมแปลง — แผนที่ย่อ 1/3 จอ + การ์ดรายละเอียดแปลงทีละ 30
 /// + ฟิลเตอร์จาก backend (ปีการผลิต/เขต/ประเภทอ้อย/สถานะปลูก/กลุ่ม)
 class PlotActivitiesView extends StatelessWidget {
-  const PlotActivitiesView({required this.api, super.key});
-
-  final ApiClient? api;
+  const PlotActivitiesView({super.key});
 
   @override
   Widget build(BuildContext context) => ChangeNotifierProvider(
-    create: (_) => PlotActivitiesViewModel.forApi(api),
-    child: _Body(api: api),
+    // VM หยิบ ApiClient จาก Provider root เอง (forContext)
+    create: (ctx) => PlotActivitiesViewModel.forContext(ctx),
+    child: const _Body(),
   );
 }
 
 class _Body extends StatefulWidget {
-  const _Body({required this.api});
-
-  final ApiClient? api;
+  const _Body();
 
   @override
   State<_Body> createState() => _BodyState();
@@ -242,8 +238,8 @@ class _BodyState extends State<_Body> {
         builder: (_) => MapView(
           parcelBrowser: true,
           autoPromptDownload: false,
-          createViewModel: () => MapViewModel(
-            api: widget.api,
+          createViewModel: () => MapViewModel.forContext(
+            context,
             canDrawManually: false,
             yearAllowlist: vm.years.isEmpty ? null : {...vm.years},
           ),
@@ -285,8 +281,8 @@ class _BodyState extends State<_Body> {
           parcelBrowser: true,
           autoPromptDownload: false,
           focusParcel: parcel,
-          createViewModel: () => MapViewModel(
-            api: widget.api,
+          createViewModel: () => MapViewModel.forContext(
+            context,
             canDrawManually: false,
             initialParcels: [parcel],
             yearAllowlist: vm.years.isEmpty ? null : {...vm.years},

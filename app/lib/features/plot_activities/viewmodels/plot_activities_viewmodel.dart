@@ -1,7 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/location_service.dart';
@@ -18,8 +19,12 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   }
 
   /// สร้างจาก session api — view ส่งแค่นี้ ไม่ต้องเห็น ParcelService
-  PlotActivitiesViewModel.forApi(ApiClient? api)
-    : this(ParcelService(api));
+  PlotActivitiesViewModel.forApi(ApiClient? api) : this(ParcelService(api));
+
+  /// หยิบ ApiClient จาก Provider ที่ root — view ไม่ต้องถือ
+  /// type ของชั้น data ส่งต่อเอง (MVVM)
+  factory PlotActivitiesViewModel.forContext(BuildContext context) =>
+      PlotActivitiesViewModel.forApi(context.read<ApiClient>());
 
   final ParcelService _service;
   final LocationService _location = LocationService();
@@ -44,7 +49,8 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   final Set<String> _zones = {};
   final Set<String> _caneTypes = {};
   final Set<bool> _planted = {}; // true=ปลูกแล้ว false=ยังไม่ปลูก
-  final Set<String> _groupKinds = {}; // 'harvest'=กลุ่มตัด 'maintain'=กลุ่มบำรุง
+  final Set<String> _groupKinds =
+      {}; // 'harvest'=กลุ่มตัด 'maintain'=กลุ่มบำรุง
   String _search = '';
   Timer? _searchDebounce;
   // เลขรุ่น fetch — refresh ใหม่ทำให้ loadMore ที่ค้างอยู่เป็น stale
@@ -102,9 +108,8 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   Future<void> _loadFilterOptions() async {
     try {
       final index = await _service.fetchYearIndex();
-      _yearOptions =
-          index.years.keys.whereType<String>().toList()
-            ..sort((a, b) => b.compareTo(a));
+      _yearOptions = index.years.keys.whereType<String>().toList()
+        ..sort((a, b) => b.compareTo(a));
       _optionsLoaded = true;
     } catch (_) {}
     try {

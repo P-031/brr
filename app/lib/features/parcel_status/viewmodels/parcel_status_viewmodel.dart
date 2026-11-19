@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
@@ -18,6 +19,11 @@ class ParcelStatusViewModel extends ChangeNotifier {
   /// (api null = ออฟไลน์)
   ParcelStatusViewModel.forApi(ApiClient? api)
     : this(api == null ? null : ParcelService(api));
+
+  /// หยิบ ApiClient จาก Provider ที่ root — view ไม่ต้องถือ
+  /// type ของชั้น data ส่งต่อเอง (MVVM)
+  factory ParcelStatusViewModel.forContext(BuildContext context) =>
+      ParcelStatusViewModel.forApi(context.read<ApiClient>());
 
   final ParcelService? _service;
 

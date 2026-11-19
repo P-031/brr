@@ -1039,10 +1039,6 @@ class ParcelService {
   }
 }
 
-/// หน้าข้อมูลแปลง + ธง truncated จาก backend — viewport fetch ที่ตัด
-/// ข้อมูลไม่ครบต้องไม่ถูกจำว่า "ครอบคลุมกรอบนั้น"
-typedef ParcelPage = ({List<Parcel> items, bool truncated});
-
 /// หน้ารายการแปลง (list) — nextCursor สำหรับ "โหลดเพิ่ม"
 /// null = หมดแล้ว; total = จำนวนรวมทั้งหมดตามฟิลเตอร์
 typedef PlotPage = ({List<PlotListItem> items, String? nextCursor, int total});

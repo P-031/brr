@@ -1,8 +1,9 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/core/services/api_client.dart';
@@ -44,6 +45,26 @@ class MapViewModel extends ChangeNotifier {
       _loading = false;
     }
   }
+
+  /// สร้าง VM หยิบ ApiClient จาก Provider ที่ root — view ไม่ต้อง
+  /// ถือ type ของชั้น data (ApiClient) ส่งต่อเอง (MVVM)
+  factory MapViewModel.forContext(
+    BuildContext context, {
+    ParcelService? service,
+    LocationService? location,
+    bool canDrawManually = true,
+    List<Parcel>? initialParcels,
+    Set<String?>? yearAllowlist,
+    bool initialCoverageComplete = false,
+  }) => MapViewModel(
+    api: context.read<ApiClient>(),
+    service: service,
+    location: location,
+    canDrawManually: canDrawManually,
+    initialParcels: initialParcels,
+    yearAllowlist: yearAllowlist,
+    initialCoverageComplete: initialCoverageComplete,
+  );
 
   final ParcelService _service;
   final LocationService _location;
@@ -113,10 +134,9 @@ class MapViewModel extends ChangeNotifier {
       if (p.isDraft
           ? p.status != 'confirmed'
           : _freshIds.contains(p.id) ||
-              ((yearAllowlist == null ||
-                      yearAllowlist!.contains(p.productionYear)) &&
-                  (_yearFilter == null ||
-                      p.productionYear == _yearFilter)))
+                ((yearAllowlist == null ||
+                        yearAllowlist!.contains(p.productionYear)) &&
+                    (_yearFilter == null || p.productionYear == _yearFilter)))
         p,
   ];
 
@@ -134,8 +154,7 @@ class MapViewModel extends ChangeNotifier {
 
   void _invalidateRender() => _renderCache = null;
 
-  List<Parcel> get renderableParcels =>
-      _renderCache ??= _computeRenderable();
+  List<Parcel> get renderableParcels => _renderCache ??= _computeRenderable();
 
   List<Parcel> _computeRenderable() {
     final vis = visibleParcels;
@@ -285,8 +304,7 @@ class MapViewModel extends ChangeNotifier {
       ParcelDetailViewModel(parcel: p, service: _service);
 
   /// VM ของหน้าดาวน์โหลด — แชร์ service เดียวกัน ไม่สร้างใหม่
-  PlotDownloadViewModel createDownloadVm() =>
-      PlotDownloadViewModel(_service);
+  PlotDownloadViewModel createDownloadVm() => PlotDownloadViewModel(_service);
 
   /// VM หน้า "ข้อมูลฉบับร่าง" — แปลงที่บันทึกลงเครื่องเท่านั้น
   DraftsViewModel createDraftsVm() => DraftsViewModel(_service);
@@ -349,9 +367,10 @@ class MapViewModel extends ChangeNotifier {
     // subscribe position stream ด้วย — แผง GPS ในแถบล่างต้องมี
     // พิกัด/คลาดเคลื่อนจริงแม้โหมดแตะวาด (ไม่ได้เดินวัด)
     if (await _location.ensurePermission()) {
-      _posSub ??= _location
-          .positionStream()
-          .listen(_onPosition, onError: (_) {});
+      _posSub ??= _location.positionStream().listen(
+        _onPosition,
+        onError: (_) {},
+      );
     }
   }
 
@@ -387,9 +406,7 @@ class MapViewModel extends ChangeNotifier {
     _corners.clear();
     _walkStartedAt = DateTime.now();
     _safeNotify();
-    _posSub = _location
-        .positionStream()
-        .listen(_onPosition, onError: (_) {});
+    _posSub = _location.positionStream().listen(_onPosition, onError: (_) {});
     return null;
   }
 
@@ -494,7 +511,9 @@ class MapViewModel extends ChangeNotifier {
   void _addWalkPoint(LatLng point, double accuracyM) {
     var capturedAt = DateTime.now();
     if (_corners.isNotEmpty && !capturedAt.isAfter(_corners.last.capturedAt)) {
-      capturedAt = _corners.last.capturedAt.add(const Duration(milliseconds: 1));
+      capturedAt = _corners.last.capturedAt.add(
+        const Duration(milliseconds: 1),
+      );
     }
     _draft.add(point);
     _corners.add(
@@ -509,7 +528,9 @@ class MapViewModel extends ChangeNotifier {
   /// ส่งให้ backend ตรวจเกณฑ์เดินวัดได้เฉพาะเมื่อทุกมุมมาจาก GPS
   Map<String, Object?>? _surveyPayload() {
     final started = _walkStartedAt;
-    if (started == null || _corners.isEmpty || _corners.length != _draft.length) {
+    if (started == null ||
+        _corners.isEmpty ||
+        _corners.length != _draft.length) {
       return null;
     }
     var finished = DateTime.now();

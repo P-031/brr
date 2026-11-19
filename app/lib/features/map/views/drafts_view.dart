@@ -5,6 +5,7 @@ import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/skeleton.dart';
+import 'package:brr/features/map/models/measurement_result.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/drafts_viewmodel.dart';
 import 'package:brr/features/map/views/measurement_save_view.dart';

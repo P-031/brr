@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:brr/features/map/models/measurement_result.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/utils/fuzzy_search.dart';
@@ -18,63 +19,6 @@ class PickerItem {
 
   final String code;
   final String name;
-}
-
-/// Result returned when the measurement form is saved.
-class MeasurementResult {
-  const MeasurementResult({
-    required this.name,
-    this.productionYear,
-    this.officerName,
-    this.project,
-    this.farmerName,
-    this.farmerId,
-    this.caneGroup,
-    this.zone,
-    this.province,
-    this.district,
-    this.subdistrict,
-    this.village,
-    this.rootNo,
-    this.sequenceNo,
-    this.prevPlotNo,
-    this.caneType,
-    this.caneVariety,
-    this.ownership,
-    this.terrain,
-    this.hasLoss,
-    this.lossRai,
-    this.targetYield,
-    this.note,
-    this.photos = const [],
-    this.draft = false,
-  });
-
-  final String name;
-  final String? productionYear;
-  final String? officerName;
-  final String? project;
-  final String? farmerName;
-  final String? farmerId;
-  final String? caneGroup;
-  final String? zone;
-  final String? province;
-  final String? district;
-  final String? subdistrict;
-  final String? village;
-  final String? rootNo;
-  final String? sequenceNo;
-  final String? prevPlotNo;
-  final String? caneType;
-  final String? caneVariety;
-  final String? ownership;
-  final String? terrain;
-  final String? hasLoss;
-  final String? lossRai;
-  final String? targetYield;
-  final String? note;
-  final List<String> photos;
-  final bool draft;
 }
 
 /// แป้นพิมพ์ไทยกดตำแหน่งเลขได้อักขระไทย/สัญลักษณ์ (เช่น / -) —

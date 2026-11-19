@@ -1,11 +1,12 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
-import 'package:brr/features/map/views/measurement_save_view.dart';
+import 'package:brr/features/map/models/measurement_result.dart';
 
 /// ViewModel หน้า "ข้อมูลฉบับร่าง" — แปลงที่กด "บันทึกข้อมูลลงเครื่อง
 /// (ฉบับร่าง)" ไว้ อยู่ใน SharedPreferences ไม่เคยยิงขึ้น backend
@@ -18,6 +19,11 @@ class DraftsViewModel extends ChangeNotifier {
 
   /// สร้างจาก session api — view ส่งแค่นี้ ไม่ต้องเห็น ParcelService
   DraftsViewModel.forApi(ApiClient? api) : this(ParcelService(api));
+
+  /// หยิบ ApiClient จาก Provider ที่ root — view ไม่ต้องถือ
+  /// type ของชั้น data ส่งต่อเอง (MVVM)
+  factory DraftsViewModel.forContext(BuildContext context) =>
+      DraftsViewModel.forApi(context.read<ApiClient>());
 
   final ParcelService _service;
 
@@ -41,8 +47,14 @@ class DraftsViewModel extends ChangeNotifier {
 
   /// รายการตามฟิลเตอร์ที่เลือก — ร่างเก่าไม่มี status = ยังไม่ยืนยัน
   List<Parcel> get filteredDrafts => switch (_statusFilter) {
-    'confirmed' => [for (final d in _drafts) if (d.status == 'confirmed') d],
-    'pending' => [for (final d in _drafts) if (d.status != 'confirmed') d],
+    'confirmed' => [
+      for (final d in _drafts)
+        if (d.status == 'confirmed') d,
+    ],
+    'pending' => [
+      for (final d in _drafts)
+        if (d.status != 'confirmed') d,
+    ],
     _ => _drafts,
   };
 
@@ -128,16 +140,12 @@ class DraftsViewModel extends ChangeNotifier {
             ? null
             : '${p.meta?['targetYield']}',
         note: _s(p, 'note'),
-        photos: [
-          for (final x in p.meta?['photos'] as List? ?? const []) '$x',
-        ],
+        photos: [for (final x in p.meta?['photos'] as List? ?? const []) '$x'],
         points: points,
         survey: _surveyOf(p),
       ),
       confirm: true,
-      photos: [
-        for (final x in p.meta?['photos'] as List? ?? const []) '$x',
-      ],
+      photos: [for (final x in p.meta?['photos'] as List? ?? const []) '$x'],
     );
   }
 

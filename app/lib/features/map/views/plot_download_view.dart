@@ -3,7 +3,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
-import 'package:brr/features/map/data/parcel_service.dart' show ParcelPage;
+import 'package:brr/features/map/models/parcel.dart' show ParcelPage;
 import 'package:brr/features/map/viewmodels/plot_download_viewmodel.dart';
 import 'package:brr/features/map/widgets/map_skeleton.dart';
 
@@ -40,9 +40,7 @@ class _DownloadBody extends StatelessWidget {
   ) async {
     final page = await action();
     if (page != null && context.mounted) {
-      Navigator.of(context).pop(
-        (page: page, selected: {...vm.selected}),
-      );
+      Navigator.of(context).pop((page: page, selected: {...vm.selected}));
     }
   }
 
@@ -58,23 +56,22 @@ class _DownloadBody extends StatelessWidget {
       appBar: AppBar(title: const Text('ดาวน์โหลดข้อมูลแปลง')),
       body: vm.downloading || vm.downloadError != null
           ? vm.downloadError != null
-              ? _errorView(
-                  'ดาวน์โหลดไม่สำเร็จ',
-                  () => _run(context, vm, vm.download),
-                  cacheFallback: () => _run(context, vm, vm.useCache),
-                )
-              // รับ bytes ครบแล้วกำลัง parse+เปิดแผนที่ — skeleton
-              // รูปแผนที่ดูเป็นธรรมชาติกว่าวงหมุนค้างที่ 100%
-              : vm.processing
-              ? const MapSkeleton(parcelBrowser: true)
-              : _progressView(vm)
+                ? _errorView(
+                    'ดาวน์โหลดไม่สำเร็จ',
+                    () => _run(context, vm, vm.download),
+                    cacheFallback: () => _run(context, vm, vm.useCache),
+                  )
+                // รับ bytes ครบแล้วกำลัง parse+เปิดแผนที่ — skeleton
+                // รูปแผนที่ดูเป็นธรรมชาติกว่าวงหมุนค้างที่ 100%
+                : vm.processing
+                ? const MapSkeleton(parcelBrowser: true)
+                : _progressView(vm)
           : years == null
           ? vm.error != null
-              ? _errorView('โหลดข้อมูลไม่สำเร็จ', vm.loadIndex)
-              : const Center(child: CircularProgressIndicator())
+                ? _errorView('โหลดข้อมูลไม่สำเร็จ', vm.loadIndex)
+                : const Center(child: CircularProgressIndicator())
           : _content(vm),
-      bottomNavigationBar:
-          years == null || vm.error != null || vm.downloading
+      bottomNavigationBar: years == null || vm.error != null || vm.downloading
           ? null
           : SafeArea(
               child: Padding(
@@ -118,15 +115,11 @@ class _DownloadBody extends StatelessWidget {
                       strokeWidth: 10,
                       strokeCap: StrokeCap.round,
                       backgroundColor: Colors.black12,
-                      valueColor: const AlwaysStoppedAnimation(
-                        AppColors.green,
-                      ),
+                      valueColor: const AlwaysStoppedAnimation(AppColors.green),
                     ),
                   ),
                   Text(
-                    progress == null
-                        ? '...'
-                        : '${(progress * 100).round()}%',
+                    progress == null ? '...' : '${(progress * 100).round()}%',
                     style: const TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.bold,
@@ -141,10 +134,7 @@ class _DownloadBody extends StatelessWidget {
               vm.processing
                   ? 'กำลังเตรียมข้อมูลแปลง...'
                   : 'กำลังดาวน์โหลดข้อมูลแปลง',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 6),
             Text(

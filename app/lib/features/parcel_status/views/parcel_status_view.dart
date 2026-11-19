@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
-import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/skeleton.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
@@ -14,15 +13,13 @@ import 'package:brr/features/parcel_status/viewmodels/parcel_status_viewmodel.da
 /// ชื่อ tab มาจาก backend (/meta/options → parcelStatuses) เสมอ;
 /// รายการแปลงจะต่อเมื่อมี endpoint (ดู ParcelStatusViewModel)
 class ParcelStatusView extends StatelessWidget {
-  const ParcelStatusView({super.key, this.api});
-
-  /// ApiClient เดียวกับ session — null = โหมดออฟไลน์ (แสดงว่าง)
-  final ApiClient? api;
+  const ParcelStatusView({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ParcelStatusViewModel.forApi(api),
+      // VM หยิบ ApiClient จาก Provider root เอง (forContext)
+      create: (ctx) => ParcelStatusViewModel.forContext(ctx),
       child: const _Body(),
     );
   }
@@ -173,9 +170,7 @@ class _BodyState extends State<_Body> {
         color: Colors.transparent,
         border: Border(
           bottom: BorderSide(
-            color: selected
-                ? const Color(0xFFFFD54F)
-                : Colors.transparent,
+            color: selected ? const Color(0xFFFFD54F) : Colors.transparent,
             width: 3,
           ),
         ),
@@ -267,10 +262,7 @@ class _RequestCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${r.kindLabel}${r.detail.isEmpty ? '' : ' — ${r.detail}'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -280,10 +272,7 @@ class _RequestCard extends StatelessWidget {
                         'ปีการผลิต ${r.productionYear}',
                       _thaiDate(r.createdAt),
                     ].where((s) => s.isNotEmpty).join('  •  '),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -315,9 +304,7 @@ class _TabSkeleton extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: selected
-                ? const Color(0xFFFFD54F)
-                : Colors.transparent,
+            color: selected ? const Color(0xFFFFD54F) : Colors.transparent,
             width: 3,
           ),
         ),

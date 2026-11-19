@@ -2,14 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
+import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/auth/views/auth_gate.dart';
 
 void main() {
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AuthViewModel(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        // ApiClient ตัวเดียวกับ session — ViewModel หยิบผ่าน
+        // context.read (forContext) แทนที่ view จะส่ง api ต่อเอง
+        Provider<ApiClient>(create: (ctx) => ctx.read<AuthViewModel>().api),
+      ],
       child: const MyApp(),
     ),
   );
@@ -40,9 +46,7 @@ class MyApp extends StatelessWidget {
         final scale = (mq.size.width / 390).clamp(0.85, 1.35).toDouble();
         return MediaQuery(
           data: mq.copyWith(
-            textScaler: TextScaler.linear(
-              scale * mq.textScaler.scale(1),
-            ),
+            textScaler: TextScaler.linear(scale * mq.textScaler.scale(1)),
           ),
           child: child!,
         );

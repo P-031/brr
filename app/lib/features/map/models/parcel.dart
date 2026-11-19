@@ -188,6 +188,10 @@ typedef OptionItem = ({String code, String name});
 /// required = เกณฑ์บังคับที่ต้องครบถึงผ่าน Brr Model
 typedef CriteriaItem = ({String name, bool required});
 
+/// หน้าของรายการแปลงจาก backend — items + flag ว่าข้อมูล
+/// ถูกตัด (limit) ไหม
+typedef ParcelPage = ({List<Parcel> items, bool truncated});
+
 /// Option lists for the measurement save form — fetched from the
 /// backend (`GET /meta/options`), never hardcoded in the app.
 class FormOptions {
@@ -255,25 +259,32 @@ class FormOptions {
       diseaseTypes: names('diseaseTypes'),
       pestTypes: names('pestTypes'),
       confirmStatuses: names('confirmStatuses'),
-      // รองรับทั้ง object {name, required} และ string ล้วน
+      // รองรับทั้ง object {name, required} และ string ล้วน;
+      // ตัด entry ที่ชื่อว่างออก กันแถวเปล่าใน UI
       projectCriteria: [
         for (final v in j['projectCriteria'] as List? ?? const [])
-          v is Map
-              ? (
-                  name: '${v['name'] ?? v['label'] ?? ''}',
-                  required: v['required'] == true,
-                )
-              : (name: '$v', required: false),
+          if (v is Map
+              ? '${v['name'] ?? v['label'] ?? ''}'.isNotEmpty
+              : '$v'.isNotEmpty)
+            v is Map
+                ? (
+                    name: '${v['name'] ?? v['label'] ?? ''}',
+                    required: v['required'] == true,
+                  )
+                : (name: '$v', required: false),
       ],
       // รองรับทั้ง object {code, name} และ string ล้วน (code = name)
       cutStatuses: [
         for (final v in j['cutStatuses'] as List? ?? const [])
-          v is Map
-              ? (
-                  code: '${v['code'] ?? v['name'] ?? ''}',
-                  name: '${v['name'] ?? v['label'] ?? v['code'] ?? ''}',
-                )
-              : (code: '$v', name: '$v'),
+          if (v is Map
+              ? '${v['name'] ?? v['label'] ?? v['code'] ?? ''}'.isNotEmpty
+              : '$v'.isNotEmpty)
+            v is Map
+                ? (
+                    code: '${v['code'] ?? v['name'] ?? ''}',
+                    name: '${v['name'] ?? v['label'] ?? v['code'] ?? ''}',
+                  )
+                : (code: '$v', name: '$v'),
       ],
     );
   }
