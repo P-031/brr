@@ -495,6 +495,7 @@ class ParcelService {
   /// (ใช้หน้า "แก้ไข รูท & ลำดับ" เป็นหลัก)
   Future<Map<String, dynamic>?> updateParcelMeta(
     String id, {
+    required int version,
     String? rootNo,
     String? sequenceNo,
     String? caneType,
@@ -514,6 +515,7 @@ class ParcelService {
   }) async {
     if (!ApiConfig.enabled || _api == null) return null;
     final res = await _api.patchJson(ApiEndpoints.plot(id), {
+      'version': version,
       'rootNo': ?rootNo,
       'sequenceNo': ?sequenceNo,
       'caneType': ?caneType,
