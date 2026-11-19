@@ -279,7 +279,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                 children: [
                   const Text(
                     'เลือกวันที่',
-                    style: TextStyle(fontSize: 14, color: Colors.black45),
+                    style: TextStyle(fontSize: 14, color: Colors.black),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -293,7 +293,6 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                           style: const TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w600,
-                            color: Colors.black,
                           ),
                         ),
                       ),
