@@ -15,7 +15,7 @@ function issuerAliases(value: string): string[] {
   const match = value.match(/^(https?:\/\/)[^/:]+(:\d+)?(\/.*)$/);
   if (!match) return [value];
   const [, scheme, port = "", path] = match;
-  return [...new Set(["127.0.0.1", "localhost", "10.0.2.2"].map((host) => `${scheme}${host}${port}${path}`))];
+  return [...new Set(["127.0.0.1", "localhost", "10.0.2.2", "192.168.0.199"].map((host) => `${scheme}${host}${port}${path}`))];
 }
 
 export const env = {

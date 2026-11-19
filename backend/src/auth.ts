@@ -55,11 +55,24 @@ export async function authenticate(req: Request): Promise<void> {
   const username = textClaim(payload, "preferred_username") ?? payload.sub;
   const displayName = textClaim(payload, "name") ?? username;
 
-  const user = await prisma.user.upsert({
-    where: { keycloakId: payload.sub },
-    create: { keycloakId: payload.sub, username, role, displayName },
-    update: { username, role, displayName },
-  });
+  const existingByKeycloak = await prisma.user.findUnique({ where: { keycloakId: payload.sub } });
+  const user = existingByKeycloak
+    ? await prisma.user.update({
+        where: { id: existingByKeycloak.id },
+        data: { username, role, displayName },
+      })
+    : await prisma.user
+        .create({ data: { keycloakId: payload.sub, username, role, displayName } })
+        .catch(async (error: unknown) => {
+          // Keycloak สร้างผู้ใช้ใหม่หลังรีสตาร์ทคอนเทนเนอร์ แต่ username เดิมยังอยู่ในฐานข้อมูล
+          if (!error || typeof error !== "object" || !("code" in error) || error.code !== "P2002") throw error;
+          const byUsername = await prisma.user.findUnique({ where: { username } });
+          if (!byUsername) throw error;
+          return prisma.user.update({
+            where: { id: byUsername.id },
+            data: { keycloakId: payload.sub, role, displayName },
+          });
+        });
 
   req.user = {
     id: user.id,

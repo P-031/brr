@@ -21,6 +21,8 @@ enum TaskKind {
   FERTILIZE
   SPRAY
   HARVEST
+  PREPARE
+  CARE
 }
 
 enum RecordKind {

@@ -11,6 +11,8 @@ const taskName = {
   FERTILIZE: "ใส่ปุ๋ย",
   SPRAY: "พ่นยา",
   HARVEST: "ตัดอ้อย",
+  PREPARE: "เตรียมแปลง",
+  CARE: "ดูแล",
 } as const;
 
 export type TaskName = (typeof taskName)[keyof typeof taskName];
