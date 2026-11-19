@@ -793,8 +793,8 @@ class _MapBodyState extends State<_MapBody> {
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const Icon(
-                                  Icons.calendar_month,
-                                  size: 18,
+                                  Icons.calendar_today,
+                                  size: 22,
                                   color: AppColors.green,
                                 ),
                                 const SizedBox(width: 8),

@@ -223,7 +223,7 @@ class _DownloadBody extends StatelessWidget {
             onChanged: (on) => vm.toggleYear(e.key, on ?? false),
             title: Text(e.key ?? _noYear),
             subtitle: Text('${e.value} แปลง'),
-            secondary: const Icon(Icons.calendar_month),
+            secondary: const Icon(Icons.calendar_today),
           ),
       ],
     );

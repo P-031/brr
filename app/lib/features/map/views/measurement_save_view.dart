@@ -771,7 +771,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               _tf(
                 _yearCtrl,
                 'ปีการผลิต',
-                Icons.calendar_month,
+                Icons.calendar_today,
                 required: true,
                 keyboard: TextInputType.number,
                 formatters: const [_DigitFormatter()],
