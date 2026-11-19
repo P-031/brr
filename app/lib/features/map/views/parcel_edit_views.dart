@@ -390,7 +390,7 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
                 ),
               ),
             ),
-            const Icon(Iconsax.arrow_down, color: Colors.black54),
+            const Icon(Iconsax.arrow_circle_down, color: Colors.black54),
           ],
         ),
       ),

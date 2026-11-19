@@ -169,7 +169,7 @@ class _LoginViewState extends State<LoginView> {
                             ),
                           ),
                           Icon(
-                            Iconsax.arrow_down,
+                            Iconsax.arrow_circle_down,
                             color: Colors.black45,
                           ),
                         ],
