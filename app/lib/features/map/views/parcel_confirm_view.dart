@@ -170,29 +170,28 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
     }
   }
 
-  /// แถว label + dropdown กรอบเทา — เลือกแล้วขอบเขียวตามสไตล์แอป
+  /// แถว label + dropdown กรอบเทา — label ชิดขวา / กรอบเขียว
+  /// เมื่อเลือกแล้ว แบบเดียวกับแถวเลือกในหน้าบันทึกกิจกรรม
   Widget _optRow(
     String label,
     String? value,
     String hint,
     VoidCallback onTap,
-  ) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-    ),
+  ) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(
       children: [
         Expanded(
+          flex: 5,
           child: Text(
-            label,
+            '$label :',
+            textAlign: TextAlign.end,
             style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
+          flex: 6,
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
             onTap: onTap,
@@ -222,7 +221,7 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
                   ),
                   const Icon(
                     Iconsax.arrow_circle_down,
-                    size: 24,
+                    size: 26,
                     color: Colors.black87,
                   ),
                 ],
@@ -234,27 +233,27 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
     ),
   );
 
-  /// แถวข้อมูลในการ์ดสรุปน้ำเงิน — label ซ้าย / ค่าหนาขวา
+  /// แถวข้อมูลในการ์ดสรุปเทา — "label : value" ชุดเดียวกับ
+  /// การ์ดสรุปแปลงในหน้าคำขอ/บันทึกกิจกรรม
   Widget _infoRow(String label, String? value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(
       children: [
-        Expanded(
-          child: Text(
-            '$label :',
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.white70),
+        Text(
+          '$label : ',
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
           ),
         ),
-        const SizedBox(width: 16),
         Expanded(
           child: Text(
-            value ?? '—',
-            textAlign: TextAlign.end,
+            value == null || value.isEmpty ? '—' : value,
             style: const TextStyle(
-              fontSize: 17,
+              fontSize: 16.5,
               fontWeight: FontWeight.bold,
-              color: Colors.white,
+              color: Colors.black87,
             ),
           ),
         ),
@@ -284,22 +283,22 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
                 children: [
-                  // การ์ดสรุปแปลง — navy ตาม ref
+                  // การ์ดสรุปแปลง — เทาชุดเดียวกับหน้าคำขอ/บันทึกกิจกรรม
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 16,
+                      horizontal: 16,
+                      vertical: 14,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.navy,
+                      color: Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
                       children: [
                         _infoRow(
                           'ปีการผลิต',
-                          'ปีการผลิต ${meta['productionYear'] ?? p.productionYear ?? ''}',
+                          '${meta['productionYear'] ?? p.productionYear ?? '—'}',
                         ),
                         _infoRow('หมายเลขแปลง', p.plotCode),
                         _infoRow('พื้นที่สำรวจ(ไร่)', rai.toStringAsFixed(2)),
@@ -308,20 +307,32 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  _optRow(
-                    'ปีการผลิตเป้าหมาย',
-                    _targetYear,
-                    'เลือก',
-                    () => _pickYear(years),
-                  ),
-                  const SizedBox(height: 10),
-                  _optRow(
-                    'สถานะแปลง',
-                    _status,
-                    'เลือก',
-                    () => opts == null
-                        ? _toast('กำลังโหลดตัวเลือก')
-                        : _pickStatus(opts),
+                  // ปีเป้าหมาย + สถานะแปลง — การ์ดขาวรวมแถวเลือก
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        _optRow(
+                          'ปีการผลิตเป้าหมาย',
+                          _targetYear,
+                          'เลือก',
+                          () => _pickYear(years),
+                        ),
+                        _optRow(
+                          'สถานะแปลง',
+                          _status,
+                          'เลือก',
+                          () => opts == null
+                              ? _toast('กำลังโหลดตัวเลือก')
+                              : _pickStatus(opts),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 10),
                   // ข้อเสนอแนะ
