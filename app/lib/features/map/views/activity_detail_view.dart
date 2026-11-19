@@ -212,6 +212,9 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
               hintStyle: TextStyle(fontSize: 18),
               isDense: true,
               border: UnderlineInputBorder(),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: AppColors.gold, width: 2),
+              ),
             ),
           ),
         ),
@@ -858,6 +861,12 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                               hintText: '0.0',
                               isDense: true,
                               border: UnderlineInputBorder(),
+                              focusedBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(
+                                  color: AppColors.gold,
+                                  width: 2,
+                                ),
+                              ),
                             ),
                             onChanged: (_) => setState(() {}),
                           ),
@@ -1492,6 +1501,12 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
                       decoration: const InputDecoration(
                         isDense: true,
                         border: UnderlineInputBorder(),
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: AppColors.gold,
+                            width: 2,
+                          ),
+                        ),
                       ),
                     ),
                   ),
