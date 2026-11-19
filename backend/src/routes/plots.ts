@@ -10,7 +10,6 @@ import { blockingOverlaps, overlapError } from "../overlap";
 import { farmerIdsForList, ownedPlot, requireFarmer, summarySelect, toDetail, visiblePlot } from "../plotAccess";
 import { prisma } from "../prisma";
 import { areaFields, plotSummary, surveyJson, taskJson, taskKindByName, yieldJson } from "../serialize";
-import { randomUUID } from "node:crypto";
 import { normalizeRing, polygonAreaSqm, ringCenter, type LatLng } from "../area";
 import { readBoundaries } from "../boundary";
 import { firstCrossingEdge, measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
@@ -69,7 +68,7 @@ const formFields = {
 
 const createPlotBody = z
 .object({
-  id: clientId.optional(),
+  id: clientId,
   name: z.string().trim().min(1).max(120),
   variety: z.string().trim().max(120).default(""),
   season: seasonText.optional(),
@@ -444,16 +443,14 @@ fieldRouter.post(
       throw new HttpError(403, "บันทึกแปลงได้เฉพาะตัวคุณเอง");
     }
 
-    const plotId = body.id ?? randomUUID();
-    if (body.id) {
-      const existing = await prisma.plot.findUnique({ where: { id: plotId }, select: { farmerId: true } });
-      if (existing) {
-        if (existing.farmerId !== farmerId) throw new HttpError(409, "รหัสแปลงนี้ถูกใช้แล้ว");
-        res.json(await toDetail(await visiblePlot(user, plotId)));
-        return;
-      }
-      await refuseDeleted("PLOT", plotId);
+    const plotId = body.id;
+    const existing = await prisma.plot.findUnique({ where: { id: plotId }, select: { farmerId: true } });
+    if (existing) {
+      if (existing.farmerId !== farmerId) throw new HttpError(409, "รหัสแปลงนี้ถูกใช้แล้ว");
+      res.json(await toDetail(await visiblePlot(user, plotId)));
+      return;
     }
+    await refuseDeleted("PLOT", plotId);
 
     const measured = body.survey ? measureSurvey(body.survey, new Date()) : measurePoints(body.points!);
     const surveyedAt = body.survey?.finishedAt ?? new Date();

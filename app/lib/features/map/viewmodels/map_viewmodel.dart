@@ -67,6 +67,7 @@ class MapViewModel extends ChangeNotifier {
   final List<LatLng> _draft = [];
   final List<WalkCorner> _corners = [];
   DateTime? _walkStartedAt;
+  String? _plotClientId;
 
   // walk-measure state
   StreamSubscription<Position>? _posSub;
@@ -300,6 +301,7 @@ class MapViewModel extends ChangeNotifier {
     if (!canDrawManually) return;
     _drawing = true;
     _draft.clear();
+    _plotClientId = null;
     _dropWalkSurvey();
     notifyListeners();
     // subscribe position stream ด้วย — แผง GPS ในแถบล่างต้องมี
@@ -341,6 +343,7 @@ class MapViewModel extends ChangeNotifier {
     _badFixStreak = 0;
     _draft.clear();
     _corners.clear();
+    _plotClientId = null;
     _walkStartedAt = DateTime.now();
     notifyListeners();
     _posSub = _location
@@ -502,6 +505,7 @@ class MapViewModel extends ChangeNotifier {
   void clearDraft() {
     if (_draft.isEmpty && _corners.isEmpty && _walkStartedAt == null) return;
     _draft.clear();
+    _plotClientId = null;
     _dropWalkSurvey();
     notifyListeners();
   }
@@ -521,6 +525,7 @@ class MapViewModel extends ChangeNotifier {
     _draft.clear();
     _corners.clear();
     _walkStartedAt = null;
+    _plotClientId = null;
     notifyListeners();
   }
 
@@ -557,7 +562,9 @@ class MapViewModel extends ChangeNotifier {
     _saving = true;
     notifyListeners();
     try {
+      _plotClientId ??= newPlotId();
       final p = await _service.createParcel(
+        id: _plotClientId!,
         name: name,
         productionYear: productionYear,
         officerName: officerName,

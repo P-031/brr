@@ -64,7 +64,9 @@ export async function authenticate(req: Request): Promise<void> {
     : await prisma.user
         .create({ data: { keycloakId: payload.sub, username, role, displayName } })
         .catch(async (error: unknown) => {
-          // Keycloak สร้างผู้ใช้ใหม่หลังรีสตาร์ทคอนเทนเนอร์ แต่ username เดิมยังอยู่ในฐานข้อมูล
+          // ผูกบัญชีเดิมจากชื่อผู้ใช้ได้เฉพาะเมื่อตั้ง ALLOW_USERNAME_REBIND=1
+          // ใช้ตอน Keycloak ถูกล้างแล้วต้องการคืนแปลงเดิม
+          if (process.env.ALLOW_USERNAME_REBIND !== "1") throw error;
           if (!error || typeof error !== "object" || !("code" in error) || error.code !== "P2002") throw error;
           const byUsername = await prisma.user.findUnique({ where: { username } });
           if (!byUsername) throw error;
