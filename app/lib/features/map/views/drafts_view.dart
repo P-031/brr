@@ -370,7 +370,7 @@ class DraftsView extends StatelessWidget {
                       width: double.infinity,
                       child: FilledButton.icon(
                         onPressed: vm.loadMore,
-                        icon: const Icon(Iconsax.arrow_down, size: 22),
+                        icon: const Icon(Iconsax.arrow_circle_down, size: 22),
                         label: const Text(
                           'โหลดเพิ่ม',
                           style: TextStyle(

@@ -804,8 +804,8 @@ class _MapBodyState extends State<_MapBody> {
                                 ),
                                 const SizedBox(width: 4),
                                 const Icon(
-                                  Iconsax.arrow_down_1,
-                                  size: 18,
+                                  Iconsax.arrow_circle_down,
+                                  size: 22,
                                   color: AppColors.green,
                                 ),
                               ],

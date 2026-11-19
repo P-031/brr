@@ -276,7 +276,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                     TextButton.icon(
                       onPressed: _pickMonthYear,
                       icon: const Icon(
-                        Iconsax.arrow_down_1,
+                        Iconsax.arrow_circle_down,
                         size: 20,
                         color: Colors.black87,
                       ),
