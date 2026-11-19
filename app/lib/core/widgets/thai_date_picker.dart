@@ -291,9 +291,9 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                           '${_thaiMonthsShort[_selected.month - 1]} '
                           '${_selected.year + 543}',
                           style: const TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.green,
+                            fontSize: 26,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black,
                           ),
                         ),
                       ),
