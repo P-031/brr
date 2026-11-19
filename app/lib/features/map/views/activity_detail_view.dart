@@ -961,7 +961,7 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
         borderRadius: BorderRadius.circular(10),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
           decoration: BoxDecoration(
             color: Colors.grey.shade200,
             borderRadius: BorderRadius.circular(10),
@@ -975,14 +975,14 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 17,
                     color: value == null ? Colors.black45 : Colors.black87,
                   ),
                 ),
               ),
               const Icon(
                 Iconsax.arrow_circle_down,
-                size: 24,
+                size: 28,
                 color: Colors.black87,
               ),
             ],
@@ -1005,7 +1005,7 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
 
   Widget _label(String t) => Text(
     t,
-    style: const TextStyle(fontSize: 15, color: Colors.black87),
+    style: const TextStyle(fontSize: 17, color: Colors.black87),
     textAlign: TextAlign.end,
   );
 
@@ -1013,9 +1013,12 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 24),
+      titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
+      contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
       title: Text(
         'เพิ่มปุ๋ยครั้งที่ ${widget.roundNo}',
-        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -1047,7 +1050,7 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
                       decimal: true,
                     ),
                     inputFormatters: const [DigitFormatter(decimal: true)],
-                    style: const TextStyle(fontSize: 16),
+                    style: const TextStyle(fontSize: 18),
                     decoration: const InputDecoration(
                       isDense: true,
                       border: UnderlineInputBorder(),
@@ -1072,11 +1075,11 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
               const SizedBox(height: 8),
               TextField(
                 controller: _customCtrl,
-                style: const TextStyle(fontSize: 15),
+                style: const TextStyle(fontSize: 17),
                 decoration: InputDecoration(
                   hintText: 'ระบุสูตรปุ๋ย',
                   hintStyle: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 17,
                     color: Colors.black38,
                   ),
                   isDense: true,
@@ -1093,7 +1096,7 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
             const SizedBox(height: 14),
             const Text(
               'สูตรปุ๋ย NPK',
-              style: TextStyle(fontSize: 15, color: Colors.black87),
+              style: TextStyle(fontSize: 17, color: Colors.black87),
             ),
             const SizedBox(height: 8),
             Row(
@@ -1113,7 +1116,7 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text(
             'ยกเลิก',
-            style: TextStyle(fontSize: 16, color: Colors.black54),
+            style: TextStyle(fontSize: 17, color: Colors.black54),
           ),
         ),
         TextButton(
@@ -1121,7 +1124,7 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
           child: const Text(
             'บันทึก',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 17,
               fontWeight: FontWeight.bold,
               color: AppColors.green,
             ),
