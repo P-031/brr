@@ -58,7 +58,17 @@ class SatelliteThumb extends StatelessWidget {
     if (_cache.length >= _memCacheLimit) {
       _cache.remove(_cache.keys.first);
     }
-    return _cache[memKey] = _load(points, key, w, h);
+    final fut = _load(points, key, w, h);
+    _cache[memKey] = fut;
+    // future ที่ fail (เน็ตหลุดกลางดึง tile) ต้องออกจาก cache —
+    // ไม่งั้น error ค้างถาวรใน map ทำให้ widget ไม่เคย retry
+    fut.then<void>(
+      (_) {},
+      onError: (_) {
+        if (identical(_cache[memKey], fut)) _cache.remove(memKey);
+      },
+    );
+    return fut;
   }
 
   @override

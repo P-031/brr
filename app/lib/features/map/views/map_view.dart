@@ -132,7 +132,12 @@ class _MapBodyState extends State<_MapBody> {
     setState(() => _formOpen = true);
     final changed = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => DraftsView(vm: vm.createDraftsVm()),
+        builder: (_) => DraftsView(
+          vm: vm.createDraftsVm(),
+          // officer แก้ร่างต้องเห็นช่องเลือกชาวไร่เหมือนทาง home —
+          // ไม่ส่ง flag จะซ่อนช่องแล้วแปลงตกเป็นของ officer เอง
+          isOfficer: vm.canDrawManually,
+        ),
       ),
     );
     if (!mounted) return;
@@ -684,6 +689,54 @@ class _MapBodyState extends State<_MapBody> {
                           minHeight: 3,
                           color: AppColors.green,
                           backgroundColor: Colors.transparent,
+                        ),
+                      ),
+                    // โหลดแปลงของกรอบจอไม่สำเร็จ — เดิมเงียบทำให้เหมือน
+                    // ไม่มีแปลง; แจ้งเตือน + แตะเพื่อลองใหม่
+                    if (vm.viewportError != null && !vm.loadingViewport)
+                      Positioned(
+                        top: MediaQuery.of(context).padding.top + 68,
+                        left: 16,
+                        right: 16,
+                        child: GestureDetector(
+                          onTap: vm.retryViewport,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFF3E0),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFFE65100),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Iconsax.warning_2,
+                                  size: 18,
+                                  color: Color(0xFFE65100),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'โหลดแปลงบริเวณนี้ไม่สำเร็จ — แตะเพื่อลองใหม่',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFFE65100),
+                                    ),
+                                  ),
+                                ),
+                                const Icon(
+                                  Iconsax.refresh,
+                                  size: 18,
+                                  color: Color(0xFFE65100),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                     // Back button floats over the map (no AppBar —

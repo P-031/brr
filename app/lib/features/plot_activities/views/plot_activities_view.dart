@@ -333,10 +333,15 @@ class _BodyState extends State<_Body> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                _filterMulti<String>(
+                // null = "ไม่มีปีการผลิต" — backend รองรับ nullYear
+                // ทำให้หาแปลงที่ยังไม่ระบุปีได้ (เดิมเลือกไม่ได้เลย)
+                _filterMulti<String?>(
                   label: 'ปีการผลิต',
                   selected: years,
-                  options: {for (final y in vm.yearOptions) y: y},
+                  options: {
+                    null: 'ไม่มีปีการผลิต',
+                    for (final y in vm.yearOptions) y: y,
+                  },
                   onChanged: (s) => setS(() {}),
                 ),
                 const SizedBox(height: 12),

@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/image_source_sheet.dart';
 
 /// One row in the searchable picker — backend will supply real
 /// `{code, name}` pairs later.
@@ -129,9 +130,24 @@ class _DigitFormatter extends TextInputFormatter {
       }
     }
     final text = sb.toString();
+    // ข้อความผ่าน filter แล้วเหมือนเดิม (เช่น พิมพ์เลขอารบิกกลาง
+    // ประโยค) → คืน newValue เลย cursor ไม่ดีดไปท้ายทุกครั้ง
+    if (text == newValue.text) return newValue;
+    // มีตัวที่ถูกตัด/แปลง — วาง cursor หลังตัวสุดท้ายที่ผ่าน filter
+    // ก่อนจุด cursor เดิม (run substring เดิมผ่าน formatter เดียวกัน)
+    final cursorEnd = newValue.selection.end.clamp(
+      0,
+      newValue.text.length,
+    );
+    final keptLen = formatEditUpdate(
+      oldValue,
+      TextEditingValue(text: newValue.text.substring(0, cursorEnd)),
+    ).text.length;
     return TextEditingValue(
       text: text,
-      selection: TextSelection.collapsed(offset: text.length),
+      selection: TextSelection.collapsed(
+        offset: keptLen.clamp(0, text.length),
+      ),
     );
   }
 }
@@ -205,6 +221,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
   @override
   void initState() {
     super.initState();
+    _recoverLostPhoto();
     // prefill จากร่างที่บันทึกไว้ — meta เก็บ payload ฟอร์มครบ
     final p = widget.initial;
     if (p == null) return;
@@ -278,25 +295,40 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
   ];
 
   void _save({bool draft = false}) {
-    setState(() => _showErrors = true);
-    final formOk = _formKey.currentState!.validate();
-    final missing = _missing;
-    if (!formOk || missing.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'กรุณากรอกข้อมูลให้ครบทุกช่อง (ยกเว้นข้อเสนอแนะ)',
+    // ฉบับร่างเก็บลงเครื่อง — กรอกเท่าที่มีได้ (เช่น วัดเสร็จแล้ว
+    // อยากกลับมากรอกต่อภายหลัง) บังคับเฉพาะตอนส่งขึ้นระบบจริง
+    // กรอบแดงเตือนก็แสดงเฉพาะเส้นทางส่งจริงเช่นกัน
+    if (!draft) {
+      setState(() => _showErrors = true);
+      final formOk = _formKey.currentState!.validate();
+      final missing = _missing;
+      if (!formOk || missing.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'กรุณากรอกข้อมูลให้ครบทุกช่อง (ยกเว้นข้อเสนอแนะ)',
+            ),
           ),
-        ),
-      );
-      return;
+        );
+        return;
+      }
     }
-    final year = _yearCtrl.text.trim();
+    final yearText = _yearCtrl.text.trim();
+    var name = _nameCtrl.text.trim();
+    // ร่างที่ยังไม่ตั้งชื่อ — ตั้งให้อัตโนมัติจากเวลาบันทึก
+    // ไม่งั้นการ์ดในหน้าฉบับร่างจะว่างเปล่าจำไม่ได้
+    if (name.isEmpty && draft) {
+      final t = DateTime.now();
+      name =
+          'แปลงร่าง ${t.day}/${t.month} ${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    }
     Navigator.pop(
       context,
       MeasurementResult(
-        name: _nameCtrl.text.trim(),
-        productionYear: year,
+        name: name,
+        // '' ต้องไม่หลุดเป็น productionYear — backend/meta นับ
+        // เป็นปีที่ไม่ระบุ ไม่ใช่สตริงว่าง
+        productionYear: yearText.isEmpty ? null : yearText,
         officerName: _officer == 'ไม่ระบุ' ? null : _officer,
         project: _project,
         farmerName: _farmer == 'ไม่ระบุ' ? null : _farmer,
@@ -333,11 +365,34 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
 
   Future<void> _pickPhoto() async {
     if (_photos.length >= 3) return;
-    final x = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1600,
-    );
-    if (x != null) setState(() => _photos.add(x));
+    final source = await showImageSourceSheet(context);
+    if (source == null) return;
+    // pickImage throw ได้บางเครื่อง (already_active / camera busy)
+    // กัน unhandled error แล้วแจ้งผู้ใช้แทนที่จะเงียบ
+    try {
+      final x = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+      );
+      if (x != null) setState(() => _photos.add(x));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('เปิดกล้องไม่สำเร็จ')));
+    }
+  }
+
+  /// Android ฆ่าแอประหว่างเปิดกล้อง (เครื่อง RAM น้อย) — image_picker
+  /// เก็บรูปที่ถ่ายไว้ใน pending state ดึงกลับมาตอนเปิดหน้าอีกครั้ง
+  Future<void> _recoverLostPhoto() async {
+    try {
+      final lost = await ImagePicker().retrieveLostData();
+      final file = lost.file;
+      if (file != null && mounted && _photos.length < 3) {
+        setState(() => _photos.add(file));
+      }
+    } catch (_) {}
   }
 
   String? _none(String? v) => (v == null || v == 'ไม่ระบุ') ? null : v;
@@ -1070,7 +1125,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                         ),
                         icon: const Icon(Iconsax.camera, size: 24),
                         label: const Text(
-                          'ถ่ายภาพ',
+                          'เพิ่มรูปภาพ',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -1191,7 +1246,9 @@ class _PickerSheetState extends State<_PickerSheet> {
                   }
                   final items = (snap.data ?? const <PickerItem>[])
                       .where(
-                        (i) => i.name.contains(_q) || i.code.contains(_q),
+                        (i) =>
+                            i.name.toLowerCase().contains(_q.toLowerCase()) ||
+                            i.code.toLowerCase().contains(_q.toLowerCase()),
                       )
                       .toList();
                   if (items.isEmpty) {
@@ -1327,7 +1384,9 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
                     }
                     final items = (snap.data ?? const <PickerItem>[])
                         .where(
-                          (i) => i.name.contains(_q) || i.code.contains(_q),
+                          (i) =>
+                            i.name.toLowerCase().contains(_q.toLowerCase()) ||
+                            i.code.toLowerCase().contains(_q.toLowerCase()),
                         )
                         .toList();
                     if (items.isEmpty) {

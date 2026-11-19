@@ -22,7 +22,9 @@ Future<int?> showOptionPopup(
       builder: (ctx, setDialogState) {
         final filtered = <int>[
         for (var i = 0; i < labels.length; i++)
-          if (query.isEmpty || labels[i].contains(query)) i,
+          if (query.isEmpty ||
+              labels[i].toLowerCase().contains(query.toLowerCase()))
+            i,
       ];
       return Dialog(
         backgroundColor: Colors.white,

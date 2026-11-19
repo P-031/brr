@@ -83,5 +83,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>ใช้กล้องถ่ายรูปประกอบการวัดแปลงและกิจกรรมแปลง</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>เลือกรูปจากแกลเลอรีเพื่อแนบกับแปลงและกิจกรรมแปลง</string>
 </dict>
 </plist>

@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 
 /// แก้ไขโปรไฟล์ — avatar, email, phone. Values are collected and
@@ -39,40 +40,21 @@ class _EditProfileViewState extends State<EditProfileView> {
   }
 
   Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Iconsax.camera, color: AppColors.green),
-              title: const Text('ถ่ายรูป'),
-              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(
-                Iconsax.gallery,
-                color: AppColors.green,
-              ),
-              title: const Text('เลือกจากแกลเลอรี'),
-              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+    final source = await showImageSourceSheet(context);
     if (source == null) return;
-    final x = await ImagePicker().pickImage(
-      source: source,
-      maxWidth: 1024,
-    );
-    if (x != null) setState(() => _photo = x);
+    // pickImage throw ได้ (already_active / camera busy บนบางเครื่อง)
+    try {
+      final x = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1024,
+      );
+      if (x != null) setState(() => _photo = x);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('เลือกรูปไม่สำเร็จ')));
+    }
   }
 
   Future<void> _save() async {
@@ -82,9 +64,9 @@ class _EditProfileViewState extends State<EditProfileView> {
       photoPath: _photo?.path,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('บันทึกโปรไฟล์แล้ว')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('บันทึกโปรไฟล์ในเครื่องแล้ว')),
+    );
     Navigator.pop(context);
   }
 

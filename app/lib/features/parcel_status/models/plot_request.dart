@@ -68,8 +68,8 @@ class PlotRequestEntry {
 
   factory PlotRequestEntry.fromJson(Map<String, dynamic> j) =>
       PlotRequestEntry(
-        id: '${j['id']}',
-        plotId: '${j['plotId']}',
+        id: '${j['id'] ?? ''}',
+        plotId: '${j['plotId'] ?? ''}',
         plotName: '${j['plotName'] ?? ''}',
         productionYear: j['productionYear'] as String?,
         requester: j['requester'] as String?,
@@ -81,7 +81,7 @@ class PlotRequestEntry {
         createdAt: DateTime.tryParse('${j['createdAt']}'),
         points: [
           for (final c in j['outline'] as List? ?? const [])
-            if (c is Map<String, dynamic>)
+            if (c is Map && c['latitude'] is num && c['longitude'] is num)
               LatLng(
                 (c['latitude'] as num).toDouble(),
                 (c['longitude'] as num).toDouble(),

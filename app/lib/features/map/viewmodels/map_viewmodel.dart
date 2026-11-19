@@ -62,6 +62,13 @@ class MapViewModel extends ChangeNotifier {
   Set<String?>? _yearAllowlist;
   Set<String?>? get yearAllowlist => _yearAllowlist;
 
+  /// แปลงที่เพิ่งบันทึกขึ้น server จาก session นี้ — bypass year
+  /// filter เสมอ ไม่งั้นเดินวัดปี 2570 ขณะดาวน์โหลดแค่ปี 2567 แล้ว
+  /// polygon ที่เพิ่งวาดจะหายทันทีทั้งที่บันทึกสำเร็จ (viewport
+  /// refetch ก็ไม่ได้ id นี้กลับมาเพราะ server กรองปีให้)
+  final Set<String> _freshIds = {};
+  final Map<String, Parcel> _fresh = {};
+
   // drawing state
   bool _drawing = false;
   final List<LatLng> _draft = [];
@@ -105,9 +112,11 @@ class MapViewModel extends ChangeNotifier {
     for (final p in _parcels)
       if (p.isDraft
           ? p.status != 'confirmed'
-          : (yearAllowlist == null ||
-                  yearAllowlist!.contains(p.productionYear)) &&
-              (_yearFilter == null || p.productionYear == _yearFilter))
+          : _freshIds.contains(p.id) ||
+              ((yearAllowlist == null ||
+                      yearAllowlist!.contains(p.productionYear)) &&
+                  (_yearFilter == null ||
+                      p.productionYear == _yearFilter)))
         p,
   ];
 
@@ -172,12 +181,24 @@ class MapViewModel extends ChangeNotifier {
   /// drafts, drops backend items that scrolled out of view.
   /// ข้ามเมื่อข้อมูลครอบคลุมกรอบใหม่ครบแล้ว (download เต็มหรือ
   /// fetch รอบก่อนไม่ truncated) — เลื่อนในบริเวณเดิมไม่ยิง API.
+  /// error ของ viewport fetch ล่าสุด — map แสดงแถบเตือน + ปุ่ม retry
+  /// (เดิม swallow เงียบ ผู้ใช้เข้าใจว่าบริเวณนั้นไม่มีแปลง)
+  String? get viewportError => _viewportError;
+  String? _viewportError;
+
+  /// โหลดกรอบปัจจุบันใหม่โดยข้าม coverage cache — ใช้จากปุ่ม retry
+  void retryViewport() {
+    final b = _viewBox;
+    if (b != null) loadViewport(b.w, b.s, b.e, b.n, force: true);
+  }
+
   Future<void> loadViewport(
     double west,
     double south,
     double east,
-    double north,
-  ) async {
+    double north, {
+    bool force = false,
+  }) async {
     final b = (w: west, s: south, e: east, n: north);
     // อัพเดทกรอบมองเสมอ — renderableParcels คัด polygon ตามกรอบนี้
     final moved = _viewBox != b;
@@ -185,7 +206,8 @@ class MapViewModel extends ChangeNotifier {
     if (moved) _invalidateRender();
     final cov = _coverage;
     if (_loadingViewport ||
-        (cov != null &&
+        (!force &&
+            cov != null &&
             b.w >= cov.w &&
             b.s >= cov.s &&
             b.e <= cov.e &&
@@ -210,12 +232,24 @@ class MapViewModel extends ChangeNotifier {
               yearAllowlist == null ||
               yearAllowlist!.contains(p.productionYear))
             p,
+        // แปลงที่เพิ่งสร้างใน session นี้ไม่กลับมาใน fetch ถ้าปีไม่
+        // อยู่ใน allowlist — ผนวกกลับเองให้คงอยู่บนแผนที่
+        for (final p in _fresh.values)
+          if (!page.items.any((s) => s.id == p.id)) p,
       ];
       _invalidateRender();
+      // server ส่งแปลง fresh กลับมาแล้ว → ถือตัว server เป็น authoritative
+      for (final p in page.items) {
+        _fresh.remove(p.id);
+        _freshIds.remove(p.id);
+      }
       // จำ coverage เฉพาะ fetch ที่ครบ — truncated มีหลุมในกรอบนี้
       // ห้ามข้าม fetch รอบต่อไปไม่งั้นแปลงหายรอบๆหมุด
       _coverage = page.truncated ? null : b;
-    } catch (_) {}
+      _viewportError = null;
+    } catch (e) {
+      _viewportError = '$e'.replaceFirst('Exception: ', '');
+    }
     _loadingViewport = false;
     notifyListeners();
   }
@@ -252,6 +286,8 @@ class MapViewModel extends ChangeNotifier {
   /// แล้วตั้ง coverage/allowlist ให้ viewport fetch กรองตามปีนั้นต่อ
   void applyDownload(ParcelPage page, Set<String?> years) {
     _yearAllowlist = years;
+    _freshIds.clear();
+    _fresh.clear();
     _parcels = [
       for (final p in page.items)
         if (p.isDraft || years.contains(p.productionYear)) p,
@@ -549,7 +585,9 @@ class MapViewModel extends ChangeNotifier {
     bool draft = false,
   }) async {
     if (_draft.length < 3) return 'ต้องปักอย่างน้อย 3 จุด';
-    if (_saving) return null;
+    // กดซ้ำระหว่างบันทึก — คืนข้อความจริงแทน null (caller ตี null
+    // เป็นสำเร็จแล้วขึ้น snackbar "บันทึกสำเร็จ" มั่ว)
+    if (_saving) return 'กำลังบันทึกอยู่ กรุณารอสักครู่';
     _saving = true;
     notifyListeners();
     try {
@@ -584,6 +622,23 @@ class MapViewModel extends ChangeNotifier {
       );
       _parcels = [..._parcels, p];
       _invalidateRender();
+      // จำ id ไว้ bypass year filter — แปลงที่เพิ่งวาดต้องไม่หาย
+      // ทั้งที่ปีการผลิตไม่อยู่ในชุดที่ดาวน์โหลดไว้
+      if (!p.isDraft) {
+        _freshIds.add(p.id);
+        _fresh[p.id] = p;
+      }
+      // รูปที่ถ่ายประกอบการวัดไม่มี endpoint อัปโหลด — เก็บเป็น
+      // activity draft ผูกกับแปลงที่สร้าง กันรูปหายเงียบๆ
+      if (!p.isDraft && photos.isNotEmpty) {
+        try {
+          await _service.saveActivityDraft(
+            plotId: p.id,
+            photoPaths: photos,
+            detailPending: true,
+          );
+        } catch (_) {}
+      }
       cancelDrawing();
       return null;
     } catch (e) {
