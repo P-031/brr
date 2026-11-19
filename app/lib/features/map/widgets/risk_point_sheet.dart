@@ -7,8 +7,30 @@ import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 
 /// (icon, พื้น, ขอบ/ตัวหนังสือ) ต่อประเภทจุดเสี่ยง — 3 สีต่างชัด
 /// ตามโจทย์: น้ำท่วม=แดง, แห้งแล้ง=ส้ม, น้ำท่วม-แล้ง 50-50=เหลือง
+/// backend ส่ง สูง/ปานกลาง/ต่ำ — map: สูง=น้ำท่วม กลาง=แล้ง ต่ำ=50-50
 /// ชื่อใหม่จาก backend ที่ยังไม่รู้จักได้ชุดเทา generic
 (IconData, Color, Color) riskChipStyle(String name) {
+  if (name.contains('ต่ำ')) {
+    return (
+      Icons.brightness_6,
+      const Color(0xFFFFEB3B),
+      const Color(0xFF7A5C00),
+    );
+  }
+  if (name.contains('สูง')) {
+    return (
+      Icons.tsunami,
+      const Color(0xFFFFCDD2),
+      const Color(0xFFC62828),
+    );
+  }
+  if (name.contains('กลาง')) {
+    return (
+      Icons.wb_sunny,
+      const Color(0xFFFFCC80),
+      const Color(0xFFBF4D00),
+    );
+  }
   if (name.contains('50')) {
     return (
       Icons.brightness_6,

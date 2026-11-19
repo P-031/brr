@@ -258,11 +258,14 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
               Container(
                 color: Colors.white,
                 child: TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
                   labelColor: AppColors.green,
                   unselectedLabelColor: Colors.black54,
                   indicatorColor: AppColors.green,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 20),
                   labelStyle: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
                   ),
                   tabs: [
