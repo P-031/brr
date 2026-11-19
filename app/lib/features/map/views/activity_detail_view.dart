@@ -872,7 +872,6 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
   static final _npkRe = RegExp(r'(\d+)\s*-\s*(\d+)\s*-\s*(\d+)');
 
   final _rateCtrl = TextEditingController();
-  final _customCtrl = TextEditingController();
   final _nCtrl = TextEditingController();
   final _pCtrl = TextEditingController();
   final _kCtrl = TextEditingController();
@@ -882,7 +881,6 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
   @override
   void dispose() {
     _rateCtrl.dispose();
-    _customCtrl.dispose();
     _nCtrl.dispose();
     _pCtrl.dispose();
     _kCtrl.dispose();
@@ -931,7 +929,8 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
       return t.isEmpty ? null : t;
     }
 
-    // ข้อความสูตรปุ๋ยที่แสดง: ชื่อสินค้า > custom > N-P-K จากช่อง
+    // ข้อความสูตรปุ๋ยที่แสดง: ชื่อสินค้าที่เลือก หรือ N-P-K จากช่อง
+    // (ตัวเลือก "อื่น ๆ" → แสดงเป็นค่า N-P-K ที่กรอก)
     final npkCombo = [
       _nCtrl.text.trim(),
       _pCtrl.text.trim(),
@@ -939,7 +938,7 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
     ].join('-');
     String? npk;
     if (_formula == _other) {
-      npk = nn(_customCtrl) ?? (npkCombo == '--' ? null : npkCombo);
+      npk = npkCombo == '--' ? null : npkCombo;
     } else {
       npk = _formula ?? (npkCombo == '--' ? null : npkCombo);
     }
@@ -1075,28 +1074,6 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
                   ),
                 ],
               ),
-              if (_formula == _other) ...[
-                const SizedBox(height: 8),
-                TextField(
-                  controller: _customCtrl,
-                  style: const TextStyle(fontSize: 17),
-                  decoration: InputDecoration(
-                    hintText: 'ระบุสูตรปุ๋ย',
-                    hintStyle: const TextStyle(
-                      fontSize: 17,
-                      color: Colors.black38,
-                    ),
-                    isDense: true,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 10,
-                    ),
-                  ),
-                ),
-              ],
               const SizedBox(height: 14),
               const Text(
                 'สูตรปุ๋ย NPK',
