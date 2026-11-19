@@ -166,11 +166,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.25,
-              color: Colors.black87,
-            ),
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
         const SizedBox(width: 10),
@@ -233,11 +229,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.25,
-              color: Colors.black87,
-            ),
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
         const SizedBox(width: 10),
@@ -267,11 +259,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.25,
-              color: Colors.black87,
-            ),
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
         const SizedBox(width: 10),
@@ -502,11 +490,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.25,
-              color: Colors.black87,
-            ),
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
         const SizedBox(width: 10),
@@ -1710,9 +1694,9 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _rateRow('หักตัดพันธุ์รวม(ตัน)', _cutVarietyCtrl),
-                    _rateRow('หักสูญเสีย จากการตัด(กก./ไร่)', _cutLossKgCtrl),
-                    _rateRow('หักสูญเสีย จากการตัด(ตัน)', _cutLossTonCtrl),
+                    _rateRow('หักตัดพันธุ์รวม\n(ตัน)', _cutVarietyCtrl),
+                    _rateRow('หักสูญเสีย จากการตัด\n(กก./ไร่)', _cutLossKgCtrl),
+                    _rateRow('หักสูญเสีย จากการตัด\n(ตัน)', _cutLossTonCtrl),
                     _optRow(
                       'เลือกสาเหตุ หักสูญเสีย',
                       _cutLossReason,
@@ -1756,7 +1740,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       },
                     ),
                     _calcRow(
-                      'ปริมาณอ้อยเข้าหีบจริง(ตัน)\n(ตันรวม − หักสูญเสียรวม)',
+                      'ปริมาณอ้อยเข้าหีบจริง(ตัน)\n(ตันรวม−หักสูญเสียรวม)',
                       _actualTons(),
                     ),
                   ],
