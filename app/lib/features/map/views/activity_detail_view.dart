@@ -349,8 +349,9 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         color: selected ? AppColors.green : Colors.grey.shade100,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: selected ? AppColors.green : Colors.grey.shade300,
-          width: selected ? 1.5 : 1,
+          // ปุ่มที่เลือกกรอบทองแบบปุ่มหน้า Home
+          color: selected ? AppColors.gold : Colors.grey.shade300,
+          width: selected ? 3 : 1,
         ),
       ),
       child: Center(
@@ -395,11 +396,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
               child: Container(
                 width: 28,
                 height: 28,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                decoration: const BoxDecoration(
+                  color: Colors.red,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.close, size: 18, color: Colors.black54),
+                child: const Icon(Icons.close, size: 18, color: Colors.white),
               ),
             ),
           ],
