@@ -374,7 +374,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                             ),
                             const Icon(
                               Iconsax.arrow_circle_down,
-                              color: Colors.black45,
+                              size: 28,
+                              color: Colors.black87,
                             ),
                           ],
                         ),

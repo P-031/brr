@@ -447,7 +447,8 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               ),
               Icon(
                 Iconsax.arrow_circle_down,
-                color: invalid ? Colors.redAccent : Colors.black45,
+                size: 28,
+                color: invalid ? Colors.redAccent : Colors.black87,
               ),
             ],
           ),
@@ -512,9 +513,10 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               ),
               Icon(
                 Iconsax.arrow_circle_down,
+                size: 28,
                 color: _showErrors && selected.isEmpty
                     ? Colors.redAccent
-                    : Colors.black45,
+                    : Colors.black87,
               ),
             ],
           ),
@@ -565,9 +567,10 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
               ),
               Icon(
                 Iconsax.arrow_circle_down,
+                size: 28,
                 color: _showErrors && _farmerId == null
                     ? Colors.redAccent
-                    : Colors.black45,
+                    : Colors.black87,
               ),
             ],
           ),

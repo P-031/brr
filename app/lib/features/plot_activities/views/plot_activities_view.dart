@@ -490,7 +490,8 @@ class _BodyState extends State<_Body> {
                   ),
                   Icon(
                     Iconsax.arrow_circle_down,
-                    color: active ? AppColors.green : Colors.black45,
+                    size: 28,
+                    color: active ? AppColors.green : Colors.black87,
                   ),
                 ],
               ),
