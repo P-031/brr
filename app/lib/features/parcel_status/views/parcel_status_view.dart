@@ -113,12 +113,22 @@ class _BodyState extends State<_Body> {
           ),
         ),
         Expanded(
-          child: items.isEmpty
-              ? const Center(
-                  child: Text(
-                    'ไม่มีข้อมูล',
-                    style: TextStyle(fontSize: 16),
+          child: vm.requestsError != null
+              // แถบ tab โหลดได้แต่ list ล้ม — แจ้ง + ให้ retry เฉพาะ
+              // ส่วน list ไม่ทำทั้งหน้าเสีย
+              ? Center(
+                  child: TextButton.icon(
+                    onPressed: vm.load,
+                    icon: const Icon(Iconsax.refresh, size: 18),
+                    label: const Text(
+                      'โหลดรายการไม่สำเร็จ — ลองใหม่',
+                      style: TextStyle(fontSize: 15),
+                    ),
                   ),
+                )
+              : items.isEmpty
+              ? const Center(
+                  child: Text('ไม่มีข้อมูล', style: TextStyle(fontSize: 16)),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),

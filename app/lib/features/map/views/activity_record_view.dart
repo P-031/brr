@@ -5,6 +5,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/activity_detail_view.dart';
 
@@ -29,6 +30,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
   @override
   void initState() {
     super.initState();
+    _recoverLostPhoto();
     // "ครั้งที่ N" = จำนวนกิจกรรมในเครื่องของแปลง + 1 — อนาคต
     // นับรวมกิจกรรมบน backend ได้เมื่อมี endpoint นำส่ง
     widget.vm.activityDraftCount().then((n) {
@@ -38,11 +40,33 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
 
   Future<void> _pickPhoto() async {
     if (_photos.length >= _maxPhotos) return;
-    final x = await ImagePicker().pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1600,
-    );
-    if (x != null) setState(() => _photos.add(x));
+    final source = await showImageSourceSheet(context);
+    if (source == null) return;
+    // pickImage throw ได้ (already_active / camera busy บนบางเครื่อง)
+    try {
+      final x = await ImagePicker().pickImage(
+        source: source,
+        maxWidth: 1600,
+      );
+      if (x != null) setState(() => _photos.add(x));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('เปิดกล้องไม่สำเร็จ')));
+    }
+  }
+
+  /// Android ฆ่าแอประหว่างเปิดกล้อง → รูปที่ถ่ายค้างใน pending
+  /// state ของ image_picker — ดึงกลับตอนเปิดหน้าใหม่
+  Future<void> _recoverLostPhoto() async {
+    try {
+      final lost = await ImagePicker().retrieveLostData();
+      final file = lost.file;
+      if (file != null && mounted && _photos.length < _maxPhotos) {
+        setState(() => _photos.add(file));
+      }
+    } catch (_) {}
   }
 
   /// แจ้งเตือนกลางจอเมื่อยังไม่มีรูป — ทั้งสองปุ่มบังคับรูปก่อน
@@ -58,7 +82,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
           const Icon(Iconsax.warning_2, size: 56, color: Color(0xFFE65100)),
           const SizedBox(height: 14),
           const Text(
-            'กรุณาถ่ายภาพก่อน',
+            'กรุณาเพิ่มรูปภาพก่อน',
             style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
@@ -320,7 +344,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
                         ),
                         icon: const Icon(Iconsax.camera, size: 22),
                         label: const Text(
-                          'ถ่ายภาพ',
+                          'เพิ่มรูปภาพ',
                           style: TextStyle(
                             fontSize: 17,
                             fontWeight: FontWeight.w600,

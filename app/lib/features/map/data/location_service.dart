@@ -12,6 +12,12 @@ class LocationService {
     if (perm == LocationPermission.denied) {
       perm = await Geolocator.requestPermission();
     }
+    // deniedForever — ระบบไม่เด้งถามอีก พาไปตั้งค่าแอปให้เปิดเอง
+    // ไม่งั้นผู้ใช้ปฏิเสธครั้งเดียวแล้วงงว่าทำไม GPS ไม่มา
+    if (perm == LocationPermission.deniedForever) {
+      await Geolocator.openAppSettings();
+      return false;
+    }
     return perm == LocationPermission.always ||
         perm == LocationPermission.whileInUse;
   }
@@ -22,8 +28,13 @@ class LocationService {
   /// fallback เร็วแทนที่จะรอค้าง
   Future<LatLng?> currentPosition() async {
     if (!await ensurePermission()) return null;
+    // lastKnown ใช้ได้เฉพาะที่สด (<60 วิ) — fix เก่าจากที่อื่น
+    // จะพาแผนที่วาร์ปไปจุดผิด
     final last = await Geolocator.getLastKnownPosition();
-    if (last != null) return LatLng(last.latitude, last.longitude);
+    final fresh =
+        last != null &&
+        DateTime.now().difference(last.timestamp).inSeconds < 60;
+    if (fresh) return LatLng(last.latitude, last.longitude);
     try {
       final p = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
@@ -32,7 +43,8 @@ class LocationService {
       );
       return LatLng(p.latitude, p.longitude);
     } catch (_) {
-      return null;
+      // fix ใหม่ไม่ได้ — ทิ้ง fix เก่าไปดีกว่าส่งพิกัดผิด
+      return last != null ? LatLng(last.latitude, last.longitude) : null;
     }
   }
 

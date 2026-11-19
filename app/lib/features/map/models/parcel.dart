@@ -48,19 +48,21 @@ class Parcel {
   /// and `/plots/:id` return `points`; both are `{latitude, longitude}`.
   factory Parcel.fromJson(Map<String, dynamic> json) {
     final raw = (json['outline'] ?? json['points']) as List? ?? [];
-    final points = raw
-        .map(
-          (c) => LatLng(
+    // พิกัดเสียข้ามไปแทนที่จะล้มทั้งแปลง — payload หลักหมื่นแปลง
+    // อาจมี item เพี้ยนอยู่สักตัว
+    final points = <LatLng>[
+      for (final c in raw)
+        if (c is Map && c['latitude'] is num && c['longitude'] is num)
+          LatLng(
             (c['latitude'] as num).toDouble(),
             (c['longitude'] as num).toDouble(),
           ),
-        )
-        .toList();
+    ];
     final farmer = json['farmer'] as Map<String, dynamic>?;
     final center = json['center'] as Map<String, dynamic>?;
     return Parcel(
-      id: '${json['id']}',
-      name: '${json['name']}',
+      id: '${json['id'] ?? ''}',
+      name: '${json['name'] ?? ''}',
       variety: json['variety'] as String?,
       owner: farmer?['displayName'] as String?,
       status: json['status'] as String?,
@@ -77,7 +79,10 @@ class Parcel {
       isDraft: json['isDraft'] == true,
       meta: json['meta'] as Map<String, dynamic>?,
       savedAt: DateTime.tryParse('${json['savedAt'] ?? ''}'),
-      centerOverride: center == null
+      centerOverride:
+          center == null ||
+              center['latitude'] is! num ||
+              center['longitude'] is! num
           ? null
           : LatLng(
               (center['latitude'] as num).toDouble(),
@@ -139,11 +144,13 @@ class Parcel {
   /// Formats square meters as Thai land units —
   /// "x ไร่ y งาน z ตร.วา" (1 ไร่ = 4 งาน, 1 งาน = 100 ตร.วา).
   static String formatThaiArea(double sqm) {
-    final sqWa = sqm / 4; // 1 ตร.วา = 4 ตร.ม.
+    // ปัดตร.วารวมก่อนแล้วค่อยแยกหน่วย — กันเคสขอบช่วง เช่น 99.6 ตร.วา
+    // เดิมแสดง "0 งาน 100 ตร.วา" (ไม่ carry ขึ้นงาน)
+    final sqWa = (sqm / 4).round(); // 1 ตร.วา = 4 ตร.ม.
     final rai = sqWa ~/ 400;
     final ngan = (sqWa % 400) ~/ 100;
     final wa = sqWa % 100;
-    return '$rai ไร่ $ngan งาน ${wa.toStringAsFixed(0)} ตร.วา';
+    return '$rai ไร่ $ngan งาน $wa ตร.วา';
   }
 
   String get areaThai => formatThaiArea(areaSquareMeters);

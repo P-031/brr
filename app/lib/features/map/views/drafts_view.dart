@@ -71,7 +71,7 @@ class DraftsView extends StatelessWidget {
         title: const Text('ยืนยันบันทึกแปลง'),
         content: Text(
           'ส่ง "${_landNo(p)}" ขึ้น server ด้วยข้อมูลที่บันทึกไว้'
-          ' — ร่างในเครื่องจะถูกลบเมื่อสำเร็จ',
+          ' — ร่างจะถูกบันทึกว่า "ยืนยันแล้ว" และแก้ไขไม่ได้อีก',
         ),
         actions: [
           TextButton(

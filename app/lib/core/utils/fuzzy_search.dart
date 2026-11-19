@@ -11,13 +11,16 @@ List<T> fuzzySearch<T>(
   int limit = 10,
 }) {
   if (query.isEmpty) return items.toList();
+  // เทียบตัวพิมพ์เล็ก — ชื่ออังกฤษพิมพ์เล็ก/ใหญ่ต่างกันก็เจอ
+  final q = query.toLowerCase();
   final direct = [
     for (final i in items)
-      if (labelOf(i).contains(query)) i,
+      if (labelOf(i).toLowerCase().contains(q)) i,
   ];
   if (direct.isNotEmpty) return direct;
   final scored = [
-    for (final i in items) (item: i, score: _lcsRatio(query, labelOf(i))),
+    for (final i in items)
+      (item: i, score: _lcsRatio(q, labelOf(i).toLowerCase())),
   ]..sort((a, b) => b.score.compareTo(a.score));
   return [
     for (final s in scored)

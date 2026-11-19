@@ -81,7 +81,7 @@ class PlotListItem {
       centerLng: (center?['longitude'] as num?)?.toDouble(),
       points: [
         for (final c in j['outline'] as List? ?? const [])
-          if (c is Map)
+          if (c is Map && c['latitude'] is num && c['longitude'] is num)
             LatLng(
               (c['latitude'] as num).toDouble(),
               (c['longitude'] as num).toDouble(),

@@ -39,15 +39,19 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   bool get optionsLoaded => _optionsLoaded;
 
   // ---------- ฟิลเตอร์ที่เลือก (เลือกได้หลายค่า) ----------
-  final Set<String> _years = {};
+  // null = "ไม่มีปีการผลิต" — backend รองรับ nullYear ตรงๆ
+  final Set<String?> _years = {};
   final Set<String> _zones = {};
   final Set<String> _caneTypes = {};
   final Set<bool> _planted = {}; // true=ปลูกแล้ว false=ยังไม่ปลูก
   final Set<String> _groupKinds = {}; // 'harvest'=กลุ่มตัด 'maintain'=กลุ่มบำรุง
   String _search = '';
   Timer? _searchDebounce;
+  // เลขรุ่น fetch — refresh ใหม่ทำให้ loadMore ที่ค้างอยู่เป็น stale
+  // ทิ้งผลลัพธ์ของมัน ไม่ให้ย้อนไป merge ทับรายการล่าสุด
+  int _fetchEpoch = 0;
 
-  Set<String> get years => _years;
+  Set<String?> get years => _years;
   Set<String> get zones => _zones;
   Set<String> get caneTypes => _caneTypes;
   Set<bool> get planted => _planted;
@@ -112,6 +116,7 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
+    final epoch = ++_fetchEpoch;
     _loading = true;
     _error = null;
     _items = const [];
@@ -119,27 +124,36 @@ class PlotActivitiesViewModel extends ChangeNotifier {
     notifyListeners();
     try {
       final page = await _fetch(cursor: null);
+      if (epoch != _fetchEpoch) return;
       _items = page.items;
       _nextCursor = page.nextCursor;
       _total = page.total;
     } catch (e) {
-      _error = '$e'.replaceFirst('Exception: ', '');
+      if (epoch == _fetchEpoch) {
+        _error = '$e'.replaceFirst('Exception: ', '');
+      }
     }
+    if (epoch != _fetchEpoch) return;
     _loading = false;
     notifyListeners();
   }
 
   Future<void> loadMore() async {
     if (_nextCursor == null || _loadingMore || _loading) return;
+    final epoch = _fetchEpoch;
     _loadingMore = true;
     notifyListeners();
     try {
       final page = await _fetch(cursor: _nextCursor);
+      // refresh มาแทรกระหว่างรอ → ผลของเพจเก่าไม่เอามาต่อ list ใหม่
+      if (epoch != _fetchEpoch) return;
       _items = [..._items, ...page.items];
       _nextCursor = page.nextCursor;
       _total = page.total;
     } catch (e) {
-      _error = '$e'.replaceFirst('Exception: ', '');
+      if (epoch == _fetchEpoch) {
+        _error = '$e'.replaceFirst('Exception: ', '');
+      }
     }
     _loadingMore = false;
     notifyListeners();
@@ -169,7 +183,7 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   // ---------- set ฟิลเตอร์แล้วรีเฟรช ----------
   /// apply ครั้งเดียวจาก filter sheet — refresh รอบเดียวไม่ยิงซ้ำ
   void applyFilters({
-    required Set<String> years,
+    required Set<String?> years,
     required Set<String> zones,
     required Set<String> caneTypes,
     required Set<bool> planted,

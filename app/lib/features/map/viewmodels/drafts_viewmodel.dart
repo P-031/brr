@@ -135,6 +135,9 @@ class DraftsViewModel extends ChangeNotifier {
         survey: _surveyOf(p),
       ),
       confirm: true,
+      photos: [
+        for (final x in p.meta?['photos'] as List? ?? const []) '$x',
+      ],
     );
   }
 
@@ -176,6 +179,7 @@ class DraftsViewModel extends ChangeNotifier {
       // ส่งจริง → ร่างเดิมกลายเป็น "ยืนยันแล้ว"; บันทึกร่างใหม่
       // → ลบตัวเก่า (ถูกร่างใหม่แทนแล้ว)
       confirm: !r.draft,
+      photos: r.photos,
     );
   }
 
@@ -202,12 +206,24 @@ class DraftsViewModel extends ChangeNotifier {
     Parcel source,
     Future<Parcel> Function(ParcelService, List<LatLng>) create, {
     bool confirm = false,
+    List<String> photos = const [],
   }) async {
     _busyId = source.id;
     notifyListeners();
     try {
-      await create(_service, source.points);
+      final created = await create(_service, source.points);
       if (confirm) {
+        // รูปประกอบการวัดไม่มี endpoint อัปโหลด — เก็บเป็น activity
+        // draft ผูกกับแปลงจริงที่สร้าง กันรูปหายเงียบๆ ตอนยืนยัน
+        if (photos.isNotEmpty) {
+          try {
+            await _service.saveActivityDraft(
+              plotId: created.id,
+              photoPaths: photos,
+              detailPending: true,
+            );
+          } catch (_) {}
+        }
         await _service.markDraftConfirmed(source.id);
       } else {
         await _service.removeDraft(source.id);

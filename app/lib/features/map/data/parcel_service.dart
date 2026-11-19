@@ -50,11 +50,54 @@ class ParcelService {
   /// SharedPreferences key holding device-only draft parcels.
   static const _draftsKey = 'draft_parcels';
 
+  /// suffix กัน id ร่างชนเมื่อบันทึก 2 ครั้งใน microsecond เดียวกัน
+  static int _draftSeq = 0;
+
   /// ไฟล์ cache payload ดาวน์โหลดล่าสุด — fallback ตอนเน็ตล่ม.
   static const _cacheName = 'parcels_cache.json';
 
   Future<File> _cacheFile() async =>
       File('${(await getApplicationDocumentsDirectory()).path}/$_cacheName');
+
+  // ---- รูปถ่าย — image_picker คืนไฟล์ใน temp cache ที่ระบบล้าง ----
+  // ได้ทุกเมื่อ; draft/activity เก็บแค่ path เลยต้องย้ายมา documents
+
+  static int _photoSeq = 0;
+
+  Future<Directory> _photosDir() async => Directory(
+    '${(await getApplicationDocumentsDirectory()).path}/photos',
+  );
+
+  /// คัดลอกรูปไปเก็บถาวรใน documents — คืน path ใหม่ (path เดิมถ้า
+  /// copy ไม่ได้ ดีกว่าทิ้งรูป; path ที่ persist แล้วคืนตัวเดิม)
+  Future<String> _persistPhoto(String path) async {
+    try {
+      final dir = await _photosDir();
+      if (path.startsWith('${dir.path}/')) return path;
+      final src = File(path);
+      if (!await src.exists()) return path;
+      if (!await dir.exists()) await dir.create(recursive: true);
+      final i = path.lastIndexOf('.');
+      final ext = i < 0 ? '.jpg' : path.substring(i);
+      final name =
+          'p_${DateTime.now().microsecondsSinceEpoch}_${_photoSeq++}$ext';
+      return (await src.copy('${dir.path}/$name')).path;
+    } catch (_) {
+      return path;
+    }
+  }
+
+  /// ลบรูปที่ persist ไว้ — ลบเฉพาะไฟล์ใต้ photos/ เท่านั้น กัน
+  /// เผลอลบไฟล์อื่นของผู้ใช้
+  Future<void> _deletePersistedPhoto(String path) async {
+    try {
+      final dir = await _photosDir();
+      if (path.startsWith('${dir.path}/')) {
+        final f = File(path);
+        if (await f.exists()) await f.delete();
+      }
+    } catch (_) {}
+  }
 
   /// ข้อมูลแปลงที่ดาวน์โหลดครั้งล่าสุด — ใช้เมื่อเครือข่ายล่ม.
   /// คืน null ถ้าไม่เคยดาวน์โหลดสำเร็จ.
@@ -159,7 +202,7 @@ class ParcelService {
     items.add({
       'id': 'act-${DateTime.now().millisecondsSinceEpoch}',
       'plotId': plotId,
-      'photos': photoPaths,
+      'photos': [for (final p in photoPaths) await _persistPhoto(p)],
       'detailPending': detailPending,
       'plantedAt': ?plantedAt,
       'caneGroup': ?caneGroup,
@@ -225,11 +268,18 @@ class ParcelService {
   Future<void> removeDraft(String id) async {
     final prefs = await SharedPreferences.getInstance();
     final drafts = await _loadDrafts();
+    final removed = drafts.where((d) => d.id == id).toList();
     drafts.removeWhere((d) => d.id == id);
     await prefs.setString(
       _draftsKey,
       jsonEncode([for (final d in drafts) d.toJson()]),
     );
+    // ลบรูปที่ persist ไว้ตามร่างด้วย กันไฟล์รกค้างในเครื่อง
+    for (final d in removed) {
+      for (final p in d.meta?['photos'] as List? ?? const []) {
+        await _deletePersistedPhoto('$p');
+      }
+    }
   }
 
   /// เบา — รายการปีการผลิต + จำนวน สำหรับหน้าเลือกดาวน์โหลด.
@@ -275,10 +325,15 @@ class ParcelService {
       return (items: await _loadDrafts(), truncated: false);
     }
     if (ApiConfig.enabled && _api != null) {
+      // เลือกเฉพาะ "ไม่มีปี" → join ได้ '' — ส่งแค่ nullYear=1
+      // ไม่ให้ backend รับ years= ว่างไปตีเป็นปีสตริงว่าง
       final yearQuery = years == null
           ? ''
-          : '&years=${Uri.encodeQueryComponent(years.whereType<String>().join(","))}'
-                '${years.contains(null) ? '&nullYear=1' : ''}';
+          : () {
+              final ys = years.whereType<String>().toList();
+              return '${ys.isNotEmpty ? '&years=${Uri.encodeQueryComponent(ys.join(","))}' : ''}'
+                  '${years.contains(null) ? '&nullYear=1' : ''}';
+            }();
       final res = await _api.getStreamed(
         '${ApiEndpoints.plotsMap}?${box ?? fullBox}$yearQuery',
         onProgress: onProgress,
@@ -327,9 +382,12 @@ class ParcelService {
       p.write('&cursor=${Uri.encodeQueryComponent(cursor)}');
     }
     if (years != null && years.isNotEmpty) {
-      p.write(
-        '&years=${Uri.encodeQueryComponent(years.whereType<String>().join(","))}',
-      );
+      // เลือกเฉพาะ "ไม่มีปี" → join ได้ '' — อย่าส่ง years= เปล่า
+      // ให้ backend ตีเป็นค่าปีว่าง ส่งแค่ nullYear=1 พอ
+      final ys = years.whereType<String>().toList();
+      if (ys.isNotEmpty) {
+        p.write('&years=${Uri.encodeQueryComponent(ys.join(","))}');
+      }
       if (years.contains(null)) p.write('&nullYear=1');
     }
     if (zones != null && zones.isNotEmpty) {
@@ -353,11 +411,15 @@ class ParcelService {
       throw Exception('โหลดรายการแปลงไม่สำเร็จ (${res.statusCode})');
     }
     final j = jsonDecode(res.body) as Map<String, dynamic>;
+    // item เสียตัวเดียวข้ามไป — ไม่ให้ล้มทั้งเพจ
+    final parsed = <PlotListItem>[];
+    for (final x in j['items'] as List) {
+      try {
+        parsed.add(PlotListItem.fromJson(x as Map<String, dynamic>));
+      } catch (_) {}
+    }
     return (
-      items: [
-        for (final x in j['items'] as List)
-          PlotListItem.fromJson(x as Map<String, dynamic>),
-      ],
+      items: parsed,
       nextCursor: j['nextCursor'] as String?,
       total: (j['total'] as num?)?.toInt() ?? 0,
     );
@@ -454,8 +516,15 @@ class ParcelService {
       }
       return Parcel.fromJson(jsonDecode(res.body) as Map<String, dynamic>);
     }
+    // รูปจาก image_picker อยู่ใน temp cache — ระบบล้างได้ทุกเมื่อ
+    // draft เก็บแค่ path เลยต้อง copy ไป documents ของแอปก่อน
+    final storedPhotos = [
+      for (final p in photos) await _persistPhoto(p),
+    ];
     final local = Parcel(
-      id: 'local-${DateTime.now().millisecondsSinceEpoch}',
+      // microseconds + counter — บันทึก 2 ครั้งใน ms เดียวกันไม่ชน id
+      // (id ชน = SharedPreferences ทับกัน ร่างหาย)
+      id: 'local-${DateTime.now().microsecondsSinceEpoch}-${_draftSeq++}',
       name: name,
       points: points,
       productionYear: productionYear,
@@ -490,7 +559,7 @@ class ParcelService {
         'note': ?note,
         'survey': ?survey,
         // path รูปถ่ายตอนบันทึก — หน้าร่างใช้แสดง + ฟอร์ม prefill
-        if (photos.isNotEmpty) 'photos': photos,
+        if (storedPhotos.isNotEmpty) 'photos': storedPhotos,
       },
     );
     if (draft) await _saveDraft(local);
@@ -578,7 +647,8 @@ class ParcelService {
   }
 
   /// ดาวน์โหลด/อัปเดตข้อมูลจุดเสี่ยงภัยพิบัติล่าสุด — GET /risk-points
-  /// แล้วเก็บ payload ลงเครื่อง (ออฟไลน์ใช้ต่อได้) คืนจำนวนจุดที่ได้
+  /// แล้ว merge เข้า local store ([_riskKey]) ตาม plotId — เดิมเขียน
+  /// ลง key 'risk_points' ซึ่งไม่มีใครอ่าน เลยเหมือนไม่เคยโหลด
   /// TODO(backend): endpoint ยังไม่มี — ตอนนี้จะเจอ 404 โชว์ซื่อสัตย์
   Future<int> downloadRiskPoints() async {
     if (!ApiConfig.enabled || _api == null) {
@@ -588,12 +658,25 @@ class ParcelService {
     if (res.statusCode != 200) {
       throw Exception('ดาวน์โหลดไม่สำเร็จ: ${_errorDetail(res)}');
     }
+    final body = jsonDecode(res.body);
+    final list = body is List
+        ? body
+        : (body as Map<String, dynamic>)['items'] as List? ?? const [];
+    // upsert ทีละแปลง — จุดเสี่ยงของแปลงนั้นถูกแทนด้วยข้อมูลใหม่
+    final items = await _loadRiskPoints();
+    var merged = 0;
+    for (final x in list) {
+      if (x is! Map) continue;
+      final item = Map<String, dynamic>.from(x);
+      final plotId = '${item['plotId'] ?? ''}';
+      if (plotId.isEmpty) continue;
+      items.removeWhere((r) => r['plotId'] == plotId);
+      items.add(item);
+      merged++;
+    }
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('risk_points', res.body);
-    final items = jsonDecode(res.body);
-    if (items is List) return items.length;
-    final list = (items as Map<String, dynamic>)['items'];
-    return list is List ? list.length : 0;
+    await prefs.setString(_riskKey, jsonEncode(items));
+    return merged;
   }
 
   /// Extension officers for the caretaker dropdown.
@@ -605,9 +688,11 @@ class ParcelService {
         final res = await _api.get(ApiEndpoints.officers);
         if (res.statusCode == 200) {
           final items = jsonDecode(res.body)['items'] as List;
+          // item ที่ไม่มี displayName ข้ามไป ไม่ล้มทั้ง list
           return [
             for (final j in items)
-              (j as Map<String, dynamic>)['displayName'] as String,
+              if (j is Map && '${j['displayName'] ?? ''}'.isNotEmpty)
+                '${j['displayName']}',
           ];
         }
         throw Exception('GET /officers → ${res.statusCode}');
@@ -697,12 +782,14 @@ typedef PlotPage = ({
 ParcelPage _parseParcelList(String body) {
   final j = jsonDecode(body) as Map<String, dynamic>;
   final items = j['items'] as List;
-  return (
-    items: [
-      for (final x in items) Parcel.fromJson(x as Map<String, dynamic>),
-    ],
-    truncated: j['truncated'] == true,
-  );
+  // item เสียตัวเดียวไม่ให้ล้มทั้งหมื่นแปลง — ข้ามแล้วไปต่อ
+  final parsed = <Parcel>[];
+  for (final x in items) {
+    try {
+      parsed.add(Parcel.fromJson(x as Map<String, dynamic>));
+    } catch (_) {}
+  }
+  return (items: parsed, truncated: j['truncated'] == true);
 }
 
 final _mockParcels = <Parcel>[
