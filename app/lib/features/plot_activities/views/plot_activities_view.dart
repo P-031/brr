@@ -388,7 +388,7 @@ class _BodyState extends State<_Body> {
                   onChanged: (s) => setS(() {}),
                 ),
                 const SizedBox(height: 20),
-                FilledButton.icon(
+                FilledButton(
                   onPressed: () {
                     Navigator.of(ctx).pop();
                     vm.applyFilters(
@@ -399,8 +399,7 @@ class _BodyState extends State<_Body> {
                       groupKinds: groupKinds,
                     );
                   },
-                  icon: const Icon(Iconsax.tick_circle),
-                  label: const Text('ใช้ตัวกรอง'),
+                  child: const Text('ใช้ตัวกรอง'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.green,
                     padding: const EdgeInsets.symmetric(vertical: 14),

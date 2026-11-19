@@ -166,11 +166,7 @@ class _BackButton extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.green),
         ),
-        child: const Icon(
-          Iconsax.arrow_left,
-          size: 20,
-          color: AppColors.green,
-        ),
+        child: const Icon(Iconsax.arrow_left, size: 20, color: AppColors.green),
       ),
     );
   }
@@ -413,7 +409,7 @@ class _MapBottomBarState extends State<MapBottomBar>
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: FilledButton.icon(
+                          child: FilledButton(
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
                                 vertical: 14,
@@ -421,8 +417,7 @@ class _MapBottomBarState extends State<MapBottomBar>
                               ),
                             ),
                             onPressed: () => _finish(context),
-                            icon: const Icon(Iconsax.tick_circle, size: 24),
-                            label: const Text(
+                            child: const Text(
                               'เสร็จสิ้น',
                               style: TextStyle(
                                 fontSize: 16,
@@ -533,10 +528,7 @@ class _MapBottomBarState extends State<MapBottomBar>
                 ),
               ),
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text(
-                'ยกเลิกการวัด',
-                style: TextStyle(fontSize: 16),
-              ),
+              child: const Text('ยกเลิกการวัด', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),

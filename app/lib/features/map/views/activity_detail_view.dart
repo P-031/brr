@@ -386,7 +386,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     borderRadius: BorderRadius.circular(10),
     onTap: onTap,
     child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
       decoration: BoxDecoration(
         color: selected ? AppColors.green : Colors.grey.shade100,
         borderRadius: BorderRadius.circular(10),
@@ -1543,14 +1543,13 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                 ),
               ),
               const SizedBox(height: 16),
-              FilledButton.icon(
+              FilledButton(
                 style: FilledButton.styleFrom(
                   backgroundColor: AppColors.green,
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
                 onPressed: _saving ? null : _save,
-                icon: const Icon(Iconsax.tick_circle, size: 22),
-                label: Text(
+                child: Text(
                   _saving ? 'กำลังบันทึก…' : 'บันทึกกิจกรรม',
                   style: const TextStyle(
                     fontSize: 17,

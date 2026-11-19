@@ -60,7 +60,10 @@ class DraftsView extends StatelessWidget {
     if (result == null || !context.mounted) return;
     final err = await vm.applyEdit(p, result);
     if (!context.mounted) return;
-    _toast(context, err ?? (result.draft ? 'บันทึกร่างแล้ว' : 'บันทึกแปลงแล้ว'));
+    _toast(
+      context,
+      err ?? (result.draft ? 'บันทึกร่างแล้ว' : 'บันทึกแปลงแล้ว'),
+    );
   }
 
   /// ยืนยัน — ส่งข้อมูลที่บันทึกไว้ขึ้น server โดยไม่ต้องกรอกใหม่
@@ -122,9 +125,8 @@ class DraftsView extends StatelessWidget {
   }
 
   void _openInfo(BuildContext context, Parcel p) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => _DraftDetailView(p)));
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => _DraftDetailView(p)));
   }
 
   /// ปุ่มดาวโหลดขวาบน — confirm ก่อนแล้วยิง GET /risk-points
@@ -380,9 +382,7 @@ class DraftsView extends StatelessWidget {
                         ),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.green,
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
@@ -407,8 +407,18 @@ class DraftsView extends StatelessWidget {
 }
 
 const _thaiMonths = [
-  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+  'ม.ค.',
+  'ก.พ.',
+  'มี.ค.',
+  'เม.ย.',
+  'พ.ค.',
+  'มิ.ย.',
+  'ก.ค.',
+  'ส.ค.',
+  'ก.ย.',
+  'ต.ค.',
+  'พ.ย.',
+  'ธ.ค.',
 ];
 
 /// เวลาบันทึก — savedAt ปกติ; ร่างเก่า (ก่อนมีฟิลด์) ถอด ms จาก
@@ -623,14 +633,13 @@ class _DraftCard extends StatelessWidget {
                     )
                   else
                     Expanded(
-                      child: FilledButton.icon(
+                      child: FilledButton(
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.green,
                           padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
                         onPressed: onConfirm,
-                        icon: const Icon(Iconsax.tick_circle, size: 22),
-                        label: const Text(
+                        child: const Text(
                           'ยืนยัน',
                           style: TextStyle(
                             fontSize: 16,
@@ -873,4 +882,3 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
-
