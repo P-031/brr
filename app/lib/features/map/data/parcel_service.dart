@@ -223,6 +223,15 @@ class ParcelService {
     String? germinationPercent,
     String? harvestGroupFarmerId,
     String? harvestGroupFarmer,
+    String? lossReason,
+    String? lossAreaRai,
+    String? yieldEstimate,
+    String? totalTons,
+    String? cutVarietyDeduction,
+    String? cutLossKgPerRai,
+    String? cutLossTons,
+    String? cutLossReason,
+    String? actualHarvestTons,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -261,6 +270,15 @@ class ParcelService {
       'germinationPercent': ?germinationPercent,
       'harvestGroupFarmerId': ?harvestGroupFarmerId,
       'harvestGroupFarmer': ?harvestGroupFarmer,
+      'lossReason': ?lossReason,
+      'lossAreaRai': ?lossAreaRai,
+      'yieldEstimate': ?yieldEstimate,
+      'totalTons': ?totalTons,
+      'cutVarietyDeduction': ?cutVarietyDeduction,
+      'cutLossKgPerRai': ?cutLossKgPerRai,
+      'cutLossTons': ?cutLossTons,
+      'cutLossReason': ?cutLossReason,
+      'actualHarvestTons': ?actualHarvestTons,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));

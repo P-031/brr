@@ -60,6 +60,14 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   String? _germPercent;
   FarmerRef? _harvestGroupFarmer;
   List<FarmerRef>? _farmers;
+  String? _lossReason;
+  final _lossAreaCtrl = TextEditingController();
+  final _yieldEstimateCtrl = TextEditingController();
+  final _cutVarietyCtrl = TextEditingController();
+  final _cutLossKgCtrl = TextEditingController();
+  final _cutLossTonCtrl = TextEditingController();
+  String? _cutLossReason;
+  double _areaRai = 0;
   bool _saving = false;
   late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
 
@@ -83,6 +91,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     _diseaseSpreadCtrl.dispose();
     _pestSpreadCtrl.dispose();
     _pestDamageCtrl.dispose();
+    _lossAreaCtrl.dispose();
+    _yieldEstimateCtrl.dispose();
+    _cutVarietyCtrl.dispose();
+    _cutLossKgCtrl.dispose();
+    _cutLossTonCtrl.dispose();
     super.dispose();
   }
 
@@ -196,6 +209,45 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     ),
   );
 
+  /// ปริมาณตันรวม = ประเมิน(ตัน/ไร่) × พื้นที่ไร่ของแปลง
+  double _totalTons() =>
+      (double.tryParse(_yieldEstimateCtrl.text) ?? 0) * _areaRai;
+
+  /// อ้อยเข้าหีบจริง = ตันรวม − หักตัดพันธุ์ − หักสูญเสียจากการตัด
+  double _actualTons() =>
+      _totalTons() -
+      (double.tryParse(_cutVarietyCtrl.text) ?? 0) -
+      (double.tryParse(_cutLossTonCtrl.text) ?? 0);
+
+  /// แถว label + ค่าคำนวณ (ตัวหนาน้ำเงินชิดขวา) — readonly
+  Widget _calcRow(String label, double value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 132,
+          child: Text(
+            '$label :',
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            value.toStringAsFixed(3),
+            textAlign: TextAlign.end,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1565C0),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
   /// แถว label + ช่องตัวเลขเส้นใต้ (อัตรา กก./ไร่)
   Widget _rateRow(String label, TextEditingController c) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 5),
@@ -227,6 +279,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                 borderSide: BorderSide(color: AppColors.gold, width: 2),
               ),
             ),
+            onChanged: (_) => setState(() {}),
           ),
         ),
       ],
@@ -354,6 +407,15 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         germinationPercent: _germPercent,
         harvestGroupFarmerId: _harvestGroupFarmer?.id,
         harvestGroupFarmer: _harvestGroupFarmer?.name,
+        lossReason: _lossReason,
+        lossAreaRai: num(_lossAreaCtrl),
+        yieldEstimate: num(_yieldEstimateCtrl),
+        totalTons: _totalTons().toStringAsFixed(3),
+        cutVarietyDeduction: num(_cutVarietyCtrl),
+        cutLossKgPerRai: num(_cutLossKgCtrl),
+        cutLossTons: num(_cutLossTonCtrl),
+        cutLossReason: _cutLossReason,
+        actualHarvestTons: _actualTons().toStringAsFixed(3),
         plantedAt: iso(planted),
       );
       if (mounted) Navigator.of(context).pop('บันทึกกิจกรรมเรียบร้อย');
@@ -568,7 +630,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
               p.meta ??
               const {};
           final areaMap = snap.data?['area'] as Map<String, dynamic>?;
-          final rai = (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
+          final rai = _areaRai =
+              (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
           return ListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
             children: [
@@ -1538,6 +1601,145 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                           ],
                         ),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดสูญเสียในแปลง — สาเหตุ + ไร่ + ประเมิน + ตันรวม(คำนวณ)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'สูญเสียในแปลง',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _optRow(
+                      'เลือกสาเหตุ',
+                      _lossReason,
+                      'เลือกรายการ',
+                      () async {
+                        FormOptions opts;
+                        try {
+                          opts = await _optionsFut;
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('โหลดตัวเลือกไม่สำเร็จ'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (opts.lossOptions.isEmpty) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('ยังไม่มีตัวเลือกสาเหตุ'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (!context.mounted) return;
+                        final idx = await showOptionPopup(
+                          context,
+                          title: 'เลือกสาเหตุ',
+                          labels: opts.lossOptions,
+                          selectedIndex: _lossReason == null
+                              ? null
+                              : opts.lossOptions.indexOf(_lossReason!),
+                        );
+                        if (idx != null) {
+                          setState(() => _lossReason = opts.lossOptions[idx]);
+                        }
+                      },
+                    ),
+                    _rateRow('สูญเสียรวม(ไร่)', _lossAreaCtrl),
+                    _rateRow('ประเมิน(ตัน/ไร่)', _yieldEstimateCtrl),
+                    _calcRow('ปริมาณตันรวม(ตัน)', _totalTons()),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดสูญเสียจากการตัดและหักพันธุ์ — หักหลายช่อง +
+              // สาเหตุ + อ้อยเข้าหีบจริง(คำนวณ)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'สูญเสียจากการตัด และหักพันธุ์',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _rateRow('หักตัดพันธุ์รวม(ตัน)', _cutVarietyCtrl),
+                    _rateRow('หักสูญเสีย จากการตัด(กก./ไร่)', _cutLossKgCtrl),
+                    _rateRow('หักสูญเสีย จากการตัด(ตัน)', _cutLossTonCtrl),
+                    _optRow(
+                      'เลือกสาเหตุ หักสูญเสีย',
+                      _cutLossReason,
+                      'เลือกรายการ',
+                      () async {
+                        FormOptions opts;
+                        try {
+                          opts = await _optionsFut;
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('โหลดตัวเลือกไม่สำเร็จ'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (opts.lossOptions.isEmpty) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('ยังไม่มีตัวเลือกสาเหตุ'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (!context.mounted) return;
+                        final idx = await showOptionPopup(
+                          context,
+                          title: 'เลือกสาเหตุ หักสูญเสีย',
+                          labels: opts.lossOptions,
+                          selectedIndex: _cutLossReason == null
+                              ? null
+                              : opts.lossOptions.indexOf(_cutLossReason!),
+                        );
+                        if (idx != null) {
+                          setState(
+                            () => _cutLossReason = opts.lossOptions[idx],
+                          );
+                        }
+                      },
+                    ),
+                    _calcRow(
+                      'ปริมาณอ้อยเข้าหีบจริง(ตัน)\n(ตันรวม − หักสูญเสียรวม)',
+                      _actualTons(),
                     ),
                   ],
                 ),

@@ -69,6 +69,15 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? germinationPercent,
     String? harvestGroupFarmerId,
     String? harvestGroupFarmer,
+    String? lossReason,
+    String? lossAreaRai,
+    String? yieldEstimate,
+    String? totalTons,
+    String? cutVarietyDeduction,
+    String? cutLossKgPerRai,
+    String? cutLossTons,
+    String? cutLossReason,
+    String? actualHarvestTons,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -103,6 +112,15 @@ class ParcelDetailViewModel extends ChangeNotifier {
     germinationPercent: germinationPercent,
     harvestGroupFarmerId: harvestGroupFarmerId,
     harvestGroupFarmer: harvestGroupFarmer,
+    lossReason: lossReason,
+    lossAreaRai: lossAreaRai,
+    yieldEstimate: yieldEstimate,
+    totalTons: totalTons,
+    cutVarietyDeduction: cutVarietyDeduction,
+    cutLossKgPerRai: cutLossKgPerRai,
+    cutLossTons: cutLossTons,
+    cutLossReason: cutLossReason,
+    actualHarvestTons: actualHarvestTons,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint
