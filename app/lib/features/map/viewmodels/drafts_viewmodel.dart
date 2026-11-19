@@ -99,7 +99,10 @@ class DraftsViewModel extends ChangeNotifier {
   Future<String?> confirm(Parcel p) {
     return _save(
       p,
-      (service, points) => service.createParcel(
+      (service, points) async {
+        final id = await service.ensureClientId(p);
+        return service.createParcel(
+        id: id,
         name: p.name,
         variety: p.variety ?? '',
         productionYear: p.productionYear ?? _s(p, 'productionYear'),
@@ -133,7 +136,8 @@ class DraftsViewModel extends ChangeNotifier {
         ],
         points: points,
         survey: _surveyOf(p),
-      ),
+        );
+      },
       confirm: true,
     );
   }
@@ -144,7 +148,10 @@ class DraftsViewModel extends ChangeNotifier {
   Future<String?> applyEdit(Parcel old, MeasurementResult r) {
     return _save(
       old,
-      (service, points) => service.createParcel(
+      (service, points) async {
+        final id = await service.ensureClientId(old);
+        return service.createParcel(
+        id: id,
         name: r.name,
         productionYear: r.productionYear,
         officerName: r.officerName,
@@ -172,7 +179,8 @@ class DraftsViewModel extends ChangeNotifier {
         draft: r.draft,
         points: points,
         survey: _surveyOf(old),
-      ),
+        );
+      },
       // ส่งจริง → ร่างเดิมกลายเป็น "ยืนยันแล้ว"; บันทึกร่างใหม่
       // → ลบตัวเก่า (ถูกร่างใหม่แทนแล้ว)
       confirm: !r.draft,
