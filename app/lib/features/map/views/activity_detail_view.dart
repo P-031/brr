@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
@@ -253,7 +252,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                     TextField(
                       controller: _dateCtrl,
                       keyboardType: TextInputType.datetime,
-                      inputFormatters: [_DateSlashFormatter()],
+                      inputFormatters: [ThaiDateSlashFormatter()],
                       style: const TextStyle(fontSize: 17),
                       decoration: InputDecoration(
                         hintText: 'วว/ดด/ปปปป',
@@ -316,7 +315,20 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                     InkWell(
                       borderRadius: BorderRadius.circular(10),
                       onTap: () async {
-                        final opts = await _optionsFut;
+                        // loadOptions พังตอนออฟไลน์ — ต้อง catch ไม่งั้น
+                        // แตะแล้วเงียบเหมือนปุ่มตาย (unhandled error)
+                        FormOptions opts;
+                        try {
+                          opts = await _optionsFut;
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('โหลดตัวเลือกไม่สำเร็จ'),
+                            ),
+                          );
+                          return;
+                        }
                         if (!context.mounted) return;
                         final idx = await showOptionPopup(
                           context,
@@ -391,29 +403,6 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           );
         },
       ),
-    );
-  }
-}
-
-/// พิมพ์ตัวเลขติดกัน → ใส่ / ให้อัตโนมัติเป็น วว/ดด/ปปปป
-/// (เก็บเฉพาะตัวเลข สูงสุด 8 หลัก)
-class _DateSlashFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
-    final d = digits.length > 8 ? digits.substring(0, 8) : digits;
-    final buf = StringBuffer();
-    for (var i = 0; i < d.length; i++) {
-      if (i == 2 || i == 4) buf.write('/');
-      buf.write(d[i]);
-    }
-    final text = buf.toString();
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
     );
   }
 }

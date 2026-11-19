@@ -222,7 +222,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
             controller: ctrl,
             autofocus: true,
             keyboardType: TextInputType.datetime,
-            inputFormatters: [_DateSlashFormatter()],
+            inputFormatters: [ThaiDateSlashFormatter()],
             onSubmitted: (_) => trySubmit(),
             style: const TextStyle(fontSize: 19),
             decoration: InputDecoration(
@@ -305,8 +305,16 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                       ),
                       TextButton(
                         onPressed: () => setState(() {
-                          _selected = DateTime.now();
-                          _visible = DateTime(_selected.year, _selected.month);
+                          // clamp เข้ากรอบ first/last — ไม่งั้น "วันนี้"
+                          // เลือกวันนอกช่วงที่อนุญาตได้แล้วตกลงคืนค่าเพี้ยน
+                          var t = DateTime.now();
+                          if (!_inRange(t)) {
+                            t = t.isBefore(widget.first)
+                                ? widget.first
+                                : widget.last;
+                          }
+                          _selected = t;
+                          _visible = DateTime(t.year, t.month);
                         }),
                         child: const Text(
                           'วันนี้',
@@ -470,8 +478,8 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
 }
 
 /// พิมพ์ตัวเลขติดกัน → ใส่ / ให้อัตโนมัติเป็น วว/ดด/ปปปป
-/// (เก็บเฉพาะตัวเลข สูงสุด 8 หลัก)
-class _DateSlashFormatter extends TextInputFormatter {
+/// (เก็บเฉพาะตัวเลข สูงสุด 8 หลัก) — ใช้ร่วมกันทุกช่องวันที่
+class ThaiDateSlashFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
@@ -485,9 +493,19 @@ class _DateSlashFormatter extends TextInputFormatter {
       buf.write(d[i]);
     }
     final text = buf.toString();
+    // cursor อยู่กลางข้อความ (แก้/ลบเลขข้างใน) — วาง cursor หลัง
+    // ตำแหน่งเลขตัวเดิมก่อน cursor ไม่ใช่ดีดไปท้ายทุกครั้ง
+    final digitsBefore = newValue.text
+        .substring(0, newValue.selection.end.clamp(0, newValue.text.length))
+        .replaceAll(RegExp(r'\D'), '')
+        .length
+        .clamp(0, 8);
+    var cursor = digitsBefore;
+    if (digitsBefore > 2) cursor++; // เลย / ตัวแรก
+    if (digitsBefore > 4) cursor++; // เลย / ตัวสอง
     return TextEditingValue(
       text: text,
-      selection: TextSelection.collapsed(offset: text.length),
+      selection: TextSelection.collapsed(offset: cursor.clamp(0, text.length)),
     );
   }
 }

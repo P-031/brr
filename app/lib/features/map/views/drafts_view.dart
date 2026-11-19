@@ -32,7 +32,8 @@ class DraftsView extends StatelessWidget {
   final DraftsViewModel vm;
 
   /// ปุ่มไปหน้าวัดพื้นที่ — null = ไม่แสดง (เข้าจากแผนที่อยู่แล้ว)
-  final VoidCallback? onStartMeasure;
+  /// await แล้ว refresh — ร่างที่เพิ่งบันทึกจากหน้าวัดโชว์ทันที
+  final Future<void> Function()? onStartMeasure;
 
   /// officer → ฟอร์มแก้ไขมีตัวเลือกชาวไร่เจ้าของแปลง
   final bool isOfficer;
@@ -277,7 +278,11 @@ class DraftsView extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    onPressed: onStartMeasure,
+                    onPressed: () async {
+                      await onStartMeasure!();
+                      // อาจมีร่างใหม่จากการวัด — โหลด list ใหม่
+                      await vm.refresh();
+                    },
                     icon: const Icon(Iconsax.rulerpen, size: 20),
                     label: const Text(
                       'เริ่มวัดพื้นที่ใหม่',
@@ -411,7 +416,8 @@ const _thaiMonths = [
 String _savedText(Parcel p) {
   var t = p.savedAt;
   if (t == null && p.id.startsWith('local-')) {
-    final ms = int.tryParse(p.id.substring(6));
+    // id รูปแบบ local-<millis|micros>(-<seq>) — เอาเลขก่อนขีดแรก
+    final ms = int.tryParse(p.id.substring(6).split('-').first);
     if (ms != null) t = DateTime.fromMillisecondsSinceEpoch(ms);
   }
   if (t == null) return '—';
