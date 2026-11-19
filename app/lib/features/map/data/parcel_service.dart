@@ -514,10 +514,12 @@ class ParcelService {
     return null;
   }
 
-  /// บันทึก/อัปเดตสถานะแปลงตัด — status = ชื่อตัวเลือกที่แสดง
+  /// บันทึก/อัปเดตสถานะแปลงตัด — status = ชื่อตัวเลือกที่แสดง,
+  /// statusCode = รหัสสถานะจาก backend (กัน label เปลี่ยน)
   Future<void> saveCutStatus({
     required String plotId,
     required String status,
+    String? statusCode,
     String? startDate,
     String? endDate,
     String? estimateTons,
@@ -529,6 +531,7 @@ class ParcelService {
     rows.add({
       'plotId': plotId,
       'status': status,
+      'statusCode': ?statusCode,
       'startDate': ?startDate,
       'endDate': ?endDate,
       'estimateTons': ?estimateTons,

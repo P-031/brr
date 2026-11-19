@@ -184,6 +184,10 @@ class FarmerRef {
 /// (e.g. prevPlots carries the plot id in [code]).
 typedef OptionItem = ({String code, String name});
 
+/// `{name, required}` — เกณฑ์โครงการส่งเสริมแปลงแต่ละข้อ;
+/// required = เกณฑ์บังคับที่ต้องครบถึงผ่าน Brr Model
+typedef CriteriaItem = ({String name, bool required});
+
 /// Option lists for the measurement save form — fetched from the
 /// backend (`GET /meta/options`), never hardcoded in the app.
 class FormOptions {
@@ -211,6 +215,8 @@ class FormOptions {
     this.diseaseTypes = const [],
     this.pestTypes = const [],
     this.confirmStatuses = const [],
+    this.projectCriteria = const [],
+    this.cutStatuses = const [],
   });
 
   factory FormOptions.fromJson(Map<String, dynamic> j) {
@@ -249,6 +255,26 @@ class FormOptions {
       diseaseTypes: names('diseaseTypes'),
       pestTypes: names('pestTypes'),
       confirmStatuses: names('confirmStatuses'),
+      // รองรับทั้ง object {name, required} และ string ล้วน
+      projectCriteria: [
+        for (final v in j['projectCriteria'] as List? ?? const [])
+          v is Map
+              ? (
+                  name: '${v['name'] ?? v['label'] ?? ''}',
+                  required: v['required'] == true,
+                )
+              : (name: '$v', required: false),
+      ],
+      // รองรับทั้ง object {code, name} และ string ล้วน (code = name)
+      cutStatuses: [
+        for (final v in j['cutStatuses'] as List? ?? const [])
+          v is Map
+              ? (
+                  code: '${v['code'] ?? v['name'] ?? ''}',
+                  name: '${v['name'] ?? v['label'] ?? v['code'] ?? ''}',
+                )
+              : (code: '$v', name: '$v'),
+      ],
     );
   }
 
@@ -334,4 +360,12 @@ class FormOptions {
   /// สถานะแปลงให้เลือกในหน้า "ยืนยันแปลงข้ามปี" —
   /// key `confirmStatuses` ใน /meta/options
   final List<String> confirmStatuses;
+
+  /// เกณฑ์โครงการส่งเสริมแปลง (sheet โครงการ) —
+  /// key `projectCriteria` ใน /meta/options: [{name, required}]
+  final List<CriteriaItem> projectCriteria;
+
+  /// สถานะแปลงตัด (sheet อัปเดตแปลงตัด) —
+  /// key `cutStatuses` ใน /meta/options: [{code, name}]
+  final List<OptionItem> cutStatuses;
 }

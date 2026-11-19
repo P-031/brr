@@ -2,17 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
-
-/// เกณฑ์โครงการส่งเสริม — 3 ข้อแรก "จำเป็น" ต้องครบถึงผ่าน Brr Model
-const _projectItems = [
-  ('ระเบิดดาน', true),
-  ('ปุ๋ยอินทรีย์', true),
-  ('โดโลไมท์', true),
-  ('ระยะร่อง >= 160 ซม.', false),
-  ('คัดพันธุ์อ้อย', false),
-  ('ใช้ยาคุมแห้ง', false),
-];
 
 const _lightGreen = Color(0xFFEAF4EA);
 
@@ -44,27 +35,54 @@ class _PlotProjectSheet extends StatefulWidget {
 }
 
 class _PlotProjectSheetState extends State<_PlotProjectSheet> {
+  /// เกณฑ์จาก `/meta/options → projectCriteria` — ไม่ hardcode;
+  /// ว่างเมื่อ backend ยังไม่ส่ง (แสดงข้อความแทน list)
+  List<CriteriaItem> _items = const [];
+  bool _loaded = false;
   final _selected = <int>{};
   bool _saving = false;
 
+  /// ชื่อเกณฑ์บังคับ (required) ทั้งหมดตามลำดับ
+  List<String> get _requiredNames => [
+    for (final it in _items)
+      if (it.required) it.name,
+  ];
+
   /// ชื่อเกณฑ์บังคับที่ยังไม่ได้ติ๊ก
   List<String> get _missingRequired => [
-    for (var i = 0; i < _projectItems.length; i++)
-      if (_projectItems[i].$2 && !_selected.contains(i)) _projectItems[i].$1,
+    for (var i = 0; i < _items.length; i++)
+      if (_items[i].required && !_selected.contains(i)) _items[i].name,
   ];
 
   @override
   void initState() {
     super.initState();
-    // เติมค่าที่เคยบันทึกในเครื่อง — จับคู่กลับเป็นดัชนีตามชื่อ
-    widget.vm.plotProject().then((r) {
-      if (r == null || !mounted) return;
-      final saved = {for (final s in r['items'] as List? ?? const []) '$s'};
-      setState(() {
-        for (var i = 0; i < _projectItems.length; i++) {
-          if (saved.contains(_projectItems[i].$1)) _selected.add(i);
+    _load();
+  }
+
+  /// โหลดเกณฑ์จาก backend + เติมค่าที่เคยบันทึกในเครื่อง
+  /// (จับคู่กลับเป็นดัชนีตามชื่อ) — โหลดพังก็โชว์สถานะว่างแทนค้าง
+  Future<void> _load() async {
+    List<CriteriaItem> items = const [];
+    Map<String, dynamic>? saved;
+    try {
+      items = (await widget.vm.loadOptions()).projectCriteria;
+    } catch (_) {}
+    try {
+      saved = await widget.vm.plotProject();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _items = items;
+      _loaded = true;
+      if (saved != null) {
+        final names = {
+          for (final s in saved['items'] as List? ?? const []) '$s',
+        };
+        for (var i = 0; i < _items.length; i++) {
+          if (names.contains(_items[i].name)) _selected.add(i);
         }
-      });
+      }
     });
   }
 
@@ -73,9 +91,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
     setState(() => _saving = true);
     try {
       await widget.vm.savePlotProject(
-        items: [
-          for (final i in _selected.toList()..sort()) _projectItems[i].$1,
-        ],
+        items: [for (final i in _selected.toList()..sort()) _items[i].name],
         passed: _missingRequired.isEmpty,
       );
       if (mounted) Navigator.of(context).pop(true);
@@ -90,7 +106,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
   }
 
   Widget _itemRow(int i) {
-    final (name, required) = _projectItems[i];
+    final (name: name, required: required) = _items[i];
     final selected = _selected.contains(i);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -162,6 +178,9 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
   Widget build(BuildContext context) {
     final p = widget.vm.parcel;
     final missing = _missingRequired;
+    // ประเภทอ้อยของแปลงสำหรับหัวข้อเงื่อนไข — ไม่มีใน meta ใช้คำกลาง
+    final caneType = '${p.meta?['caneType'] ?? ''}';
+    final condLabel = caneType.isEmpty ? 'แปลงนี้' : 'แปลง$caneType';
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
       child: Column(
@@ -212,6 +231,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
           ),
           const SizedBox(height: 14),
           // กล่องเงื่อนไข — เขียวอ่อนชุดเดียวกับกล่อง info ของแอป
+          // ชื่อประเภทอ้อย + เกณฑ์บังคับมาจาก meta/backend ไม่ hardcode
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
@@ -219,17 +239,23 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
               color: _lightGreen,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Row(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Iconsax.info_circle, size: 20, color: AppColors.green),
-                SizedBox(width: 10),
+                const Icon(
+                  Iconsax.info_circle,
+                  size: 20,
+                  color: AppColors.green,
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'เงื่อนไขสำหรับ แปลงอ้อยตฤต\n'
-                    'ต้องมีโครงการ: ระเบิดดาน, ปุ๋ยอินทรีย์ และ โดโลไมท์ '
-                    'จึงจะมีสิทธิ์เข้าโครงการ Brr Model',
-                    style: TextStyle(
+                    _requiredNames.isEmpty
+                        ? 'เงื่อนไขสำหรับ $condLabel'
+                        : 'เงื่อนไขสำหรับ $condLabel\n'
+                              'ต้องมีโครงการ: ${_requiredNames.join(', ')} '
+                              'จึงจะมีสิทธิ์เข้าโครงการ Brr Model',
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                       color: AppColors.green,
@@ -246,37 +272,38 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
             children: [
               Expanded(
                 child: Text(
-                  'เลือกโครงการ (${_selected.length}/${_projectItems.length})',
+                  'เลือกโครงการ (${_selected.length}/${_items.length})',
                   style: const TextStyle(
                     fontSize: 16.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
-              TextButton(
-                style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 6),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: AppColors.navy,
-                ),
-                onPressed: () => setState(() {
-                  _selected
-                    ..clear()
-                    ..addAll([
-                      for (var i = 0; i < _projectItems.length; i++)
-                        if (_projectItems[i].$2) i,
-                    ]);
-                }),
-                child: const Text(
-                  'เลือกเกณฑ์บังคับ (3 โครงการ)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    decoration: TextDecoration.underline,
+              if (_requiredNames.isNotEmpty)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: AppColors.navy,
+                  ),
+                  onPressed: () => setState(() {
+                    _selected
+                      ..clear()
+                      ..addAll([
+                        for (var i = 0; i < _items.length; i++)
+                          if (_items[i].required) i,
+                      ]);
+                  }),
+                  child: Text(
+                    'เลือกเกณฑ์บังคับ (${_requiredNames.length} โครงการ)',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
                 ),
-              ),
               TextButton(
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -285,9 +312,8 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                   foregroundColor: AppColors.green,
                 ),
                 onPressed: () => setState(
-                  () => _selected.addAll(
-                    List.generate(_projectItems.length, (i) => i),
-                  ),
+                  () =>
+                      _selected.addAll(List.generate(_items.length, (i) => i)),
                 ),
                 child: const Text(
                   'เลือกทั้งหมด',
@@ -317,7 +343,27 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
             ],
           ),
           const SizedBox(height: 8),
-          for (var i = 0; i < _projectItems.length; i++) _itemRow(i),
+          if (!_loaded)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_items.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'ไม่มีข้อมูลเกณฑ์โครงการจากระบบ',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15, color: Colors.black45),
+              ),
+            )
+          else
+            for (var i = 0; i < _items.length; i++) _itemRow(i),
           const SizedBox(height: 14),
           // กล่องเตือนส้ม — โชว์เฉพาะตอนเกณฑ์บังคับยังไม่ครบ
           if (missing.isNotEmpty)
@@ -384,7 +430,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving || _items.isEmpty ? null : _save,
                   icon: const Icon(Iconsax.save_2, size: 22),
                   label: Text(
                     _saving ? 'กำลังบันทึก…' : 'บันทึกข้อมูลโครงการ',

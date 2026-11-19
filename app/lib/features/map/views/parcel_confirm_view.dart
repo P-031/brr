@@ -34,16 +34,27 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
   bool _saving = false;
 
   late final Future<
-    ({List<String> years, FormOptions opts, Map meta, double rai})
+    ({List<String> years, FormOptions? opts, Map meta, double rai})
   >
   _dataFut = _load();
 
-  Future<({List<String> years, FormOptions opts, Map meta, double rai})>
+  Future<({List<String> years, FormOptions? opts, Map meta, double rai})>
   _load() async {
-    final years = await widget.vm.loadYears();
-    final opts = await widget.vm.loadOptions();
+    // catch ทีละ call — ออฟไลน์/endpoint พังตัวใดตัวหนึ่งไม่ให้
+    // ทั้งหน้าว่าง (เดิม future ล้ม = ไม่มี error UI แสดงอะไรเลย)
+    List<String> years = const [];
+    FormOptions? opts;
+    Map<String, dynamic>? detail;
+    try {
+      years = await widget.vm.loadYears();
+    } catch (_) {}
+    try {
+      opts = await widget.vm.loadOptions();
+    } catch (_) {}
+    try {
+      detail = await widget.vm.detail;
+    } catch (_) {}
     // meta/พื้นที่ล่าสุดจาก /plots/:id — fallback ข้อมูลแปลงที่มีอยู่
-    final detail = await widget.vm.detail;
     final meta =
         (detail?['meta'] as Map<String, dynamic>?) ??
         widget.vm.parcel.meta ??
@@ -272,7 +283,7 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
       ),
       body:
           FutureBuilder<
-            ({List<String> years, FormOptions opts, Map meta, double rai})
+            ({List<String> years, FormOptions? opts, Map meta, double rai})
           >(
             future: _dataFut,
             builder: (context, snap) {

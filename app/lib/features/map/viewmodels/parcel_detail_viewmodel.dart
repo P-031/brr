@@ -200,6 +200,7 @@ class ParcelDetailViewModel extends ChangeNotifier {
 
   Future<void> saveCutStatus({
     required String status,
+    String? statusCode,
     String? startDate,
     String? endDate,
     String? estimateTons,
@@ -207,6 +208,7 @@ class ParcelDetailViewModel extends ChangeNotifier {
   }) => _service.saveCutStatus(
     plotId: parcel.id,
     status: status,
+    statusCode: statusCode,
     startDate: startDate,
     endDate: endDate,
     estimateTons: estimateTons,

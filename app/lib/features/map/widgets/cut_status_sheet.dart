@@ -4,15 +4,18 @@ import 'package:iconsax/iconsax.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/digit_formatter.dart';
 import 'package:brr/core/widgets/thai_date_picker.dart';
+import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 
-/// (ตัวอักษร badge, ชื่อ, สี) ต่อสถานะแปลงตัด — เลือกได้ 1 รายการ
-const _statuses = [
-  ('N', 'ยังไม่ตัด', Color(0xFF757575)),
-  ('Y', 'กำลังตัด', Color(0xFFF57C00)),
-  ('F', 'ตัดเสร็จ', Color(0xFF2E7D32)),
-  ('S', 'หยุดพักชั่วคราว', Color(0xFF1565C0)),
-];
+/// สี badge ต่อรหัสสถานะ — เรื่องการแสดงผลอยู่ฝั่งแอป;
+/// code/ชื่อสถานะมาจาก backend (/meta/options → cutStatuses)
+/// code ที่ไม่รู้จักใช้สีเทา
+const _statusColors = {
+  'N': Color(0xFF757575),
+  'Y': Color(0xFFF57C00),
+  'F': Color(0xFF2E7D32),
+  'S': Color(0xFF1565C0),
+};
 
 const _months = [
   'ม.ค.',
@@ -63,7 +66,12 @@ class _CutStatusSheet extends StatefulWidget {
 }
 
 class _CutStatusSheetState extends State<_CutStatusSheet> {
+  /// ตัวเลือกสถานะจาก `/meta/options → cutStatuses` — ไม่ hardcode;
+  /// ว่างเมื่อ backend ยังไม่ส่ง (แสดงข้อความแทน list)
+  List<OptionItem> _items = const [];
+  bool _loaded = false;
   String? _status;
+  String? _statusCode;
   DateTime? _startDate;
   DateTime? _endDate;
   late final TextEditingController _estimateCtrl;
@@ -77,20 +85,46 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
     _estimateCtrl = TextEditingController(
       text: '${widget.vm.parcel.meta?['targetYield'] ?? ''}',
     );
-    // เติมค่าที่เคยบันทึกในเครื่อง
-    widget.vm.cutStatus().then((r) {
-      if (r == null || !mounted) return;
-      setState(() {
-        _status = '${r['status'] ?? ''}'.isEmpty ? null : '${r['status']}';
-        _startDate = DateTime.tryParse('${r['startDate']}');
-        _endDate = DateTime.tryParse('${r['endDate']}');
-        final cut = '${r['cutCaneTons'] ?? ''}';
+    _load();
+  }
+
+  /// โหลดตัวเลือกสถานะจาก backend + เติมค่าที่เคยบันทึกในเครื่อง
+  /// — โหลดพังก็โชว์สถานะว่างแทนค้าง
+  Future<void> _load() async {
+    List<OptionItem> items = const [];
+    Map<String, dynamic>? saved;
+    try {
+      items = (await widget.vm.loadOptions()).cutStatuses;
+    } catch (_) {}
+    try {
+      saved = await widget.vm.cutStatus();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _items = items;
+      _loaded = true;
+      if (saved != null) {
+        // จับคู่ด้วย code ก่อน ไม่เจอค่อยเทียบชื่อ — กัน backend
+        // เปลี่ยน label แล้วค่าเก่าหลุด
+        final code = '${saved['statusCode'] ?? ''}';
+        final name = '${saved['status'] ?? ''}';
+        for (final it in _items) {
+          if ((code.isNotEmpty && it.code == code) ||
+              (name.isNotEmpty && it.name == name)) {
+            _status = it.name;
+            _statusCode = it.code;
+            break;
+          }
+        }
+        _startDate = DateTime.tryParse('${saved['startDate']}');
+        _endDate = DateTime.tryParse('${saved['endDate']}');
+        final cut = '${saved['cutCaneTons'] ?? ''}';
         if (cut.isNotEmpty) _cutCaneCtrl.text = cut;
-        final est = '${r['estimateTons'] ?? ''}';
+        final est = '${saved['estimateTons'] ?? ''}';
         if (est.isNotEmpty && _estimateCtrl.text.isEmpty) {
           _estimateCtrl.text = est;
         }
-      });
+      }
     });
   }
 
@@ -125,15 +159,15 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
   Future<void> _save() async {
     if (_saving) return;
     if (_status == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('กรุณาเลือกสถานะแปลง')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('กรุณาเลือกสถานะแปลง')));
       return;
     }
     setState(() => _saving = true);
     try {
       await widget.vm.saveCutStatus(
         status: _status!,
+        statusCode: _statusCode,
         startDate: _iso(_startDate),
         endDate: _iso(_endDate),
         estimateTons: _estimateCtrl.text.trim().isEmpty
@@ -146,24 +180,27 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  /// แถวตัวเลือกสถานะ — วงกลม radio + badge ตัวอักษรสี + ชื่อ
+  /// แถวตัวเลือกสถานะ — วงกลม radio + badge รหัสสี + ชื่อ
   Widget _statusRow(int i) {
-    final (letter, name, color) = _statuses[i];
-    final selected = _status == name;
+    final item = _items[i];
+    final color = _statusColors[item.code] ?? Colors.grey.shade600;
+    final selected = _status == item.name;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => setState(() => _status = name),
+        onTap: () => setState(() {
+          _status = item.name;
+          _statusCode = item.code;
+        }),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
@@ -177,9 +214,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
           child: Row(
             children: [
               Icon(
-                selected
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
+                selected ? Icons.radio_button_checked : Icons.radio_button_off,
                 size: 24,
                 color: selected ? AppColors.green : Colors.grey.shade400,
               ),
@@ -193,7 +228,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  letter,
+                  item.code,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -202,7 +237,9 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: Text(name, style: const TextStyle(fontSize: 16.5))),
+              Expanded(
+                child: Text(item.name, style: const TextStyle(fontSize: 16.5)),
+              ),
             ],
           ),
         ),
@@ -289,7 +326,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A237E),
+                        color: AppColors.navy,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -320,7 +357,27 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
               style: TextStyle(fontSize: 14, color: Colors.black45),
             ),
           ),
-          for (var i = 0; i < _statuses.length; i++) _statusRow(i),
+          if (!_loaded)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_items.isEmpty)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'ไม่มีข้อมูลสถานะแปลงจากระบบ',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 15, color: Colors.black45),
+              ),
+            )
+          else
+            for (var i = 0; i < _items.length; i++) _statusRow(i),
           const SizedBox(height: 16),
           _label('วันที่เริ่มตัด'),
           _dateField('เลือกวันที่เริ่มตัด', _startDate, true),
@@ -338,13 +395,10 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                     _label('ประมาณตัน'),
                     TextField(
                       controller: _estimateCtrl,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                      inputFormatters: const [
-                        DigitFormatter(decimal: true),
-                      ],
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: const [DigitFormatter(decimal: true)],
                       style: const TextStyle(fontSize: 16.5),
                       decoration: InputDecoration(
                         isDense: true,
@@ -352,15 +406,11 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                         fillColor: Colors.grey.shade100,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: Colors.grey.shade300,
-                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: Colors.grey.shade300,
-                          ),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -394,10 +444,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                       // รอข้อมูลหีบจาก backend — โชว์ค่าเริ่มต้น
                       child: const Text(
                         '0.00 (0.0%)',
-                        style: TextStyle(
-                          fontSize: 16.5,
-                          color: Colors.black54,
-                        ),
+                        style: TextStyle(fontSize: 16.5, color: Colors.black54),
                       ),
                     ),
                   ],
@@ -409,9 +456,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
           _label('ตัดพันธุ์อ้อย (ตัน)'),
           TextField(
             controller: _cutCaneCtrl,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: const [DigitFormatter(decimal: true)],
             style: const TextStyle(fontSize: 16.5),
             decoration: InputDecoration(
@@ -467,7 +512,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving || _items.isEmpty ? null : _save,
                   icon: const Icon(Iconsax.save_2, size: 22),
                   label: Text(
                     _saving ? 'กำลังบันทึก…' : 'บันทึก',
