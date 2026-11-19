@@ -629,8 +629,9 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                       ),
                       onTap: () => _pushFullScreen(
                         ActivityDraftsView(vm: widget.vm),
-                        onReturn: () =>
-                            setState(() => _acts = widget.vm.activityDrafts()),
+                        onReturn: () => setState(() {
+                          _acts = widget.vm.activityDrafts();
+                        }),
                       ),
                     );
                   },

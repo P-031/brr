@@ -22,11 +22,16 @@ class ActivityDetailView extends StatefulWidget {
     required this.vm,
     required this.photoPaths,
     required this.activityNo,
+    this.draft,
   });
 
   final ParcelDetailViewModel vm;
   final List<String> photoPaths;
   final int activityNo;
+
+  /// ร่างที่บันทึกไว้ในเครื่อง — มีค่าเมื่อเปิดมาแก้ไขจาก
+  /// หน้า "นำส่งกิจกรรม" (prefill ทุกช่อง + บันทึกทับรายการเดิม)
+  final Map<String, dynamic>? draft;
 
   @override
   State<ActivityDetailView> createState() => _ActivityDetailViewState();
@@ -86,7 +91,92 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     // prefill กลุ่มอ้อยจากข้อมูลแปลงถ้ามี
     _caneGroup = widget.vm.parcel.meta?['caneGroup'] as String?;
     _photos.addAll(widget.photoPaths.take(3));
+    _prefillDraft();
     _recoverLostPhoto();
+  }
+
+  /// เปิดมาแก้ไขร่าง — เติมค่าที่เคยบันทึกกลับทุกช่อง
+  void _prefillDraft() {
+    final d = widget.draft;
+    if (d == null) return;
+    String s(String k) => '${d[k] ?? ''}';
+    void fill(TextEditingController c, String k) {
+      final v = s(k);
+      if (v.isNotEmpty) c.text = v;
+    }
+
+    String? e(String k) {
+      final v = s(k);
+      return v.isEmpty ? null : v;
+    }
+
+    final planted = DateTime.tryParse(s('plantedAt'));
+    if (planted != null) {
+      _plantedAt = planted;
+      _dateCtrl.text = _fmtThai(planted);
+    }
+    _caneGroup = e('caneGroup') ?? _caneGroup;
+    _herbicide = e('herbicideUsed');
+    fill(_rateCtrl, 'fertilizerRate');
+    fill(_nCtrl, 'npkN');
+    fill(_pCtrl, 'npkP');
+    fill(_kCtrl, 'npkK');
+    _mpiApplied = d['mpiApplied'] as bool?;
+    for (final r in d['fertilizerRounds'] as List? ?? const []) {
+      final m = Map<String, dynamic>.from(r as Map);
+      _rounds.add(
+        _FertRound(
+          date: DateTime.tryParse('${m['date']}'),
+          rate: '${m['rate'] ?? ''}',
+          npk: '${m['npk'] ?? ''}',
+          n: '${m['npkN'] ?? ''}',
+          p: '${m['npkP'] ?? ''}',
+          k: '${m['npkK'] ?? ''}',
+        ),
+      );
+    }
+    _organicType = e('organicFertilizerType');
+    fill(_organicRateCtrl, 'organicRate');
+    _organicDate = DateTime.tryParse(s('organicDate'));
+    fill(_dolomiteRateCtrl, 'dolomiteRate');
+    _dolomiteDate = DateTime.tryParse(s('dolomiteDate'));
+    _weedPresent = d['weedPresent'] as bool?;
+    _subsoiled = d['subsoiled'] as bool?;
+    fill(_subsoilDepthCtrl, 'subsoilDepth');
+    _diseasePresent = d['diseasePresent'] as bool?;
+    _diseaseType = e('diseaseType');
+    fill(_diseaseSpreadCtrl, 'diseaseSpread');
+    _diseaseManaged = d['diseaseManaged'] as bool?;
+    _pestPresent = d['pestPresent'] as bool?;
+    _pestType = e('pestType');
+    fill(_pestSpreadCtrl, 'pestSpread');
+    fill(_pestDamageCtrl, 'pestDamage');
+    _pestManaged = d['pestManaged'] as bool?;
+    _hilled = d['hilled'] as bool?;
+    _germPercent = e('germinationPercent');
+    final farmerName = e('harvestGroupFarmer');
+    if (farmerName != null) {
+      _harvestGroupFarmer = FarmerRef(
+        id: e('harvestGroupFarmerId') ?? '',
+        name: farmerName,
+      );
+    }
+    _lossReason = e('lossReason');
+    fill(_lossAreaCtrl, 'lossAreaRai');
+    fill(_yieldEstimateCtrl, 'yieldEstimate');
+    fill(_cutVarietyCtrl, 'cutVarietyDeduction');
+    fill(_cutLossKgCtrl, 'cutLossKgPerRai');
+    fill(_cutLossTonCtrl, 'cutLossTons');
+    _cutLossReason = e('cutLossReason');
+    _seedCane = d['seedCane'] == true;
+    fill(_seedNoteCtrl, 'seedCaneNote');
+    fill(_suggestionCtrl, 'suggestion');
+    // รูปที่ persist ไว้ตอนบันทึกร่าง — ใช้ของร่างแทน photoPaths
+    if ((d['photos'] as List? ?? const []).isNotEmpty) {
+      _photos
+        ..clear()
+        ..addAll([for (final p in d['photos'] as List) '$p'].take(3));
+    }
   }
 
   @override
@@ -464,6 +554,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         seedCane: _seedCane,
         seedCaneNote: num(_seedNoteCtrl),
         suggestion: num(_suggestionCtrl),
+        activityId: widget.draft?['id'] as String?,
         plantedAt: iso(planted),
       );
       if (mounted) {

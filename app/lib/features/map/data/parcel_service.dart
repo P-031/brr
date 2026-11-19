@@ -235,11 +235,14 @@ class ParcelService {
     bool? seedCane,
     String? seedCaneNote,
     String? suggestion,
+    // แก้ไขร่างเดิม — ส่ง id ของรายการเดิมมา จะเขียนทับแทนเพิ่มใหม่
+    // (เก็บ id/createdAt/submitStatus เดิมไว้)
+    String? activityId,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
-    items.add({
-      'id': 'act-${DateTime.now().millisecondsSinceEpoch}',
+    final entry = <String, dynamic>{
+      'id': activityId ?? 'act-${DateTime.now().millisecondsSinceEpoch}',
       'plotId': plotId,
       'photos': [for (final p in photoPaths) await _persistPhoto(p)],
       'detailPending': detailPending,
@@ -285,8 +288,21 @@ class ParcelService {
       'seedCane': ?seedCane,
       'seedCaneNote': ?seedCaneNote,
       'suggestion': ?suggestion,
-      'createdAt': DateTime.now().toIso8601String(),
-    });
+    };
+    // อัปเดตรายการเดิม — คงเวลาบันทึกแรก + สถานะการส่งไว้
+    if (activityId != null) {
+      final i = items.indexWhere((a) => a['id'] == activityId);
+      if (i >= 0) {
+        entry['createdAt'] = items[i]['createdAt'];
+        entry['submitStatus'] = items[i]['submitStatus'] ?? 'pending';
+        items[i] = entry;
+        await prefs.setString(_activityKey, jsonEncode(items));
+        return;
+      }
+    }
+    entry['submitStatus'] = 'pending';
+    entry['createdAt'] = DateTime.now().toIso8601String();
+    items.add(entry);
     await prefs.setString(_activityKey, jsonEncode(items));
   }
 

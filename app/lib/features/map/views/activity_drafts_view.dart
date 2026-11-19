@@ -5,6 +5,7 @@ import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
+import 'package:brr/features/map/views/activity_detail_view.dart';
 
 /// หน้า "นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง" — list กิจกรรมของแปลง
 /// ที่บันทึกลงเครื่อง (รูปเท่านั้นรอรายละเอียด / กรอกครบรอนำส่ง)
@@ -126,6 +127,26 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
     ),
   );
 
+  /// ปุ่มแก้ไข — เด้งหน้าบันทึกกิจกรรมพร้อม prefill จากร่าง
+  /// บันทึกแล้ว reload list (รายการเดิมถูกเขียนทับด้วย id เดิม)
+  Future<void> _openEdit(int no, Map<String, dynamic> a) async {
+    final msg = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => ActivityDetailView(
+          vm: widget.vm,
+          photoPaths: const [],
+          activityNo: no,
+          draft: a,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    _reload();
+    if (msg != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    }
+  }
+
   Widget _card(int no, Map<String, dynamic> a) {
     final pending = a['detailPending'] == true;
     final photos = a['photos'] as List? ?? const [];
@@ -156,6 +177,19 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
                         ),
                       ),
                     ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => _openEdit(no, a),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Iconsax.edit,
+                          size: 22,
+                          color: AppColors.green,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
                     InkWell(
                       borderRadius: BorderRadius.circular(20),
                       onTap: () => _confirmDelete(a),
@@ -203,22 +237,68 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
           return const Center(child: CircularProgressIndicator());
         }
         final items = snap.data ?? const [];
-        if (items.isEmpty) {
-          return const Center(
-            child: Text(
-              'ยังไม่มีกิจกรรมที่บันทึกไว้ในเครื่อง',
-              style: TextStyle(fontSize: 16, color: Colors.black45),
-            ),
-          );
-        }
-        // "ครั้งที่ N" นับตามเวลาบันทึก (เก่าสุด = ครั้งที่ 1) —
-        // แสดงใหม่สุดบนสุดแต่เลขครั้งยังเรียงถูก
-        return ListView.builder(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
-          itemCount: items.length,
-          itemBuilder: (_, i) => _card(items.length - i, items[i]),
+        // แบ่งตามสถานะการส่ง — รายการเก่าไม่มี field นับเป็น
+        // "รอส่งขึ้นระบบ" (ยังไม่มี endpoint นำส่งจริง)
+        final pending = [
+          for (final a in items)
+            if ('${a['submitStatus'] ?? 'pending'}' == 'pending') a,
+        ];
+        final failed = [
+          for (final a in items)
+            if (a['submitStatus'] == 'failed') a,
+        ];
+        final sent = [
+          for (final a in items)
+            if (a['submitStatus'] == 'sent') a,
+        ];
+        return DefaultTabController(
+          length: 3,
+          child: Column(
+            children: [
+              Container(
+                color: Colors.white,
+                child: TabBar(
+                  labelColor: AppColors.green,
+                  unselectedLabelColor: Colors.black54,
+                  indicatorColor: AppColors.green,
+                  labelStyle: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  tabs: [
+                    Tab(text: 'รอส่งขึ้นระบบ (${pending.length})'),
+                    Tab(text: 'ส่งไม่สำเร็จ (${failed.length})'),
+                    Tab(text: 'ส่งสำเร็จแล้ว (${sent.length})'),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [_list(pending), _list(failed), _list(sent)],
+                ),
+              ),
+            ],
+          ),
         );
       },
     ),
   );
+
+  Widget _list(List<Map<String, dynamic>> items) {
+    if (items.isEmpty) {
+      return const Center(
+        child: Text(
+          'ไม่มีรายการ',
+          style: TextStyle(fontSize: 16, color: Colors.black45),
+        ),
+      );
+    }
+    // "ครั้งที่ N" นับตามเวลาบันทึก (เก่าสุด = ครั้งที่ 1) —
+    // แสดงใหม่สุดบนสุดแต่เลขครั้งยังเรียงถูก
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+      itemCount: items.length,
+      itemBuilder: (_, i) => _card(items.length - i, items[i]),
+    );
+  }
 }
