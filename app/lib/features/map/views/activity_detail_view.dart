@@ -166,7 +166,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.25,
+              color: Colors.black87,
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -229,7 +233,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.25,
+              color: Colors.black87,
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -259,7 +267,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.25,
+              color: Colors.black87,
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -490,7 +502,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.25,
+              color: Colors.black87,
+            ),
           ),
         ),
         const SizedBox(width: 10),
