@@ -291,8 +291,9 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                           '${_thaiMonthsShort[_selected.month - 1]} '
                           '${_selected.year + 543}',
                           style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w600,
+                            fontSize: 30,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.green,
                           ),
                         ),
                       ),
@@ -358,16 +359,16 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                   IconButton(
                     onPressed: () => _shiftMonth(-1),
                     icon: const Icon(
-                      Iconsax.arrow_left_2,
-                      size: 28,
+                      Icons.chevron_left,
+                      size: 30,
                       color: Colors.black54,
                     ),
                   ),
                   IconButton(
                     onPressed: () => _shiftMonth(1),
                     icon: const Icon(
-                      Iconsax.arrow_right_2,
-                      size: 28,
+                      Icons.chevron_right,
+                      size: 30,
                       color: Colors.black54,
                     ),
                   ),
