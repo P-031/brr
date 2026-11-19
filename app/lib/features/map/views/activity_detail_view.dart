@@ -712,7 +712,14 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                           ),
                         ),
                         Text(
-                          (double.tryParse(_rateCtrl.text) ?? 0)
+                          // อัตราฝ่ากอ + รวมอัตราทุกรอบใส่ปุ๋ย
+                          ((double.tryParse(_rateCtrl.text) ?? 0) +
+                                  _rounds.fold<double>(
+                                    0,
+                                    (s, r) =>
+                                        s +
+                                        (double.tryParse(r.rate ?? '') ?? 0),
+                                  ))
                               .toStringAsFixed(1),
                           style: const TextStyle(
                             fontSize: 17,
