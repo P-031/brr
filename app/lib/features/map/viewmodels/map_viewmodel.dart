@@ -65,6 +65,8 @@ class MapViewModel extends ChangeNotifier {
   // drawing state
   bool _drawing = false;
   final List<LatLng> _draft = [];
+  final List<WalkCorner> _corners = [];
+  DateTime? _walkStartedAt;
 
   // walk-measure state
   StreamSubscription<Position>? _posSub;
@@ -72,7 +74,7 @@ class MapViewModel extends ChangeNotifier {
   bool _walkPaused = false;
   double? _gpsAccuracy;
 
-  /// นับ fix ที่ accuracy >20ม. ต่อเนื่อง — ครบ 5 → auto-pause
+  /// นับ fix ที่ accuracy เกิน 15 ม. ต่อเนื่อง — ครบ 5 → auto-pause
   int _badFixStreak = 0;
 
   /// true เมื่อหยุดพักเพราะ GPS แย่ (ไม่ใช่ผู้ใช้กดพักเอง) —
@@ -337,6 +339,8 @@ class MapViewModel extends ChangeNotifier {
     _autoPaused = false;
     _badFixStreak = 0;
     _draft.clear();
+    _corners.clear();
+    _walkStartedAt = DateTime.now();
     notifyListeners();
     _posSub = _location
         .positionStream()
@@ -378,7 +382,7 @@ class MapViewModel extends ChangeNotifier {
       return;
     }
     // สัญญาณแย่เกิน — badge เปลี่ยนสีแต่ไม่ลงจุด
-    if (p.accuracy > 20) {
+    if (p.accuracy > 15) {
       // GPS แย่ต่อเนื่อง — auto-pause กันเส้นกระโดด/จุดหลุด
       // ผู้ใช้กดเดินต่อเองเมื่อสัญญาณดีกลับมา
       _badFixStreak++;
@@ -410,7 +414,7 @@ class MapViewModel extends ChangeNotifier {
         return;
       }
     }
-    _draft.add(_lastFix!);
+    _addWalkPoint(_lastFix!, p.accuracy);
     notifyListeners();
   }
 
@@ -437,14 +441,47 @@ class MapViewModel extends ChangeNotifier {
       if (d < 2.5) return 'อยู่ใกล้จุดล่าสุดเกินไป — เดินออกไปอีก';
       if (d > 25) return 'พิกัดกระโดดผิดปกติ — ไม่สามารถบันทึกค่าได้';
     }
-    _draft.add(fix);
+    _addWalkPoint(fix, acc);
     notifyListeners();
     return null;
+  }
+
+  void _addWalkPoint(LatLng point, double accuracyM) {
+    var capturedAt = DateTime.now();
+    if (_corners.isNotEmpty && !capturedAt.isAfter(_corners.last.capturedAt)) {
+      capturedAt = _corners.last.capturedAt.add(const Duration(milliseconds: 1));
+    }
+    _draft.add(point);
+    _corners.add(
+      WalkCorner(
+        point: point,
+        accuracyM: accuracyM < 0.1 ? 0.1 : accuracyM,
+        capturedAt: capturedAt,
+      ),
+    );
+  }
+
+  /// ส่งให้ backend ตรวจเกณฑ์เดินวัดได้เฉพาะเมื่อทุกมุมมาจาก GPS
+  Map<String, Object?>? _surveyPayload() {
+    final started = _walkStartedAt;
+    if (started == null || _corners.isEmpty || _corners.length != _draft.length) {
+      return null;
+    }
+    var finished = DateTime.now();
+    if (!finished.isAfter(_corners.last.capturedAt)) {
+      finished = _corners.last.capturedAt.add(const Duration(milliseconds: 1));
+    }
+    return {
+      'startedAt': started.toUtc().toIso8601String(),
+      'finishedAt': finished.toUtc().toIso8601String(),
+      'corners': [for (final corner in _corners) corner.toJson()],
+    };
   }
 
   /// ย้อนกลับ — remove the last drafted point.
   void undoDraftPoint() {
     if (_draft.isNotEmpty) _draft.removeLast();
+    if (_corners.length > _draft.length) _corners.removeLast();
     notifyListeners();
   }
 
@@ -452,6 +489,14 @@ class MapViewModel extends ChangeNotifier {
   void moveDraftPoint(int index, LatLng p) {
     if (index < 0 || index >= _draft.length) return;
     _draft[index] = p;
+    if (index < _corners.length) {
+      final corner = _corners[index];
+      _corners[index] = WalkCorner(
+        point: p,
+        accuracyM: corner.accuracyM,
+        capturedAt: corner.capturedAt,
+      );
+    }
     notifyListeners();
   }
 
@@ -459,6 +504,7 @@ class MapViewModel extends ChangeNotifier {
   void clearDraft() {
     if (_draft.isEmpty) return;
     _draft.clear();
+    _corners.clear();
     notifyListeners();
   }
 
@@ -469,6 +515,8 @@ class MapViewModel extends ChangeNotifier {
     _walking = false;
     _walkPaused = false;
     _draft.clear();
+    _corners.clear();
+    _walkStartedAt = null;
     notifyListeners();
   }
 
@@ -532,6 +580,7 @@ class MapViewModel extends ChangeNotifier {
         photos: photos,
         draft: draft,
         points: List.of(_draft),
+        survey: _surveyPayload(),
       );
       _parcels = [..._parcels, p];
       _invalidateRender();
@@ -544,4 +593,24 @@ class MapViewModel extends ChangeNotifier {
       notifyListeners();
     }
   }
+}
+
+/// มุมหนึ่งมุมจากการเดินวัด — backend ใช้ตรวจความแม่นยำไม่เกิน 15 เมตร
+class WalkCorner {
+  const WalkCorner({
+    required this.point,
+    required this.accuracyM,
+    required this.capturedAt,
+  });
+
+  final LatLng point;
+  final double accuracyM;
+  final DateTime capturedAt;
+
+  Map<String, Object> toJson() => {
+    'latitude': point.latitude,
+    'longitude': point.longitude,
+    'accuracyM': accuracyM,
+    'capturedAt': capturedAt.toUtc().toIso8601String(),
+  };
 }

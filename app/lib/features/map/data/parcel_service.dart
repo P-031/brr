@@ -407,6 +407,7 @@ class ParcelService {
     List<String> photos = const [],
     bool draft = false,
     required List<LatLng> points,
+    Map<String, Object?>? survey,
   }) async {
     // Draft = save on device only, never posts to the backend.
     if (!draft && ApiConfig.enabled && _api != null) {
@@ -438,10 +439,12 @@ class ParcelService {
           'lossRai': ?double.tryParse(lossRai ?? ''),
           'targetYield': ?double.tryParse(targetYield ?? ''),
           'note': ?note,
-          'points': [
-            for (final p in points)
-              {'latitude': p.latitude, 'longitude': p.longitude},
-          ],
+          'survey': ?survey,
+          if (survey == null)
+            'points': [
+              for (final p in points)
+                {'latitude': p.latitude, 'longitude': p.longitude},
+            ],
         },
       );
       if (res.statusCode >= 300) {
@@ -483,6 +486,7 @@ class ParcelService {
         'lossRai': ?lossRai,
         'targetYield': ?targetYield,
         'note': ?note,
+        'survey': ?survey,
         // path รูปถ่ายตอนบันทึก — หน้าร่างใช้แสดง + ฟอร์ม prefill
         if (photos.isNotEmpty) 'photos': photos,
       },

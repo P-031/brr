@@ -132,6 +132,7 @@ class DraftsViewModel extends ChangeNotifier {
           for (final x in p.meta?['photos'] as List? ?? const []) '$x',
         ],
         points: points,
+        survey: _surveyOf(p),
       ),
       confirm: true,
     );
@@ -170,6 +171,7 @@ class DraftsViewModel extends ChangeNotifier {
         photos: r.photos,
         draft: r.draft,
         points: points,
+        survey: _surveyOf(old),
       ),
       // ส่งจริง → ร่างเดิมกลายเป็น "ยืนยันแล้ว"; บันทึกร่างใหม่
       // → ลบตัวเก่า (ถูกร่างใหม่แทนแล้ว)
@@ -186,6 +188,12 @@ class DraftsViewModel extends ChangeNotifier {
     } catch (e) {
       return '$e';
     }
+  }
+
+  Map<String, Object?>? _surveyOf(Parcel parcel) {
+    final raw = parcel.meta?['survey'];
+    if (raw is! Map) return null;
+    return Map<String, Object?>.from(raw);
   }
 
   /// สร้าง parcel ผ่าน callback → สำเร็จแล้วจัดการร่างต้นทาง
