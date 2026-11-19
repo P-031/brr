@@ -396,11 +396,12 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
               child: Container(
                 width: 28,
                 height: 28,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
                   shape: BoxShape.circle,
+                  border: Border.all(color: Colors.red, width: 1.5),
                 ),
-                child: const Icon(Icons.close, size: 18, color: Colors.white),
+                child: const Icon(Icons.close, size: 18, color: Colors.red),
               ),
             ),
           ],
