@@ -370,7 +370,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         border: Border.all(
           // ปุ่มที่เลือกกรอบทองแบบปุ่มหน้า Home
           color: selected ? AppColors.gold : Colors.grey.shade300,
-          width: selected ? 3 : 1,
+          width: selected ? 4.5 : 1,
         ),
       ),
       child: Center(
