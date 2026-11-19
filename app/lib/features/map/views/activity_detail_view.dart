@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/digit_formatter.dart';
+import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/core/widgets/thai_date_picker.dart';
 import 'package:brr/features/map/models/parcel.dart';
@@ -67,6 +71,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   final _cutLossKgCtrl = TextEditingController();
   final _cutLossTonCtrl = TextEditingController();
   String? _cutLossReason;
+  bool _seedCane = false;
+  final _seedNoteCtrl = TextEditingController();
+  final _suggestionCtrl = TextEditingController();
+  // รูปแนบกิจกรรม — seed จากรูปที่ถ่ายมาก่อนเข้าหน้า เพิ่ม/ลบได้ถึง 3 ใบ
+  final _photos = <String>[];
   double _areaRai = 0;
   bool _saving = false;
   late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
@@ -76,6 +85,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     super.initState();
     // prefill กลุ่มอ้อยจากข้อมูลแปลงถ้ามี
     _caneGroup = widget.vm.parcel.meta?['caneGroup'] as String?;
+    _photos.addAll(widget.photoPaths.take(3));
+    _recoverLostPhoto();
   }
 
   @override
@@ -96,6 +107,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     _cutVarietyCtrl.dispose();
     _cutLossKgCtrl.dispose();
     _cutLossTonCtrl.dispose();
+    _seedNoteCtrl.dispose();
+    _suggestionCtrl.dispose();
     super.dispose();
   }
 
@@ -147,6 +160,34 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
     if (picked != null) setState(() => set(picked));
+  }
+
+  /// เลือก/ถ่ายรูปเพิ่ม (สูงสุด 3 ใบ) — image_picker throw ได้บาง
+  /// เครื่อง กัน unhandled error แล้วแจ้งผู้ใช้แทนที่จะเงียบ
+  Future<void> _pickPhoto() async {
+    if (_photos.length >= 3) return;
+    final source = await showImageSourceSheet(context);
+    if (source == null) return;
+    try {
+      final x = await ImagePicker().pickImage(source: source, maxWidth: 1600);
+      if (x != null) setState(() => _photos.add(x.path));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('เปิดกล้องไม่สำเร็จ')));
+    }
+  }
+
+  /// Android ฆ่าแอประหว่างเปิดกล้อง (เครื่อง RAM น้อย) — ดึงรูปที่
+  /// ค้างใน pending state กลับมาตอนเปิดหน้าอีกครั้ง
+  Future<void> _recoverLostPhoto() async {
+    try {
+      final lost = await ImagePicker().retrieveLostData();
+      final file = lost.file;
+      if (file != null && mounted && _photos.length < 3) {
+        setState(() => _photos.add(file.path));
+      }
+    } catch (_) {}
   }
 
   /// แถว label (ชิดขวา) + ช่องเทาแบบ dropdown ในการ์ด —
@@ -377,7 +418,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
 
     try {
       await widget.vm.saveActivityDraft(
-        photoPaths: widget.photoPaths,
+        photoPaths: _photos,
         detailPending: false,
         caneGroup: _caneGroup,
         herbicideUsed: _herbicide,
@@ -417,6 +458,9 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         cutLossTons: num(_cutLossTonCtrl),
         cutLossReason: _cutLossReason,
         actualHarvestTons: _actualTons().toStringAsFixed(3),
+        seedCane: _seedCane,
+        seedCaneNote: num(_seedNoteCtrl),
+        suggestion: num(_suggestionCtrl),
         plantedAt: iso(planted),
       );
       if (mounted) Navigator.of(context).pop('บันทึกกิจกรรมเรียบร้อย');
@@ -1742,6 +1786,238 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                     _calcRow(
                       'ปริมาณอ้อยเข้าหีบจริง(ตัน)\n(ตันรวม−หักสูญเสียรวม)',
                       _actualTons(),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              // อ้อยพันธุ์ — checkbox + รายละเอียด
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'อ้อยพันธุ์',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: () => setState(() => _seedCane = !_seedCane),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Checkbox(
+                            value: _seedCane,
+                            activeColor: AppColors.green,
+                            visualDensity: VisualDensity.compact,
+                            onChanged: (v) =>
+                                setState(() => _seedCane = v ?? false),
+                          ),
+                          const Expanded(
+                            child: Padding(
+                              padding: EdgeInsets.only(top: 12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'อ้อยพันธุ์',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.green,
+                                    ),
+                                  ),
+                                  Text(
+                                    'เลือกหากแปลงนี้เหมาะสมเป็นอ้อยพันธุ์',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.black54,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 5),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            flex: 5,
+                            child: Text(
+                              'รายละเอียดอ้อยพันธุ์ :',
+                              textAlign: TextAlign.end,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 6,
+                            child: TextField(
+                              controller: _seedNoteCtrl,
+                              style: const TextStyle(fontSize: 16),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                focusedBorder: UnderlineInputBorder(
+                                  borderSide: BorderSide(
+                                    color: AppColors.gold,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // ข้อเสนอแนะ / ตรวจสอบ — พิมพ์อิสระหลายบรรทัด
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ข้อเสนอแนะ / ตรวจสอบ',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _suggestionCtrl,
+                      maxLines: 3,
+                      style: const TextStyle(fontSize: 16),
+                      decoration: const InputDecoration(
+                        labelText: 'ข้อเสนอแนะ',
+                        isDense: true,
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(
+                            color: AppColors.gold,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // ภาพถ่าย — รูปที่ถ่ายมา + เพิ่ม/ลบได้สูงสุด 3 ใบ
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'ภาพถ่าย',
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          '${_photos.length}/3',
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                    if (_photos.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        height: 88,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _photos.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 10),
+                          itemBuilder: (context, i) => Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.file(
+                                  File(_photos[i]),
+                                  width: 88,
+                                  height: 88,
+                                  cacheWidth: 176,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                              Positioned(
+                                top: -4,
+                                right: -4,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _photos.removeAt(i)),
+                                  child: const CircleAvatar(
+                                    radius: 11,
+                                    backgroundColor: Colors.white,
+                                    child: Icon(
+                                      Iconsax.close_circle,
+                                      size: 16,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton.icon(
+                        onPressed: _photos.length < 3 ? _pickPhoto : null,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.green,
+                          side: const BorderSide(color: AppColors.green),
+                        ),
+                        icon: const Icon(Iconsax.camera, size: 24),
+                        label: const Text(
+                          'เพิ่มรูปภาพ',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),

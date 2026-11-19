@@ -78,6 +78,9 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? cutLossTons,
     String? cutLossReason,
     String? actualHarvestTons,
+    bool? seedCane,
+    String? seedCaneNote,
+    String? suggestion,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -121,6 +124,9 @@ class ParcelDetailViewModel extends ChangeNotifier {
     cutLossTons: cutLossTons,
     cutLossReason: cutLossReason,
     actualHarvestTons: actualHarvestTons,
+    seedCane: seedCane,
+    seedCaneNote: seedCaneNote,
+    suggestion: suggestion,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

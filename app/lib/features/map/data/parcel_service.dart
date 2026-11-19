@@ -232,6 +232,9 @@ class ParcelService {
     String? cutLossTons,
     String? cutLossReason,
     String? actualHarvestTons,
+    bool? seedCane,
+    String? seedCaneNote,
+    String? suggestion,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -279,6 +282,9 @@ class ParcelService {
       'cutLossTons': ?cutLossTons,
       'cutLossReason': ?cutLossReason,
       'actualHarvestTons': ?actualHarvestTons,
+      'seedCane': ?seedCane,
+      'seedCaneNote': ?seedCaneNote,
+      'suggestion': ?suggestion,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));
