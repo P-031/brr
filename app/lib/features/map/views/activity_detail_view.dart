@@ -129,10 +129,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     child: Row(
       children: [
         SizedBox(
-          width: 110,
+          width: 132,
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
+            softWrap: false,
             style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
@@ -181,10 +182,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     child: Row(
       children: [
         SizedBox(
-          width: 110,
+          width: 132,
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
+            softWrap: false,
             style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
