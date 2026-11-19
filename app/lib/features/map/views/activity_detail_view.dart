@@ -504,12 +504,17 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         ),
       ),
       child: Center(
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: selected ? Colors.white : Colors.black87,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            softWrap: false,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : Colors.black87,
+            ),
           ),
         ),
       ),
@@ -530,7 +535,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     child: Row(
       children: [
         Expanded(
-          flex: 5,
+          flex: 4,
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
@@ -539,7 +544,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         ),
         const SizedBox(width: 10),
         Expanded(
-          flex: 6,
+          flex: 7,
           child: Row(
             children: [
               for (final e
