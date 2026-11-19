@@ -34,6 +34,15 @@ class ParcelDetailViewModel extends ChangeNotifier {
   /// ใช้ตั้งชื่อ "ครั้งที่ N"
   Future<int> activityDraftCount() => _service.activityDraftCount(parcel.id);
 
+  /// กิจกรรมที่บันทึกไว้ในเครื่องของแปลง — ใหม่สุดก่อน
+  /// (หน้า "นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง")
+  Future<List<Map<String, dynamic>>> activityDrafts() =>
+      _service.activitiesFor(parcel.id);
+
+  /// ลบกิจกรรมในเครื่อง (+ รูปที่ persist ไว้ตามรายการ)
+  Future<void> removeActivityDraft(String id) =>
+      _service.removeActivityDraft(id);
+
   /// บันทึกกิจกรรมลงเครื่อง — photos = path ไฟล์ที่ถ่าย;
   /// `detailPending` = บันทึกเฉพาะรูปรอกรอกรายละเอียด
   Future<void> saveActivityDraft({

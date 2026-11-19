@@ -506,21 +506,20 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         border: Border.all(
           // ปุ่มที่เลือกกรอบทองแบบปุ่มหน้า Home
           color: selected ? AppColors.gold : Colors.grey.shade300,
-          width: selected ? 4.5 : 1,
+          width: selected ? 2.5 : 1,
         ),
       ),
       child: Center(
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            label,
-            maxLines: 1,
-            softWrap: false,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: selected ? Colors.white : Colors.black87,
-            ),
+        // ฟอนต์คงที่ทั้งสองปุ่ม — กรอบเล็กไปให้ตัดบรรทัด/ขยายกรอบแทนการย่อ
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          maxLines: 2,
+          overflow: TextOverflow.visible,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: selected ? Colors.white : Colors.black87,
           ),
         ),
       ),
@@ -551,18 +550,22 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         const SizedBox(width: 10),
         Expanded(
           flex: 7,
-          child: Row(
-            children: [
-              for (final e
-                  in reversed
-                      ? [(false, falseLabel), (true, trueLabel)]
-                      : [(true, trueLabel), (false, falseLabel)]) ...[
-                Expanded(
-                  child: _mpiButton(e.$2, value == e.$1, () => onSet(e.$1)),
-                ),
-                if (e.$1 != (reversed ? true : false)) const SizedBox(width: 8),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final e
+                    in reversed
+                        ? [(false, falseLabel), (true, trueLabel)]
+                        : [(true, trueLabel), (false, falseLabel)]) ...[
+                  Expanded(
+                    child: _mpiButton(e.$2, value == e.$1, () => onSet(e.$1)),
+                  ),
+                  if (e.$1 != (reversed ? true : false))
+                    const SizedBox(width: 8),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],

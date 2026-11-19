@@ -294,6 +294,31 @@ class ParcelService {
   Future<int> activityDraftCount(String plotId) async =>
       (await _loadActivities()).where((a) => a['plotId'] == plotId).length;
 
+  /// กิจกรรมที่บันทึกไว้ในเครื่องของแปลง — ใหม่สุดขึ้นก่อน
+  /// (หน้า "นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง" แสดง list นี้)
+  Future<List<Map<String, dynamic>>> activitiesFor(String plotId) async {
+    final items = (await _loadActivities())
+        .where((a) => a['plotId'] == plotId)
+        .toList();
+    items.sort((a, b) => '${b['createdAt']}'.compareTo('${a['createdAt']}'));
+    return items;
+  }
+
+  /// ลบกิจกรรมในเครื่อง + ลบรูปที่ persist ไว้ตามรายการด้วย
+  /// กันไฟล์รกค้างในเครื่อง
+  Future<void> removeActivityDraft(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = await _loadActivities();
+    final removed = items.where((a) => a['id'] == id).toList();
+    items.removeWhere((a) => a['id'] == id);
+    await prefs.setString(_activityKey, jsonEncode(items));
+    for (final a in removed) {
+      for (final p in a['photos'] as List? ?? const []) {
+        await _deletePersistedPhoto('$p');
+      }
+    }
+  }
+
   // ---- จุดเสี่ยงภัยพิบัติ — เก็บลงเครื่องก่อน รอ endpoint backend ----
 
   static const _riskKey = 'risk_points_v1';
