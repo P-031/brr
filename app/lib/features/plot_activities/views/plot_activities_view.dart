@@ -399,11 +399,11 @@ class _BodyState extends State<_Body> {
                       groupKinds: groupKinds,
                     );
                   },
-                  child: const Text('ใช้ตัวกรอง'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.green,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
+                  child: const Text('ใช้ตัวกรอง'),
                 ),
               ],
             ),

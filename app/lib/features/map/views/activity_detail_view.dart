@@ -161,17 +161,17 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(
       children: [
-        SizedBox(
-          width: 132,
+        Expanded(
+          flex: 5,
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            softWrap: false,
             style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
+          flex: 6,
           child: InkWell(
             borderRadius: BorderRadius.circular(10),
             onTap: onTap,
@@ -224,8 +224,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(
       children: [
-        SizedBox(
-          width: 132,
+        Expanded(
+          flex: 5,
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
@@ -234,6 +234,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         ),
         const SizedBox(width: 10),
         Expanded(
+          flex: 6,
           child: Text(
             value.toStringAsFixed(3),
             textAlign: TextAlign.end,
@@ -253,17 +254,17 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     padding: const EdgeInsets.symmetric(vertical: 5),
     child: Row(
       children: [
-        SizedBox(
-          width: 132,
+        Expanded(
+          flex: 5,
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
-            softWrap: false,
             style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
         ),
         const SizedBox(width: 10),
         Expanded(
+          flex: 6,
           child: TextField(
             controller: c,
             textAlign: TextAlign.end,
@@ -484,8 +485,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     padding: const EdgeInsets.symmetric(vertical: 6),
     child: Row(
       children: [
-        SizedBox(
-          width: 132,
+        Expanded(
+          flex: 5,
           child: Text(
             '$label :',
             textAlign: TextAlign.end,
@@ -494,6 +495,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         ),
         const SizedBox(width: 10),
         Expanded(
+          flex: 6,
           child: Row(
             children: [
               for (final e
