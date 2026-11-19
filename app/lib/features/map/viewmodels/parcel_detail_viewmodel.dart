@@ -46,6 +46,8 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? npkN,
     String? npkP,
     String? npkK,
+    bool? mpiApplied,
+    List<Map<String, dynamic>>? fertilizerRounds,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -57,6 +59,8 @@ class ParcelDetailViewModel extends ChangeNotifier {
     npkN: npkN,
     npkP: npkP,
     npkK: npkK,
+    mpiApplied: mpiApplied,
+    fertilizerRounds: fertilizerRounds,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

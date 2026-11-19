@@ -64,9 +64,8 @@ class ParcelService {
 
   static int _photoSeq = 0;
 
-  Future<Directory> _photosDir() async => Directory(
-    '${(await getApplicationDocumentsDirectory()).path}/photos',
-  );
+  Future<Directory> _photosDir() async =>
+      Directory('${(await getApplicationDocumentsDirectory()).path}/photos');
 
   /// คัดลอกรูปไปเก็บถาวรใน documents — คืน path ใหม่ (path เดิมถ้า
   /// copy ไม่ได้ ดีกว่าทิ้งรูป; path ที่ persist แล้วคืนตัวเดิม)
@@ -201,6 +200,8 @@ class ParcelService {
     String? npkN,
     String? npkP,
     String? npkK,
+    bool? mpiApplied,
+    List<Map<String, dynamic>>? fertilizerRounds,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -216,6 +217,8 @@ class ParcelService {
       'npkN': ?npkN,
       'npkP': ?npkP,
       'npkK': ?npkK,
+      'mpiApplied': ?mpiApplied,
+      'fertilizerRounds': ?fertilizerRounds,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));
@@ -307,8 +310,8 @@ class ParcelService {
       return (
         years: {
           for (final j in items)
-            (j as Map<String, dynamic>)['year'] as String?:
-                (j['count'] as num).toInt(),
+            (j as Map<String, dynamic>)['year'] as String?: (j['count'] as num)
+                .toInt(),
         },
         drafts: drafts,
       );
@@ -322,9 +325,11 @@ class ParcelService {
 
   Future<ParcelPage> fetchParcels({
     String? box,
+
     /// เลือกเฉพาะปีการผลิต — null = ทุกปี, null ใน set = รวมแปลงไม่มีปี.
     Set<String?>? years,
     void Function(int received, int? total)? onProgress,
+
     /// เรียกตอนรับ bytes ครบแล้วกำลัง gunzip+parse ใน isolate —
     /// ช่วงนี้ UI ต้องโชว์สถานะ "กำลังเตรียมข้อมูล" ไม่งั้นดูเหมือนค้าง
     void Function()? onProcessing,
@@ -485,42 +490,39 @@ class ParcelService {
   }) async {
     // Draft = save on device only, never posts to the backend.
     if (!draft && ApiConfig.enabled && _api != null) {
-      final res = await _api.postJson(
-        ApiEndpoints.plots,
-        {
-          'name': name,
-          'variety': variety,
-          // Officer saves the plot for the picked farmer; farmers
-          // omit it and the backend uses their own account.
-          'farmerId': ?farmerId,
-          'productionYear': ?productionYear,
-          'officerName': ?officerName,
-          'project': ?project,
-          'caneGroup': ?caneGroup,
-          'zone': ?zone,
-          'province': ?province,
-          'district': ?district,
-          'subdistrict': ?subdistrict,
-          'village': ?village,
-          'rootNo': ?rootNo,
-          'sequenceNo': ?sequenceNo,
-          'prevPlotNo': ?prevPlotNo,
-          'caneType': ?caneType,
-          'caneVariety': ?caneVariety,
-          'ownership': ?ownership,
-          'terrain': ?terrain,
-          'hasLoss': ?hasLoss,
-          'lossRai': ?double.tryParse(lossRai ?? ''),
-          'targetYield': ?double.tryParse(targetYield ?? ''),
-          'note': ?note,
-          'survey': ?survey,
-          if (survey == null)
-            'points': [
-              for (final p in points)
-                {'latitude': p.latitude, 'longitude': p.longitude},
-            ],
-        },
-      );
+      final res = await _api.postJson(ApiEndpoints.plots, {
+        'name': name,
+        'variety': variety,
+        // Officer saves the plot for the picked farmer; farmers
+        // omit it and the backend uses their own account.
+        'farmerId': ?farmerId,
+        'productionYear': ?productionYear,
+        'officerName': ?officerName,
+        'project': ?project,
+        'caneGroup': ?caneGroup,
+        'zone': ?zone,
+        'province': ?province,
+        'district': ?district,
+        'subdistrict': ?subdistrict,
+        'village': ?village,
+        'rootNo': ?rootNo,
+        'sequenceNo': ?sequenceNo,
+        'prevPlotNo': ?prevPlotNo,
+        'caneType': ?caneType,
+        'caneVariety': ?caneVariety,
+        'ownership': ?ownership,
+        'terrain': ?terrain,
+        'hasLoss': ?hasLoss,
+        'lossRai': ?double.tryParse(lossRai ?? ''),
+        'targetYield': ?double.tryParse(targetYield ?? ''),
+        'note': ?note,
+        'survey': ?survey,
+        if (survey == null)
+          'points': [
+            for (final p in points)
+              {'latitude': p.latitude, 'longitude': p.longitude},
+          ],
+      });
       if (res.statusCode >= 300) {
         throw Exception('บันทึกแปลงไม่สำเร็จ: ${_errorDetail(res)}');
       }
@@ -528,9 +530,7 @@ class ParcelService {
     }
     // รูปจาก image_picker อยู่ใน temp cache — ระบบล้างได้ทุกเมื่อ
     // draft เก็บแค่ path เลยต้อง copy ไป documents ของแอปก่อน
-    final storedPhotos = [
-      for (final p in photos) await _persistPhoto(p),
-    ];
+    final storedPhotos = [for (final p in photos) await _persistPhoto(p)];
     final local = Parcel(
       // microseconds + counter — บันทึก 2 ครั้งใน ms เดียวกันไม่ชน id
       // (id ชน = SharedPreferences ทับกัน ร่างหาย)
@@ -781,11 +781,7 @@ typedef ParcelPage = ({List<Parcel> items, bool truncated});
 
 /// หน้ารายการแปลง (list) — nextCursor สำหรับ "โหลดเพิ่ม"
 /// null = หมดแล้ว; total = จำนวนรวมทั้งหมดตามฟิลเตอร์
-typedef PlotPage = ({
-  List<PlotListItem> items,
-  String? nextCursor,
-  int total,
-});
+typedef PlotPage = ({List<PlotListItem> items, String? nextCursor, int total});
 
 /// Decode /plots/map payload ใน background isolate — compute() ส่ง
 /// เฉพาะ String ข้ามได้ แล้วคืน Parcel[] กลับมา
