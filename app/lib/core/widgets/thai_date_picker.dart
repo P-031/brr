@@ -186,76 +186,6 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
     if (picked != null) setState(() => _visible = picked);
   }
 
-  /// ดินสอ → popup พิมพ์วันที่เอง วว/ดด/ปปปป (ใส่ / อัตโนมัติ)
-  /// รับ พ.ศ. (>=2400 ลบ 543) และ ค.ศ.
-  Future<void> _editByText() async {
-    final ctrl = TextEditingController(
-      text:
-          '${_selected.day.toString().padLeft(2, '0')}/'
-          '${_selected.month.toString().padLeft(2, '0')}/'
-          '${_selected.year + 543}',
-    );
-    final parsed = await showDialog<DateTime>(
-      context: context,
-      builder: (ctx) {
-        void trySubmit() {
-          final parts = ctrl.text.trim().split('/');
-          if (parts.length != 3) return;
-          final d = int.tryParse(parts[0]);
-          final m = int.tryParse(parts[1]);
-          var y = int.tryParse(parts[2]);
-          if (d == null || m == null || y == null) return;
-          if (y >= 2400) y -= 543;
-          final dt = DateTime(y, m, d);
-          if (dt.year != y || dt.month != m || dt.day != d || !_inRange(dt)) {
-            return;
-          }
-          Navigator.of(ctx).pop(dt);
-        }
-
-        return AlertDialog(
-          title: const Text(
-            'กรอกวันที่',
-            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
-          ),
-          content: TextField(
-            controller: ctrl,
-            autofocus: true,
-            keyboardType: TextInputType.datetime,
-            inputFormatters: [ThaiDateSlashFormatter()],
-            onSubmitted: (_) => trySubmit(),
-            style: const TextStyle(fontSize: 19),
-            decoration: InputDecoration(
-              hintText: 'วว/ดด/ปปปป (พ.ศ.)',
-              hintStyle: const TextStyle(fontSize: 17),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('ยกเลิก', style: TextStyle(fontSize: 17)),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.green),
-              onPressed: trySubmit,
-              child: const Text('ตกลง', style: TextStyle(fontSize: 17)),
-            ),
-          ],
-        );
-      },
-    );
-    ctrl.dispose();
-    if (parsed != null) {
-      setState(() {
-        _selected = parsed;
-        _visible = DateTime(parsed.year, parsed.month);
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final daysInMonth = DateUtils.getDaysInMonth(_visible.year, _visible.month);
@@ -268,226 +198,226 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ---- หัว: "เลือกวันที่" + วันที่เลือกใหญ่ ----
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'เลือกวันที่',
-                    style: TextStyle(fontSize: 14, color: Colors.black),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
+        // scroll ได้บนจอเตี้ย — grid 6 แถว + header สูงเกินพื้นที่
+        // ที่เหลือได้จนเคย overflow ล่าง (เห็นแถบเหลือง debug)
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ---- หัว: "เลือกวันที่" + วันที่เลือกใหญ่ ----
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'เลือกวันที่',
+                      style: TextStyle(fontSize: 14, color: Colors.black),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${_thaiDayNames[_selected.weekday % 7]} '
+                            '${_selected.day} '
+                            '${_thaiMonthsShort[_selected.month - 1]} '
+                            '${_selected.year + 543}',
+                            style: const TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.green,
+                            ),
+                          ),
+                        ),
+                        OutlinedButton(
+                          onPressed: () => setState(() {
+                            // clamp เข้ากรอบ first/last — ไม่งั้น "วันนี้"
+                            // เลือกวันนอกช่วงที่อนุญาตได้แล้วตกลงคืนค่าเพี้ยน
+                            var t = DateTime.now();
+                            if (!_inRange(t)) {
+                              t = t.isBefore(widget.first)
+                                  ? widget.first
+                                  : widget.last;
+                            }
+                            _selected = t;
+                            _visible = DateTime(t.year, t.month);
+                          }),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.green,
+                            side: const BorderSide(
+                              color: AppColors.green,
+                              width: 1.4,
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                          ),
+                          child: const Text(
+                            'วันนี้',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              // ---- แถวเดือน/ปี + ลูกศรเลื่อนเดือน ----
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+                child: Row(
+                  children: [
+                    TextButton.icon(
+                      onPressed: _pickMonthYear,
+                      icon: const Icon(
+                        Iconsax.arrow_down_1,
+                        size: 20,
+                        color: Colors.black87,
+                      ),
+                      label: Text(
+                        '${_thaiMonths[_visible.month - 1]} '
+                        '${_visible.year + 543}',
+                        style: const TextStyle(
+                          fontSize: 19,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: () => _shiftMonth(-1),
+                      icon: const Icon(
+                        Icons.chevron_left,
+                        size: 30,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _shiftMonth(1),
+                      icon: const Icon(
+                        Icons.chevron_right,
+                        size: 30,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // ---- หัวคอลัมน์วัน ----
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    for (final w in _thaiWeekdays)
                       Expanded(
+                        child: Center(
+                          child: Text(
+                            w,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black45,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              // ---- ตารางวัน ----
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    mainAxisSpacing: 4,
+                    crossAxisSpacing: 4,
+                  ),
+                  itemCount: cells,
+                  itemBuilder: (_, i) {
+                    final day = i - leading + 1;
+                    if (day < 1) return const SizedBox.shrink();
+                    final d = DateTime(_visible.year, _visible.month, day);
+                    final enabled = _inRange(d);
+                    final on =
+                        d.year == _selected.year &&
+                        d.month == _selected.month &&
+                        d.day == _selected.day;
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: enabled
+                          ? () => setState(() => _selected = d)
+                          : null,
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: on ? AppColors.green : null,
+                        ),
                         child: Text(
-                          '${_thaiDayNames[_selected.weekday % 7]} '
-                          '${_selected.day} '
-                          '${_thaiMonthsShort[_selected.month - 1]} '
-                          '${_selected.year + 543}',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.green,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _editByText,
-                        icon: const Icon(
-                          Iconsax.edit_2,
-                          size: 26,
-                          color: Colors.black45,
-                        ),
-                      ),
-                      OutlinedButton(
-                        onPressed: () => setState(() {
-                          // clamp เข้ากรอบ first/last — ไม่งั้น "วันนี้"
-                          // เลือกวันนอกช่วงที่อนุญาตได้แล้วตกลงคืนค่าเพี้ยน
-                          var t = DateTime.now();
-                          if (!_inRange(t)) {
-                            t = t.isBefore(widget.first)
-                                ? widget.first
-                                : widget.last;
-                          }
-                          _selected = t;
-                          _visible = DateTime(t.year, t.month);
-                        }),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.green,
-                          side: const BorderSide(
-                            color: AppColors.green,
-                            width: 1.4,
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                        child: const Text(
-                          'วันนี้',
+                          '$day',
                           style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: on
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: !enabled
+                                ? Colors.black26
+                                : on
+                                ? Colors.white
+                                : Colors.black87,
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            // ---- แถวเดือน/ปี + ลูกศรเลื่อนเดือน ----
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
-              child: Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: _pickMonthYear,
-                    icon: const Icon(
-                      Iconsax.arrow_down_1,
-                      size: 20,
-                      color: Colors.black87,
-                    ),
-                    label: Text(
-                      '${_thaiMonths[_visible.month - 1]} '
-                      '${_visible.year + 543}',
-                      style: const TextStyle(
-                        fontSize: 19,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => _shiftMonth(-1),
-                    icon: const Icon(
-                      Icons.chevron_left,
-                      size: 30,
-                      color: Colors.black54,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => _shiftMonth(1),
-                    icon: const Icon(
-                      Icons.chevron_right,
-                      size: 30,
-                      color: Colors.black54,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // ---- หัวคอลัมน์วัน ----
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  for (final w in _thaiWeekdays)
-                    Expanded(
-                      child: Center(
-                        child: Text(
-                          w,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black45,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 6),
-            // ---- ตารางวัน ----
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  mainAxisSpacing: 4,
-                  crossAxisSpacing: 4,
+                    );
+                  },
                 ),
-                itemCount: cells,
-                itemBuilder: (_, i) {
-                  final day = i - leading + 1;
-                  if (day < 1) return const SizedBox.shrink();
-                  final d = DateTime(_visible.year, _visible.month, day);
-                  final enabled = _inRange(d);
-                  final on =
-                      d.year == _selected.year &&
-                      d.month == _selected.month &&
-                      d.day == _selected.day;
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: enabled ? () => setState(() => _selected = d) : null,
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: on ? AppColors.green : null,
+              ),
+              const SizedBox(height: 8),
+              // ---- ปุ่มล่าง: ยกเลิก / ตกลง ----
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text(
+                        'ยกเลิก',
+                        style: TextStyle(fontSize: 18, color: Colors.black54),
                       ),
-                      child: Text(
-                        '$day',
+                    ),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(_selected),
+                      child: const Text(
+                        'ตกลง',
                         style: TextStyle(
                           fontSize: 18,
-                          fontWeight: on ? FontWeight.bold : FontWeight.normal,
-                          color: !enabled
-                              ? Colors.black26
-                              : on
-                              ? Colors.white
-                              : Colors.black87,
+                          color: AppColors.green,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            // ---- ปุ่มล่าง: ยกเลิก / ตกลง ----
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    child: const Text(
-                      'ยกเลิก',
-                      style: TextStyle(fontSize: 18, color: Colors.black54),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(_selected),
-                    child: const Text(
-                      'ตกลง',
-                      style: TextStyle(
-                        fontSize: 18,
-                        color: AppColors.green,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
