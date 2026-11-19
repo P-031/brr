@@ -85,7 +85,7 @@ const createPlotBody = z
 
 const updatePlotBody = z
 .object({
-  version: baseVersion.optional(),
+  version: baseVersion,
   name: z.string().trim().min(1).max(120).optional(),
   variety: z.string().trim().max(120).optional(),
   season: seasonText.optional(),
@@ -518,11 +518,14 @@ fieldRouter.post(
         value: z.string().trim().min(1).max(200),
       })
       .parse(req.body);
-    await prisma.plotRequest.create({ data: { plotId, kind: body.kind, value: body.value } });
     if (body.kind === "status") {
-      await prisma.plot.update({ where: { id: plotId }, data: { status: body.value } });
+      const allowed = await prisma.fromOption.findUnique({
+        where: { group_label: { group: "plotStatuses", label: body.value} },
+      });
+      if (!allowed) throw new HttpError(400, "สถานะไม่อยู่ในตัวเลือก");
     }
-    res.status(201).json({ kind: body.kind, value: body.value });
+    await prisma.plotRequest.create({ data: { plotId, kind: body.kind, value: body.value } });
+    res.status(201).json({ kind: body.kind, value: body.value, status: "รออนุมัติ" });
   }),
 );
 
@@ -569,12 +572,8 @@ fieldRouter.patch(
         surveyedAt: survey?.finishedAt,
         version: { increment: 1 },
       };
-      if (body.version === undefined) {
-        await tx.plot.update({ where: { id: plotId }, data });
-      } else {
-        const updated = await tx.plot.updateMany({ where: { id: plotId, version: body.version }, data });
-        if (updated.count === 0) return false;
-      }
+     const updated = await tx.plot.updateMany({ where: { id: plotId, version: body.version }, data });
+     if (updated.count === 0) return false;
       if (survey && measured) {
         await assertFits(tx, measured, plot.farmerId, season ?? plot.season, plotId);
         await writeBoundary(tx, plotId, measured.ring);
