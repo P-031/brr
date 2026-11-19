@@ -42,6 +42,10 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? plantedAt,
     String? caneGroup,
     String? herbicideUsed,
+    String? toppingRate,
+    String? npkN,
+    String? npkP,
+    String? npkK,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -49,6 +53,10 @@ class ParcelDetailViewModel extends ChangeNotifier {
     plantedAt: plantedAt,
     caneGroup: caneGroup,
     herbicideUsed: herbicideUsed,
+    toppingRate: toppingRate,
+    npkN: npkN,
+    npkP: npkP,
+    npkK: npkK,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

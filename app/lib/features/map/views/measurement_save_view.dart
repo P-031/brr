@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/utils/fuzzy_search.dart';
+import 'package:brr/core/widgets/digit_formatter.dart';
 import 'package:brr/core/widgets/image_source_sheet.dart';
 
 /// One row in the searchable picker — backend will supply real
@@ -77,82 +78,6 @@ class MeasurementResult {
 }
 
 /// แป้นพิมพ์ไทยกดตำแหน่งเลขได้อักขระไทย/สัญลักษณ์ (เช่น / -) —
-/// แปลงเลขไทย ๐-๙ เป็นอารบิกแล้วตัดตัวอื่นทิ้ง ทำให้ช่องตัวเลข
-/// พิมพ์ได้ไม่ว่าแป้นจะอยู่โหมดไหน
-class _DigitFormatter extends TextInputFormatter {
-  const _DigitFormatter({this.decimal = false});
-
-  /// true = อนุญาตจุดทศนิยม 1 จุด (ไร่สูญเสีย/เป้าผลผลิต)
-  final bool decimal;
-
-  static const _thai = '๐๑๒๓๔๕๖๗๘๙';
-
-  /// แป้นไทย Kedmanee — อักขระที่แถวตัวเลขพิมพ์ออกมาโดยไม่กด Shift
-  /// จับคู่กับเลขตาม "ตำแหน่งปุ่ม" (กดปุ่ม 4 ได้ ภ = ตั้งใจพิมพ์ 4)
-  static const _kedmanee = {
-    'ๅ': '1',
-    '/': '2',
-    '-': '3',
-    'ภ': '4',
-    'ถ': '5',
-    'ุ': '6',
-    'ึ': '7',
-    'ค': '8',
-    'ต': '9',
-    'จ': '0',
-  };
-
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final sb = StringBuffer();
-    var hasDot = false;
-    for (final r in newValue.text.runes) {
-      final ch = String.fromCharCode(r);
-      final ti = _thai.indexOf(ch);
-      if (ti >= 0) {
-        sb.write(ti);
-        continue;
-      }
-      final kd = _kedmanee[ch];
-      if (kd != null) {
-        sb.write(kd);
-        continue;
-      }
-      if (r >= 0x30 && r <= 0x39) {
-        sb.write(ch);
-        continue;
-      }
-      if (decimal && !hasDot && ch == '.') {
-        hasDot = true;
-        sb.write('.');
-      }
-    }
-    final text = sb.toString();
-    // ข้อความผ่าน filter แล้วเหมือนเดิม (เช่น พิมพ์เลขอารบิกกลาง
-    // ประโยค) → คืน newValue เลย cursor ไม่ดีดไปท้ายทุกครั้ง
-    if (text == newValue.text) return newValue;
-    // มีตัวที่ถูกตัด/แปลง — วาง cursor หลังตัวสุดท้ายที่ผ่าน filter
-    // ก่อนจุด cursor เดิม (run substring เดิมผ่าน formatter เดียวกัน)
-    final cursorEnd = newValue.selection.end.clamp(
-      0,
-      newValue.text.length,
-    );
-    final keptLen = formatEditUpdate(
-      oldValue,
-      TextEditingValue(text: newValue.text.substring(0, cursorEnd)),
-    ).text.length;
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(
-        offset: keptLen.clamp(0, text.length),
-      ),
-    );
-  }
-}
-
 /// บันทึกข้อมูลการวัด — shows the measured area (ไร่/งาน/ตร.วา)
 /// plus a form for plot name, production year and caretaker
 /// officer. Backend-ready fields collected now.
@@ -307,9 +232,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
       if (!formOk || missing.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'กรุณากรอกข้อมูลให้ครบทุกช่อง (ยกเว้นข้อเสนอแนะ)',
-            ),
+            content: Text('กรุณากรอกข้อมูลให้ครบทุกช่อง (ยกเว้นข้อเสนอแนะ)'),
           ),
         );
         return;
@@ -372,16 +295,12 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     // pickImage throw ได้บางเครื่อง (already_active / camera busy)
     // กัน unhandled error แล้วแจ้งผู้ใช้แทนที่จะเงียบ
     try {
-      final x = await ImagePicker().pickImage(
-        source: source,
-        maxWidth: 1600,
-      );
+      final x = await ImagePicker().pickImage(source: source, maxWidth: 1600);
       if (x != null) setState(() => _photos.add(x));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('เปิดกล้องไม่สำเร็จ')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('เปิดกล้องไม่สำเร็จ')));
     }
   }
 
@@ -777,7 +696,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                 Icons.calendar_today,
                 required: true,
                 keyboard: TextInputType.number,
-                formatters: const [_DigitFormatter()],
+                formatters: const [DigitFormatter()],
               ),
               const SizedBox(height: 16),
               _picker(
@@ -895,7 +814,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                 'รูท',
                 Iconsax.hashtag,
                 keyboard: TextInputType.number,
-                formatters: const [_DigitFormatter()],
+                formatters: const [DigitFormatter()],
               ),
               const SizedBox(height: 16),
               _tf(
@@ -903,7 +822,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                 'ลำดับ',
                 Iconsax.task_square,
                 keyboard: TextInputType.number,
-                formatters: const [_DigitFormatter()],
+                formatters: const [DigitFormatter()],
               ),
               const SizedBox(height: 24),
               const Text(
@@ -973,7 +892,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                 // เลือก "ไม่มี" ในช่องสาเหตุ → เว้นว่างได้
                 required: !_losses.contains(_noneName),
                 keyboard: const TextInputType.numberWithOptions(decimal: true),
-                formatters: const [_DigitFormatter(decimal: true)],
+                formatters: const [DigitFormatter(decimal: true)],
               ),
               const SizedBox(height: 24),
               const Text(
@@ -990,7 +909,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                 Iconsax.flag,
                 required: true,
                 keyboard: const TextInputType.numberWithOptions(decimal: true),
-                formatters: const [_DigitFormatter(decimal: true)],
+                formatters: const [DigitFormatter(decimal: true)],
                 helper: 'ไม่ควรใส่เกิน 30 ตัน/ไร่',
                 validator: (v) {
                   final t = double.tryParse(v?.trim() ?? '');
@@ -1319,9 +1238,7 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
       for (final it in items)
         if (widget.initial.contains(it.name)) it.code,
     };
-    _extra.addAll(
-      widget.initial.difference({for (final it in items) it.name}),
-    );
+    _extra.addAll(widget.initial.difference({for (final it in items) it.name}));
   }
 
   void _toggle(PickerItem it, bool on) {

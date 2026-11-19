@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/digit_formatter.dart';
 import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/core/widgets/thai_date_picker.dart';
 import 'package:brr/features/map/models/parcel.dart';
@@ -29,6 +30,10 @@ class ActivityDetailView extends StatefulWidget {
 
 class _ActivityDetailViewState extends State<ActivityDetailView> {
   final _dateCtrl = TextEditingController();
+  final _rateCtrl = TextEditingController();
+  final _nCtrl = TextEditingController();
+  final _pCtrl = TextEditingController();
+  final _kCtrl = TextEditingController();
   DateTime? _plantedAt;
   String? _caneGroup;
   String? _herbicide;
@@ -45,6 +50,10 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   @override
   void dispose() {
     _dateCtrl.dispose();
+    _rateCtrl.dispose();
+    _nCtrl.dispose();
+    _pCtrl.dispose();
+    _kCtrl.dispose();
     super.dispose();
   }
 
@@ -129,12 +138,21 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
       }
     }
     setState(() => _saving = true);
+    String? num(TextEditingController c) {
+      final t = c.text.trim();
+      return t.isEmpty ? null : t;
+    }
+
     try {
       await widget.vm.saveActivityDraft(
         photoPaths: widget.photoPaths,
         detailPending: false,
         caneGroup: _caneGroup,
         herbicideUsed: _herbicide,
+        toppingRate: num(_rateCtrl),
+        npkN: num(_nCtrl),
+        npkP: num(_pCtrl),
+        npkK: num(_kCtrl),
         plantedAt: planted == null
             ? null
             : '${planted.year.toString().padLeft(4, '0')}-'
@@ -151,6 +169,20 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  /// ช่องสูตรปุ๋ย NPK — label ลอยบนขอบกรอบแบบการ์ดอ้างอิง
+  Widget _npk(String label, TextEditingController c) => TextField(
+    controller: c,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    inputFormatters: const [DigitFormatter(decimal: true)],
+    style: const TextStyle(fontSize: 17),
+    decoration: InputDecoration(
+      labelText: label,
+      isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+    ),
+  );
 
   Widget _line(String label, String? value) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 6),
@@ -462,6 +494,99 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                           ],
                         ),
                       ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดฝ่ากอ — อัตราปุ๋ย + สูตร NPK + ยอดรวม
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ฝ่ากอ',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Text(
+                          'อัตรา(กก./ไร่) :',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: _rateCtrl,
+                            textAlign: TextAlign.end,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            inputFormatters: const [
+                              DigitFormatter(decimal: true),
+                            ],
+                            style: const TextStyle(fontSize: 17),
+                            decoration: const InputDecoration(
+                              hintText: '0.0',
+                              isDense: true,
+                              border: UnderlineInputBorder(),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'กรุณากรอกสูตรปุ๋ย NPK',
+                      style: TextStyle(fontSize: 14, color: Colors.black45),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(child: _npk('N', _nCtrl)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _npk('P', _pCtrl)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _npk('K', _kCtrl)),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'รวม (กก.)',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          // อัตรา กก./ไร่ × พื้นที่ ไร่ = ปุ๋ยรวมที่ต้องใช้
+                          ((double.tryParse(_rateCtrl.text) ?? 0) * rai)
+                              .toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1565C0),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

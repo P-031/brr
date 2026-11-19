@@ -197,6 +197,10 @@ class ParcelService {
     String? plantedAt,
     String? caneGroup,
     String? herbicideUsed,
+    String? toppingRate,
+    String? npkN,
+    String? npkP,
+    String? npkK,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -208,6 +212,10 @@ class ParcelService {
       'plantedAt': ?plantedAt,
       'caneGroup': ?caneGroup,
       'herbicideUsed': ?herbicideUsed,
+      'toppingRate': ?toppingRate,
+      'npkN': ?npkN,
+      'npkP': ?npkP,
+      'npkK': ?npkK,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));
