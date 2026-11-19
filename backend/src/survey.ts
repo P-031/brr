@@ -9,8 +9,8 @@ export const surveyRules = {
   maxAccuracyM: 15,
   /** Corners closer than this to the previous one count as a double tap. */
   minCornerGapM: 2,
-  /** Faster than a brisk walk between corners means the corner was not walked to. */
-  maxWalkSpeedMps: 3,
+  /** จุดที่ห่างกว่านี้ถือว่าพิกัดกระโดด ตรงกับเกณฑ์ในแอป */
+  maxCornerGapM: 25,
   maxDurationHours: 12,
   /** How far ahead of the server clock a phone clock may run. */
   maxClockSkewMinutes: 5,
@@ -138,10 +138,8 @@ export function measureSurvey(survey: Survey, now: Date): MeasuredSurvey {
 
     const gap = distanceM(previous, corner);
     if (gap < rules.minCornerGapM) invalid(`มุมที่ ${number} ซ้ำกับมุมก่อนหน้า`, number);
-
-    const walked = Math.max(0, gap - previous.accuracyM - corner.accuracyM);
-    if (walked / seconds > rules.maxWalkSpeedMps) {
-      invalid(`มุมที่ ${number} ไกลจากมุมก่อนหน้าเกินกว่าจะเดินถึงในเวลานั้น`, number);
+    if (gap > rules.maxCornerGapM) {
+      invalid(`มุมที่ ${number} ห่างจากมุมก่อนหน้าเกิน ${rules.maxCornerGapM} เมตร`, number);
     }
   });
 
