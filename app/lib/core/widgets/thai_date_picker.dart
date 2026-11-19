@@ -232,14 +232,9 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                         ),
                         OutlinedButton(
                           onPressed: () => setState(() {
-                            // clamp เข้ากรอบ first/last — ไม่งั้น "วันนี้"
-                            // เลือกวันนอกช่วงที่อนุญาตได้แล้วตกลงคืนค่าเพี้ยน
-                            var t = DateTime.now();
-                            if (!_inRange(t)) {
-                              t = t.isBefore(widget.first)
-                                  ? widget.first
-                                  : widget.last;
-                            }
+                            // เลือกวันจริงของวันนี้เสมอ + เด้งกลับมา
+                            // ที่เดือนปัจจุบัน แม้กำลังดูเดือนอื่นอยู่
+                            final t = DateTime.now();
                             _selected = t;
                             _visible = DateTime(t.year, t.month);
                           }),
