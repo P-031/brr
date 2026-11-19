@@ -60,6 +60,15 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? diseaseType,
     String? diseaseSpread,
     bool? diseaseManaged,
+    bool? pestPresent,
+    String? pestType,
+    String? pestSpread,
+    String? pestDamage,
+    bool? pestManaged,
+    bool? hilled,
+    String? germinationPercent,
+    String? harvestGroupFarmerId,
+    String? harvestGroupFarmer,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -85,6 +94,15 @@ class ParcelDetailViewModel extends ChangeNotifier {
     diseaseType: diseaseType,
     diseaseSpread: diseaseSpread,
     diseaseManaged: diseaseManaged,
+    pestPresent: pestPresent,
+    pestType: pestType,
+    pestSpread: pestSpread,
+    pestDamage: pestDamage,
+    pestManaged: pestManaged,
+    hilled: hilled,
+    germinationPercent: germinationPercent,
+    harvestGroupFarmerId: harvestGroupFarmerId,
+    harvestGroupFarmer: harvestGroupFarmer,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

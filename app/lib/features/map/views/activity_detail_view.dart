@@ -51,6 +51,15 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   String? _diseaseType;
   final _diseaseSpreadCtrl = TextEditingController();
   bool? _diseaseManaged;
+  bool? _pestPresent;
+  String? _pestType;
+  final _pestSpreadCtrl = TextEditingController();
+  final _pestDamageCtrl = TextEditingController();
+  bool? _pestManaged;
+  bool? _hilled;
+  String? _germPercent;
+  FarmerRef? _harvestGroupFarmer;
+  List<FarmerRef>? _farmers;
   bool _saving = false;
   late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
 
@@ -72,6 +81,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     _dolomiteRateCtrl.dispose();
     _subsoilDepthCtrl.dispose();
     _diseaseSpreadCtrl.dispose();
+    _pestSpreadCtrl.dispose();
+    _pestDamageCtrl.dispose();
     super.dispose();
   }
 
@@ -334,6 +345,15 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         diseaseType: _diseaseType,
         diseaseSpread: num(_diseaseSpreadCtrl),
         diseaseManaged: _diseaseManaged,
+        pestPresent: _pestPresent,
+        pestType: _pestType,
+        pestSpread: num(_pestSpreadCtrl),
+        pestDamage: num(_pestDamageCtrl),
+        pestManaged: _pestManaged,
+        hilled: _hilled,
+        germinationPercent: _germPercent,
+        harvestGroupFarmerId: _harvestGroupFarmer?.id,
+        harvestGroupFarmer: _harvestGroupFarmer?.name,
         plantedAt: iso(planted),
       );
       if (mounted) Navigator.of(context).pop('บันทึกกิจกรรมเรียบร้อย');
@@ -1257,6 +1277,267 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       _diseaseManaged,
                       (v) => setState(() => _diseaseManaged = v),
                       reversed: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดแมลง — มี/ไม่มี + ชนิดแมลง + ระบาด% + เบียน% + จัดการ
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'แมลง',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _toggleRow(
+                      'แมลง',
+                      'มีแมลง',
+                      'ไม่มีแมลง',
+                      _pestPresent,
+                      (v) => setState(() => _pestPresent = v),
+                    ),
+                    _optRow(
+                      'เลือกชนิดแมลง',
+                      _pestType,
+                      'เลือกรายการ',
+                      () async {
+                        FormOptions opts;
+                        try {
+                          opts = await _optionsFut;
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('โหลดตัวเลือกไม่สำเร็จ'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (opts.pestTypes.isEmpty) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('ยังไม่มีตัวเลือกชนิดแมลง'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (!context.mounted) return;
+                        final idx = await showOptionPopup(
+                          context,
+                          title: 'เลือกชนิดแมลง',
+                          labels: opts.pestTypes,
+                          selectedIndex: _pestType == null
+                              ? null
+                              : opts.pestTypes.indexOf(_pestType!),
+                        );
+                        if (idx != null) {
+                          setState(() => _pestType = opts.pestTypes[idx]);
+                        }
+                      },
+                    ),
+                    _rateRow('ระบาด (%)', _pestSpreadCtrl),
+                    _rateRow('เบียน (%)', _pestDamageCtrl),
+                    _toggleRow(
+                      'การจัดการแมลง',
+                      'จัดการแล้ว',
+                      'ยังไม่จัดการ',
+                      _pestManaged,
+                      (v) => setState(() => _pestManaged = v),
+                      reversed: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดพูนโคน — ทำ/ไม่ทำ
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'พูนโคน',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _toggleRow(
+                      'พูนโคน',
+                      'ทำ',
+                      'ไม่ทำ',
+                      _hilled,
+                      (v) => setState(() => _hilled = v),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดการงอก — เลือกเปอร์เซ็นต์งอก
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'การงอก',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _optRow('เปอร์เซ็นต์งอก', _germPercent, 'เลือก', () async {
+                      final percents = [
+                        for (var p = 0; p <= 100; p += 5) '$p%',
+                      ];
+                      final idx = await showOptionPopup(
+                        context,
+                        title: 'เปอร์เซ็นต์งอก',
+                        labels: percents,
+                        selectedIndex: _germPercent == null
+                            ? null
+                            : percents.indexOf(_germPercent!),
+                      );
+                      if (idx != null) {
+                        setState(() => _germPercent = percents[idx]);
+                      }
+                    }),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดเลือกกลุ่มตัดอ้อย — เลือกชาวไร่จาก backend
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'เลือกกลุ่มตัดอ้อย',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(10),
+                      onTap: () async {
+                        List<FarmerRef> farmers;
+                        try {
+                          farmers = _farmers ??= await widget.vm.loadFarmers();
+                        } catch (_) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('โหลดรายชื่อไม่สำเร็จ'),
+                            ),
+                          );
+                          return;
+                        }
+                        if (farmers.isEmpty) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('ไม่มีรายชื่อชาวไร่')),
+                          );
+                          return;
+                        }
+                        if (!context.mounted) return;
+                        final idx = await showOptionPopup(
+                          context,
+                          title: 'เลือกกลุ่มตัดอ้อย',
+                          labels: [
+                            for (final f in farmers) '[${f.id}] ${f.name}',
+                          ],
+                          selectedIndex: _harvestGroupFarmer == null
+                              ? null
+                              : farmers.indexWhere(
+                                  (f) => f.id == _harvestGroupFarmer!.id,
+                                ),
+                          searchHint: 'ค้นหาชาวไร่',
+                        );
+                        if (idx != null) {
+                          setState(() => _harvestGroupFarmer = farmers[idx]);
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 13,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _harvestGroupFarmer == null
+                                ? Colors.grey.shade300
+                                : AppColors.green,
+                            width: _harvestGroupFarmer == null ? 1 : 1.5,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Iconsax.people,
+                              size: 24,
+                              color: Colors.black45,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _harvestGroupFarmer == null
+                                    ? 'แตะเพื่อเลือก'
+                                    : '[${_harvestGroupFarmer!.id}] '
+                                          '${_harvestGroupFarmer!.name}',
+                                textAlign: TextAlign.center,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: _harvestGroupFarmer == null
+                                      ? Colors.black38
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const Icon(
+                              Iconsax.arrow_circle_down,
+                              size: 26,
+                              color: Colors.black87,
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),

@@ -209,6 +209,7 @@ class FormOptions {
     this.fertilizerFormulas = const [],
     this.organicFertilizerTypes = const [],
     this.diseaseTypes = const [],
+    this.pestTypes = const [],
   });
 
   factory FormOptions.fromJson(Map<String, dynamic> j) {
@@ -245,6 +246,7 @@ class FormOptions {
       fertilizerFormulas: names('fertilizerFormulas'),
       organicFertilizerTypes: names('organicFertilizerTypes'),
       diseaseTypes: names('diseaseTypes'),
+      pestTypes: names('pestTypes'),
     );
   }
 
@@ -323,4 +325,7 @@ class FormOptions {
 
   /// ชนิดโรคอ้อยให้เลือกในการ์ด "โรค" — key `diseaseTypes`
   final List<String> diseaseTypes;
+
+  /// ชนิดแมลงศัตรูอ้อยให้เลือกในการ์ด "แมลง" — key `pestTypes`
+  final List<String> pestTypes;
 }

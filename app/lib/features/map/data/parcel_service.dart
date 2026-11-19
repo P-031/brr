@@ -214,6 +214,15 @@ class ParcelService {
     String? diseaseType,
     String? diseaseSpread,
     bool? diseaseManaged,
+    bool? pestPresent,
+    String? pestType,
+    String? pestSpread,
+    String? pestDamage,
+    bool? pestManaged,
+    bool? hilled,
+    String? germinationPercent,
+    String? harvestGroupFarmerId,
+    String? harvestGroupFarmer,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -243,6 +252,15 @@ class ParcelService {
       'diseaseType': ?diseaseType,
       'diseaseSpread': ?diseaseSpread,
       'diseaseManaged': ?diseaseManaged,
+      'pestPresent': ?pestPresent,
+      'pestType': ?pestType,
+      'pestSpread': ?pestSpread,
+      'pestDamage': ?pestDamage,
+      'pestManaged': ?pestManaged,
+      'hilled': ?hilled,
+      'germinationPercent': ?germinationPercent,
+      'harvestGroupFarmerId': ?harvestGroupFarmerId,
+      'harvestGroupFarmer': ?harvestGroupFarmer,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));
