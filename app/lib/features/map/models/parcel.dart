@@ -112,8 +112,7 @@ class Parcel {
   String get landNo => name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
 
   /// รหัสแปลง = เลข `#NNN` ท้ายชื่อ (schema ไม่มีฟิลด์ code แยก)
-  String? get plotCode =>
-      RegExp(r'#\s*(\d+)\s*$').firstMatch(name)?.group(1);
+  String? get plotCode => RegExp(r'#\s*(\d+)\s*$').firstMatch(name)?.group(1);
 
   LatLng get center {
     if (centerOverride != null) return centerOverride!;
@@ -207,17 +206,17 @@ class FormOptions {
     this.parcelStatuses = const [],
     this.riskLevels = const [],
     this.prevPlots = const [],
+    this.fertilizerFormulas = const [],
   });
 
   factory FormOptions.fromJson(Map<String, dynamic> j) {
-    List<String> names(String k) =>
-        [for (final v in j[k] as List? ?? const []) '$v'];
+    List<String> names(String k) => [
+      for (final v in j[k] as List? ?? const []) '$v',
+    ];
     Map<String, List<String>> mapList(String k) => {
       if (j[k] is Map)
         for (final e in (j[k] as Map).entries)
-          '${e.key}': [
-            for (final v in e.value as List? ?? const []) '$v',
-          ],
+          '${e.key}': [for (final v in e.value as List? ?? const []) '$v'],
     };
     return FormOptions(
       zones: names('zones'),
@@ -241,15 +240,18 @@ class FormOptions {
         for (final v in j['prevPlots'] as List? ?? const [])
           (code: '${v['code']}', name: '${v['name']}'),
       ],
+      fertilizerFormulas: names('fertilizerFormulas'),
     );
   }
 
   /// จังหวัด → อำเภอ → ตำบล → [หมู่บ้าน] for cascading pickers.
-  static Map<String, Map<String, Map<String, List<String>>>>
-      _parseLocations(dynamic j) {
+  static Map<String, Map<String, Map<String, List<String>>>> _parseLocations(
+    dynamic j,
+  ) {
     if (j is! Map) return const {};
-    List<String> strs(dynamic v) =>
-        [for (final e in v as List? ?? const []) '$e'];
+    List<String> strs(dynamic v) => [
+      for (final e in v as List? ?? const []) '$e',
+    ];
     Map<String, List<String>> tambons(dynamic v) => {
       if (v is Map)
         for (final e in v.entries) '${e.key}': strs(e.value),
@@ -258,9 +260,7 @@ class FormOptions {
       if (v is Map)
         for (final e in v.entries) '${e.key}': tambons(e.value),
     };
-    return {
-      for (final e in j.entries) '${e.key}': districts(e.value),
-    };
+    return {for (final e in j.entries) '${e.key}': districts(e.value)};
   }
 
   /// อำเภอในจังหวัดที่เลือก — empty until a province is picked.
@@ -276,8 +276,7 @@ class FormOptions {
     String? province,
     String? district,
     String? subdistrict,
-  ) =>
-      locations[province]?[district]?[subdistrict] ?? const [];
+  ) => locations[province]?[district]?[subdistrict] ?? const [];
 
   final List<String> zones;
   final List<String> provinces;
@@ -309,4 +308,8 @@ class FormOptions {
   final List<String> parcelStatuses;
   final List<String> riskLevels;
   final List<OptionItem> prevPlots;
+
+  /// สูตร/ชื่อปุ๋ยให้เลือกในรอบการใส่ปุ๋ย — มาจาก /meta/options
+  /// (key `fertilizerFormulas`; backend ยังไม่ส่ง → ว่าง)
+  final List<String> fertilizerFormulas;
 }

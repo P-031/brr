@@ -38,7 +38,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   String? _caneGroup;
   String? _herbicide;
   bool? _mpiApplied;
-  final _rounds = <_FertRound>[_FertRound()];
+  final _rounds = <_FertRound>[];
   bool _saving = false;
   late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
 
@@ -56,9 +56,6 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     _nCtrl.dispose();
     _pCtrl.dispose();
     _kCtrl.dispose();
-    for (final r in _rounds) {
-      r.dispose();
-    }
     super.dispose();
   }
 
@@ -98,14 +95,23 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     }
   }
 
-  Future<void> _pickRoundDate(_FertRound r) async {
-    final picked = await showThaiDatePicker(
-      context,
-      initialDate: r.date ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+  /// เปิด dialog กรอกรอบใส่ปุ๋ยใหม่ — บันทึกแล้วเพิ่มเข้า list
+  Future<void> _addRound() async {
+    FormOptions opts;
+    try {
+      opts = await _optionsFut;
+    } catch (_) {
+      opts = const FormOptions();
+    }
+    if (!mounted) return;
+    final r = await showDialog<_FertRound>(
+      context: context,
+      builder: (_) => _FertRoundDialog(
+        roundNo: _rounds.length + 1,
+        formulas: opts.fertilizerFormulas,
+      ),
     );
-    if (picked != null) setState(() => r.date = picked);
+    if (r != null) setState(() => _rounds.add(r));
   }
 
   /// แจ้งเตือนกลางจอเมื่อวันที่ไม่ถูกต้อง
@@ -164,17 +170,17 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
               '${d.month.toString().padLeft(2, '0')}-'
               '${d.day.toString().padLeft(2, '0')}';
 
-    // รอบใส่ปุ๋ยที่กรอกอะไรไว้บ้างสักช่องเท่านั้น
+    // รอบใส่ปุ๋ย — เพิ่มผ่าน dialog แล้วเก็บเป็นค่า string/date
     final rounds = [
       for (final r in _rounds)
-        if (r.date != null ||
-            r.rateCtrl.text.trim().isNotEmpty ||
-            r.npkCtrl.text.trim().isNotEmpty)
-          {
-            'date': ?iso(r.date),
-            'rate': ?num(r.rateCtrl),
-            'npk': ?num(r.npkCtrl),
-          },
+        {
+          'date': ?iso(r.date),
+          'rate': ?r.rate,
+          'npk': ?r.npk,
+          'npkN': ?r.n,
+          'npkP': ?r.p,
+          'npkK': ?r.k,
+        },
     ];
 
     try {
@@ -243,7 +249,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     ),
   );
 
-  /// การ์ดรอบการใส่ปุ๋ย — วันที่ใส่ / อัตรา / สูตรปุ๋ย NPK + ปุ่มลบ
+  /// การ์ดรอบการใส่ปุ๋ย — แสดงข้อมูลอย่างเดียว + ปุ่มลบ
+  /// (กรอกผ่าน dialog "เพิ่มปุ๋ยครั้งที่ N")
   Widget _roundCard(int index, _FertRound r) => Container(
     padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
     decoration: BoxDecoration(
@@ -267,9 +274,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
             ),
             InkWell(
               borderRadius: BorderRadius.circular(14),
-              onTap: () => setState(() {
-                _rounds.removeAt(index).dispose();
-              }),
+              onTap: () => setState(() => _rounds.removeAt(index)),
               child: Container(
                 width: 28,
                 height: 28,
@@ -282,95 +287,33 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () => _pickRoundDate(r),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              children: [
-                const Text(
-                  'วันที่ใส่ :',
-                  style: TextStyle(fontSize: 16, color: Colors.black54),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    r.date == null ? 'แตะเพื่อเลือก' : _fmtThai(r.date!),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: r.date == null ? Colors.black38 : Colors.black87,
-                    ),
-                  ),
-                ),
-                const Icon(
-                  Icons.calendar_today,
-                  size: 22,
-                  color: AppColors.green,
-                ),
-              ],
+        const SizedBox(height: 4),
+        _roundLine('วันที่ใส่', r.date == null ? '—' : _fmtThai(r.date!)),
+        _roundLine('อัตรา (กก./ไร่)', r.rate ?? '—'),
+        _roundLine('สูตรปุ๋ย NPK', r.npk ?? '—'),
+      ],
+    ),
+  );
+
+  Widget _roundLine(String label, String value) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$label :',
+          style: const TextStyle(fontSize: 16, color: Colors.black54),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
             ),
           ),
-        ),
-        Row(
-          children: [
-            const Text(
-              'อัตรา (กก./ไร่) :',
-              style: TextStyle(fontSize: 16, color: Colors.black54),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: r.rateCtrl,
-                textAlign: TextAlign.end,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: const [DigitFormatter(decimal: true)],
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-                decoration: const InputDecoration(
-                  hintText: '0.0',
-                  isDense: true,
-                  border: UnderlineInputBorder(),
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            const Text(
-              'สูตรปุ๋ย NPK :',
-              style: TextStyle(fontSize: 16, color: Colors.black54),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: r.npkCtrl,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-                decoration: const InputDecoration(
-                  hintText: 'เช่น 15-15-15',
-                  hintStyle: TextStyle(
-                    fontSize: 15,
-                    color: Colors.black38,
-                    fontWeight: FontWeight.normal,
-                  ),
-                  isDense: true,
-                  border: UnderlineInputBorder(),
-                ),
-              ),
-            ),
-          ],
         ),
       ],
     ),
@@ -835,8 +778,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         minimumSize: const Size.fromHeight(0),
                       ),
-                      onPressed: () =>
-                          setState(() => _rounds.add(_FertRound())),
+                      onPressed: _addRound,
                       icon: const Icon(Icons.add, size: 20),
                       label: const Text(
                         'เพิ่มรอบการใส่ปุ๋ย',
@@ -859,7 +801,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                               .fold<double>(
                                 0,
                                 (s, r) =>
-                                    s + (double.tryParse(r.rateCtrl.text) ?? 0),
+                                    s + (double.tryParse(r.rate ?? '') ?? 0),
                               )
                               .toStringAsFixed(1),
                           style: const TextStyle(
@@ -897,14 +839,295 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   }
 }
 
-/// รอบการใส่ปุ๋ยหนึ่งรอบ — วันที่ + อัตรา + สูตร NPK (text อิสระ)
+/// รอบการใส่ปุ๋ยหนึ่งรอบ — ค่าที่กรอกจาก [ _FertRoundDialog ]
+/// `npk` = ข้อความสูตรปุ๋ยที่แสดง (ชื่อสินค้า หรือ N-P-K)
 class _FertRound {
-  final rateCtrl = TextEditingController();
-  final npkCtrl = TextEditingController();
-  DateTime? date;
+  _FertRound({this.date, this.rate, this.npk, this.n, this.p, this.k});
 
+  final DateTime? date;
+  final String? rate;
+  final String? npk;
+  final String? n;
+  final String? p;
+  final String? k;
+}
+
+/// Dialog กรอกรอบใส่ปุ๋ย — วันที่ใส่ / อัตรา / สูตรปุ๋ย (เลือกจาก
+/// `/meta/options → fertilizerFormulas` + "อื่น ๆ") + ช่อง N-P-K
+/// เลือกสูตรที่มีรูปแบบ 15-5-30 ในชื่อจะเติม N/P/K ให้อัตโนมัติ
+class _FertRoundDialog extends StatefulWidget {
+  const _FertRoundDialog({required this.roundNo, required this.formulas});
+
+  final int roundNo;
+
+  /// รายการสูตรปุ๋ยจาก backend — ว่างได้ถ้า /meta/options ยังไม่ส่ง
+  final List<String> formulas;
+
+  @override
+  State<_FertRoundDialog> createState() => _FertRoundDialogState();
+}
+
+class _FertRoundDialogState extends State<_FertRoundDialog> {
+  static const _other = 'อื่น ๆ';
+  static final _npkRe = RegExp(r'(\d+)\s*-\s*(\d+)\s*-\s*(\d+)');
+
+  final _rateCtrl = TextEditingController();
+  final _customCtrl = TextEditingController();
+  final _nCtrl = TextEditingController();
+  final _pCtrl = TextEditingController();
+  final _kCtrl = TextEditingController();
+  DateTime? _date;
+  String? _formula;
+
+  @override
   void dispose() {
-    rateCtrl.dispose();
-    npkCtrl.dispose();
+    _rateCtrl.dispose();
+    _customCtrl.dispose();
+    _nCtrl.dispose();
+    _pCtrl.dispose();
+    _kCtrl.dispose();
+    super.dispose();
+  }
+
+  String _fmtThai(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/'
+      '${d.year + 543}';
+
+  Future<void> _pickDate() async {
+    final picked = await showThaiDatePicker(
+      context,
+      initialDate: _date ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickFormula() async {
+    final labels = [...widget.formulas, _other];
+    final idx = await showOptionPopup(
+      context,
+      title: 'เลือกสูตรปุ๋ย',
+      labels: labels,
+      selectedIndex: _formula == null ? null : labels.indexOf(_formula!),
+    );
+    if (idx == null) return;
+    setState(() {
+      _formula = labels[idx];
+      // ชื่อสูตรที่มี N-P-K ในตัว เช่น "สูตร 15-5-30" → เติมช่องให้เลย
+      final m = _npkRe.firstMatch(_formula!);
+      if (m != null) {
+        _nCtrl.text = m.group(1)!;
+        _pCtrl.text = m.group(2)!;
+        _kCtrl.text = m.group(3)!;
+      }
+    });
+  }
+
+  void _save() {
+    String? nn(TextEditingController c) {
+      final t = c.text.trim();
+      return t.isEmpty ? null : t;
+    }
+
+    // ข้อความสูตรปุ๋ยที่แสดง: ชื่อสินค้า > custom > N-P-K จากช่อง
+    final npkCombo = [
+      _nCtrl.text.trim(),
+      _pCtrl.text.trim(),
+      _kCtrl.text.trim(),
+    ].join('-');
+    String? npk;
+    if (_formula == _other) {
+      npk = nn(_customCtrl) ?? (npkCombo == '--' ? null : npkCombo);
+    } else {
+      npk = _formula ?? (npkCombo == '--' ? null : npkCombo);
+    }
+    Navigator.of(context).pop(
+      _FertRound(
+        date: _date,
+        rate: nn(_rateCtrl),
+        npk: npk,
+        n: nn(_nCtrl),
+        p: nn(_pCtrl),
+        k: nn(_kCtrl),
+      ),
+    );
+  }
+
+  /// ช่องแบบ dropdown ของ dialog — แตะแล้วเปิด picker
+  Widget _pickerField(String hint, String? value, VoidCallback onTap) =>
+      InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value ?? hint,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: value == null ? Colors.black45 : Colors.black87,
+                  ),
+                ),
+              ),
+              const Icon(
+                Iconsax.arrow_circle_down,
+                size: 24,
+                color: Colors.black87,
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _npkBox(String label, TextEditingController c) => TextField(
+    controller: c,
+    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+    inputFormatters: const [DigitFormatter(decimal: true)],
+    style: const TextStyle(fontSize: 16),
+    decoration: InputDecoration(
+      labelText: label,
+      isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    ),
+  );
+
+  Widget _label(String t) => Text(
+    t,
+    style: const TextStyle(fontSize: 15, color: Colors.black87),
+    textAlign: TextAlign.end,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(
+        'เพิ่มปุ๋ยครั้งที่ ${widget.roundNo}',
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _label('วันที่ใส่ :'),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _pickerField(
+                    'เลือกวันที่',
+                    _date == null ? null : _fmtThai(_date!),
+                    _pickDate,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _label('อัตรา(กก./ไร่) :'),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: TextField(
+                    controller: _rateCtrl,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: const [DigitFormatter(decimal: true)],
+                    style: const TextStyle(fontSize: 16),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      border: UnderlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: _label('สูตรปุ๋ย :'),
+                ),
+                const SizedBox(width: 10),
+                Expanded(child: _pickerField('เลือก', _formula, _pickFormula)),
+              ],
+            ),
+            if (_formula == _other) ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: _customCtrl,
+                style: const TextStyle(fontSize: 15),
+                decoration: InputDecoration(
+                  hintText: 'ระบุสูตรปุ๋ย',
+                  hintStyle: const TextStyle(
+                    fontSize: 15,
+                    color: Colors.black38,
+                  ),
+                  isDense: true,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 10,
+                  ),
+                ),
+              ),
+            ],
+            const SizedBox(height: 14),
+            const Text(
+              'สูตรปุ๋ย NPK',
+              style: TextStyle(fontSize: 15, color: Colors.black87),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _npkBox('N', _nCtrl)),
+                const SizedBox(width: 8),
+                Expanded(child: _npkBox('P', _pCtrl)),
+                const SizedBox(width: 8),
+                Expanded(child: _npkBox('K', _kCtrl)),
+              ],
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text(
+            'ยกเลิก',
+            style: TextStyle(fontSize: 16, color: Colors.black54),
+          ),
+        ),
+        TextButton(
+          onPressed: _save,
+          child: const Text(
+            'บันทึก',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.green,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
