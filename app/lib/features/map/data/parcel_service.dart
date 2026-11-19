@@ -436,6 +436,108 @@ class ParcelService {
     await prefs.setString(_projectKey, jsonEncode(rows));
   }
 
+  // ---- ยืนยันแปลงข้ามปี — เก็บลงเครื่องก่อน รอ endpoint นำส่ง ----
+
+  static const _confirmKey = 'parcel_confirms_v1';
+
+  Future<List<Map<String, dynamic>>> _loadParcelConfirms() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_confirmKey);
+    if (raw == null) return [];
+    try {
+      return [
+        for (final j in jsonDecode(raw) as List)
+          Map<String, dynamic>.from(j as Map),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// การยืนยันข้ามปีล่าสุดของแปลง (เก็บทับรายการเดิมต่อ plotId)
+  Future<Map<String, dynamic>?> parcelConfirmFor(String plotId) async {
+    for (final r in await _loadParcelConfirms()) {
+      if (r['plotId'] == plotId) return r;
+    }
+    return null;
+  }
+
+  /// บันทึกยืนยันแปลงข้ามปี — รูป copy เข้า documents เหมือน
+  /// รูปกิจกรรม/รูปแปลง กัน temp cache ถูกระบบล้าง
+  Future<void> saveParcelConfirm({
+    required String plotId,
+    String? targetYear,
+    String? status,
+    String? note,
+    List<String> photoPaths = const [],
+    String? recordedBy,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final rows = await _loadParcelConfirms();
+    rows.removeWhere((r) => r['plotId'] == plotId);
+    rows.add({
+      'plotId': plotId,
+      'targetYear': ?targetYear,
+      'status': ?status,
+      'note': ?note,
+      'photos': [for (final p in photoPaths) await _persistPhoto(p)],
+      'recordedBy': ?recordedBy,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    await prefs.setString(_confirmKey, jsonEncode(rows));
+  }
+
+  // ---- สถานะแปลงตัด — เก็บลงเครื่องก่อน รอ endpoint backend ----
+
+  static const _cutKey = 'cut_status_v1';
+
+  Future<List<Map<String, dynamic>>> _loadCutStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_cutKey);
+    if (raw == null) return [];
+    try {
+      return [
+        for (final j in jsonDecode(raw) as List)
+          Map<String, dynamic>.from(j as Map),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// สถานะตัดล่าสุดของแปลง — {status, startDate, endDate,
+  /// estimateTons, cutCaneTons, updatedAt}
+  Future<Map<String, dynamic>?> cutStatusFor(String plotId) async {
+    for (final r in await _loadCutStatus()) {
+      if (r['plotId'] == plotId) return r;
+    }
+    return null;
+  }
+
+  /// บันทึก/อัปเดตสถานะแปลงตัด — status = ชื่อตัวเลือกที่แสดง
+  Future<void> saveCutStatus({
+    required String plotId,
+    required String status,
+    String? startDate,
+    String? endDate,
+    String? estimateTons,
+    String? cutCaneTons,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final rows = await _loadCutStatus();
+    rows.removeWhere((r) => r['plotId'] == plotId);
+    rows.add({
+      'plotId': plotId,
+      'status': status,
+      'startDate': ?startDate,
+      'endDate': ?endDate,
+      'estimateTons': ?estimateTons,
+      'cutCaneTons': ?cutCaneTons,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    await prefs.setString(_cutKey, jsonEncode(rows));
+  }
+
   /// Removes a stored draft by id (e.g. after it's pushed to the backend).
   Future<void> removeDraft(String id) async {
     final prefs = await SharedPreferences.getInstance();

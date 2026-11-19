@@ -9,8 +9,11 @@ import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/activity_drafts_view.dart';
 import 'package:brr/features/map/views/activity_history_view.dart';
 import 'package:brr/features/map/views/activity_record_view.dart';
+import 'package:brr/features/map/views/parcel_confirm_view.dart';
 import 'package:brr/features/map/views/parcel_detail_view.dart';
 import 'package:brr/features/map/views/parcel_edit_views.dart';
+import 'package:brr/features/map/widgets/cut_status_sheet.dart';
+import 'package:brr/features/map/widgets/plot_project_sheet.dart';
 import 'package:brr/features/map/widgets/risk_point_sheet.dart';
 
 /// Sheet ข้อมูลแปลง (ตาม ref แอปจริง) — header เลขแปลง + ตารางข้อมูล
@@ -77,6 +80,14 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   /// จุดเสี่ยงที่บันทึกไว้ในเครื่องของแปลง — การ์ด preview ใช้โชว์
   /// สถานะ; refresh หลัง sheet ฟอร์มบันทึกกลับมา
   late Future<Map<String, dynamic>?> _riskPoint = widget.vm.riskPoint();
+
+  /// โครงการส่งเสริมที่บันทึกไว้ในเครื่อง — badge การ์ดม่วง
+  /// refresh หลัง sheet โครงการบันทึกกลับมา
+  late Future<Map<String, dynamic>?> _project = widget.vm.plotProject();
+
+  /// สถานะแปลงตัดที่บันทึกไว้ในเครื่อง — badge การ์ดฟ้า
+  /// refresh หลัง sheet สถานะบันทึกกลับมา
+  late Future<Map<String, dynamic>?> _cut = widget.vm.cutStatus();
 
   /// กิจกรรมที่บันทึกไว้ในเครื่อง — subtitle การ์ดนำส่งนับจำนวน
   /// จริง; refresh หลังกลับจากหน้ารายการ (อาจลบ/เพิ่มรายการ)
@@ -668,17 +679,26 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                           color: Colors.white,
                         ),
                         const SizedBox(width: 6),
-                        Text(
-                          _str(meta['cutStatus']) ?? 'ยังไม่ระบุ',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: Colors.white,
-                          ),
+                        FutureBuilder<Map<String, dynamic>?>(
+                          future: _cut,
+                          builder: (context, s) {
+                            // บันทึกในเครื่องมีสิทธิ์ก่อน meta.cutStatus
+                            final saved = '${s.data?['status'] ?? ''}';
+                            return Text(
+                              saved.isNotEmpty
+                                  ? saved
+                                  : _str(meta['cutStatus']) ?? 'ยังไม่ระบุ',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Colors.white,
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
                   ),
-                  onTap: () => _todo('อัปเดตสถานะแปลงตัด'),
+                  onTap: _openCutSheet,
                 ),
                 const SizedBox(height: 10),
                 _actionCard(
@@ -708,13 +728,26 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Text(
-                          _str(meta['project']) ?? 'ยังไม่ระบุ',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF7B1FA2),
-                          ),
+                        child: FutureBuilder<Map<String, dynamic>?>(
+                          future: _project,
+                          builder: (context, s) {
+                            // บันทึกในเครื่องมีสิทธิ์ก่อน meta —
+                            // ครบเกณฑ์บังคับ = Brr Model
+                            final saved = s.data;
+                            final text = saved != null
+                                ? (saved['passed'] == true
+                                      ? 'Brr Model'
+                                      : 'เลือกแล้ว ${(saved['items'] as List? ?? const []).length}/6')
+                                : _str(meta['project']) ?? 'ยังไม่ระบุ';
+                            return Text(
+                              text,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF7B1FA2),
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(width: 6),
@@ -725,7 +758,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                       ),
                     ],
                   ),
-                  onTap: () => _todo('ข้อมูลโครงการส่งเสริมแปลง'),
+                  onTap: _openProjectSheet,
                 ),
                 const SizedBox(height: 10),
                 _actionCard(
@@ -739,7 +772,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   subtitle: 'ยืนยันแปลงข้ามปี',
                   titleColor: Colors.white,
                   subtitleColor: Colors.white70,
-                  onTap: () => _todo('ยืนยันแปลง'),
+                  onTap: () =>
+                      _pushFullScreen(ParcelConfirmView(vm: widget.vm)),
                 ),
                 const SizedBox(height: 10),
                 // การ์ดจุดเสี่ยง — preview สถานะที่บันทึกไว้ แตะเปิด
@@ -986,6 +1020,30 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('บันทึกจุดเสี่ยงภัยแล้ว')));
+    }
+  }
+
+  /// เปิด sheet อัปเดตสถานะแปลงตัด — บันทึกสำเร็จ refresh badge + snackbar
+  Future<void> _openCutSheet() async {
+    final saved = await showCutStatusSheet(context, vm: widget.vm);
+    if (!mounted) return;
+    setState(() => _cut = widget.vm.cutStatus());
+    if (saved == true) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('บันทึกสถานะแปลงตัดแล้ว')));
+    }
+  }
+
+  /// เปิด sheet โครงการส่งเสริม — บันทึกสำเร็จ refresh badge + snackbar
+  Future<void> _openProjectSheet() async {
+    final saved = await showPlotProjectSheet(context, vm: widget.vm);
+    if (!mounted) return;
+    setState(() => _project = widget.vm.plotProject());
+    if (saved == true) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('บันทึกข้อมูลโครงการแล้ว')));
     }
   }
 

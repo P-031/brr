@@ -210,6 +210,7 @@ class FormOptions {
     this.organicFertilizerTypes = const [],
     this.diseaseTypes = const [],
     this.pestTypes = const [],
+    this.confirmStatuses = const [],
   });
 
   factory FormOptions.fromJson(Map<String, dynamic> j) {
@@ -247,6 +248,7 @@ class FormOptions {
       organicFertilizerTypes: names('organicFertilizerTypes'),
       diseaseTypes: names('diseaseTypes'),
       pestTypes: names('pestTypes'),
+      confirmStatuses: names('confirmStatuses'),
     );
   }
 
@@ -328,4 +330,8 @@ class FormOptions {
 
   /// ชนิดแมลงศัตรูอ้อยให้เลือกในการ์ด "แมลง" — key `pestTypes`
   final List<String> pestTypes;
+
+  /// สถานะแปลงให้เลือกในหน้า "ยืนยันแปลงข้ามปี" —
+  /// key `confirmStatuses` ใน /meta/options
+  final List<String> confirmStatuses;
 }

@@ -43,6 +43,31 @@ class ParcelDetailViewModel extends ChangeNotifier {
   Future<void> removeActivityDraft(String id) =>
       _service.removeActivityDraft(id);
 
+  /// การยืนยันแปลงข้ามปีล่าสุดของแปลง — เก็บในเครื่องรอ endpoint
+  Future<Map<String, dynamic>?> parcelConfirm() =>
+      _service.parcelConfirmFor(parcel.id);
+
+  /// รายการปีการผลิตสำหรับ dropdown "ปีการผลิตเป้าหมาย" —
+  /// ใช้ `/plots/years` ชุดเดียวกับหน้าดาวน์โหลด
+  Future<List<String>> loadYears() async => [
+    for (final y in (await _service.fetchYearIndex()).years.keys) ?y,
+  ];
+
+  Future<void> saveParcelConfirm({
+    String? targetYear,
+    String? status,
+    String? note,
+    List<String> photoPaths = const [],
+    String? recordedBy,
+  }) => _service.saveParcelConfirm(
+    plotId: parcel.id,
+    targetYear: targetYear,
+    status: status,
+    note: note,
+    photoPaths: photoPaths,
+    recordedBy: recordedBy,
+  );
+
   /// บันทึกกิจกรรมลงเครื่อง — photos = path ไฟล์ที่ถ่าย;
   /// `detailPending` = บันทึกเฉพาะรูปรอกรอกรายละเอียด
   Future<void> saveActivityDraft({
@@ -167,10 +192,25 @@ class ParcelDetailViewModel extends ChangeNotifier {
   Future<void> savePlotProject({
     required List<String> items,
     required bool passed,
-  }) => _service.savePlotProject(
+  }) =>
+      _service.savePlotProject(plotId: parcel.id, items: items, passed: passed);
+
+  /// สถานะแปลงตัดที่บันทึกไว้ในเครื่อง — เก็บในเครื่องรอ endpoint
+  Future<Map<String, dynamic>?> cutStatus() => _service.cutStatusFor(parcel.id);
+
+  Future<void> saveCutStatus({
+    required String status,
+    String? startDate,
+    String? endDate,
+    String? estimateTons,
+    String? cutCaneTons,
+  }) => _service.saveCutStatus(
     plotId: parcel.id,
-    items: items,
-    passed: passed,
+    status: status,
+    startDate: startDate,
+    endDate: endDate,
+    estimateTons: estimateTons,
+    cutCaneTons: cutCaneTons,
   );
 
   /// PATCH รูท/ลำดับ แล้ว refetch detail — listener (sheet/detail
