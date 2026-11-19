@@ -11,6 +11,8 @@ const taskName = {
   FERTILIZE: "ใส่ปุ๋ย",
   SPRAY: "พ่นยา",
   HARVEST: "ตัดอ้อย",
+  PREPARE: "เตรียมแปลง",
+  CARE: "ดูแล",
 } as const;
 
 export type TaskName = (typeof taskName)[keyof typeof taskName];
@@ -46,7 +48,14 @@ export function plotSummary(plot: {
   id: string;
   name: string;
   variety: string;
-  productionYear?: string | null;
+  areaSqm: number;
+  centerLat: number;
+  centerLng: number;
+  version: number;
+  surveyedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  season: string;
   officerName?: string | null;
   project?: string | null;
   caneGroup?: string | null;
@@ -66,47 +75,56 @@ export function plotSummary(plot: {
   lossRai?: number | null;
   targetYield?: number | null;
   note?: string | null;
-  areaSqm: number;
-  centerLat: number;
-  centerLng: number;
-  createdAt: Date;
+  groupKind?: string | null;
+  status?: string | null;
   farmer: { id: string; username: string; displayName: string };
 }) {
   return {
     id: plot.id,
     name: plot.name,
     variety: plot.variety,
+    season: plot.season,
     ...areaFields(plot.areaSqm),
     center: { latitude: plot.centerLat, longitude: plot.centerLng },
+    version: plot.version,
+    surveyedAt: plot.surveyedAt?.toISOString() ?? null,
     createdAt: plot.createdAt.toISOString(),
+    updatedAt: plot.updatedAt.toISOString(),
     farmer: {
       id: plot.farmer.id,
       username: plot.farmer.username,
       displayName: plot.farmer.displayName,
     },
-    meta: {
-      productionYear: plot.productionYear,
-      officerName: plot.officerName,
-      project: plot.project,
-      caneGroup: plot.caneGroup,
-      zone: plot.zone,
-      province: plot.province,
-      district: plot.district,
-      subdistrict: plot.subdistrict,
-      village: plot.village,
-      rootNo: plot.rootNo,
-      sequenceNo: plot.sequenceNo,
-      prevPlotNo: plot.prevPlotNo,
-      caneType: plot.caneType,
-      caneVariety: plot.caneVariety,
-      ownership: plot.ownership,
-      terrain: plot.terrain,
-      hasLoss: plot.hasLoss,
-      lossRai: plot.lossRai,
-      targetYield: plot.targetYield,
-      note: plot.note,
-    },
+    productionYear: plot.season === "" ? null : plot.season,
+    status: plot.status ?? null,
   };
+}
+
+export function plotMeta(plot: Parameters<typeof plotSummary>[0]) {
+  const year = plot.season === "" ? null : plot.season;
+  return {
+    productionYear: year,
+    officerName: plot.officerName ?? null,
+    project: plot.project ?? null,
+    caneGroup: plot.caneGroup ?? null,
+    zone: plot.zone ?? null,
+    province: plot.province ?? null,
+    district: plot.district ?? null,
+    subdistrict: plot.subdistrict ?? null,
+    village: plot.village ?? null,
+    rootNo: plot.rootNo ?? null,
+    sequenceNo: plot.sequenceNo ?? null,
+    prevPlotNo: plot.prevPlotNo ?? null,
+    caneType: plot.caneType ?? null,
+    caneVariety: plot.caneVariety ?? null,
+    ownership: plot.ownership ?? null,
+    terrain: plot.terrain ?? null,
+    hasLoss: plot.hasLoss ?? null,
+    lossRai: plot.lossRai ?? null,
+    targetYield: plot.targetYield ?? null,
+    note: plot.note ?? null,
+    groupKind: plot.groupKind ?? null,
+  }
 }
 
 export function plotDetail(
@@ -114,7 +132,7 @@ export function plotDetail(
     points: LatLng[];
   },
 ) {
-  return { ...plotSummary(plot), points: plot.points };
+  return { ...plotSummary(plot), points: plot.points, meta:plotMeta(plot) };
 }
 
 export function yieldJson(record: {
@@ -122,7 +140,9 @@ export function yieldJson(record: {
   plotId: string;
   season: string;
   weightTons: number;
+  version: number;
   createdAt: Date;
+  updatedAt: Date;
   areaSqm: number;
 }) {
   return {
@@ -131,7 +151,9 @@ export function yieldJson(record: {
     season: record.season,
     weightTons: record.weightTons,
     tonsPerRai: tonsPerRai(record.weightTons, record.areaSqm),
+    version: record.version,
     createdAt: record.createdAt.toISOString(),
+    updatedAt: record.updatedAt.toISOString(),
   };
 }
 
@@ -141,6 +163,8 @@ export function taskJson(task: {
   kind: keyof typeof taskName;
   date: Date;
   done: boolean;
+  version: number;
+  updatedAt: Date;
 }) {
   return {
     id: task.id,
@@ -148,5 +172,27 @@ export function taskJson(task: {
     kind: taskName[task.kind],
     date: formatDate(task.date),
     done: task.done,
+    version: task.version,
+    updatedAt: task.updatedAt.toISOString(),
+  };
+}
+
+export function surveyJson(survey: {
+  id: string;
+  plotId: string;
+  startedAt: Date;
+  finishedAt: Date;
+  corners: unknown;
+  areaSqm: number;
+  createdAt: Date;
+}) {
+  return {
+    id: survey.id,
+    plotId: survey.plotId,
+    startedAt: survey.startedAt.toISOString(),
+    finishedAt: survey.finishedAt.toISOString(),
+    corners: survey.corners,
+    ...areaFields(survey.areaSqm),
+    createdAt: survey.createdAt.toISOString(),
   };
 }

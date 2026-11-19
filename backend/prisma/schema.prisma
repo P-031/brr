@@ -21,6 +21,14 @@ enum TaskKind {
   FERTILIZE
   SPRAY
   HARVEST
+  PREPARE
+  CARE
+}
+
+enum RecordKind {
+  PLOT
+  YIELD
+  TASK
 }
 
 model User {
@@ -33,7 +41,6 @@ model User {
   updatedAt   DateTime @updatedAt
 
   plots      Plot[]
-  requests   PlotRequest[]
   caringFor  FarmerCare[] @relation("OfficerCare")
   caretakers FarmerCare[] @relation("FarmerCare")
 
@@ -57,43 +64,67 @@ model Plot {
   farmerId  String
   name      String
   variety   String                                 @default("")
-  // Measurement-form metadata — all optional so old records and
-  // bare creates still work.
-  productionYear String?
-  officerName    String?
-  project        String?
-  caneGroup      String?
-  zone           String?
-  province       String?
-  district       String?
-  subdistrict    String?
-  village        String?
-  rootNo         String?
-  sequenceNo     String?
-  prevPlotNo     String?
-  caneType       String?
-  caneVariety    String?
-  ownership      String?
-  terrain        String?
-  hasLoss        String?
-  lossRai        Float?
-  targetYield    Float?
-  note           String?
   areaSqm   Float
   centerLat Float
   centerLng Float
-  /// Read and written with raw SQL in src/boundary.ts. Prisma Client cannot touch this column.
-  boundary  Unsupported("geometry(Polygon, 4326)")?
-  createdAt DateTime                               @default(now())
-  updatedAt DateTime                               @updatedAt
+  /// Crop season this plot belongs to. Chosen before load or save. Never changed later.
+  season    String
+  officerName String?
+  project     String?
+  caneGroup   String?
+  zone        String?
+  province    String?
+  district    String?
+  subdistrict String?
+  village     String?
+  rootNo      String?
+  sequenceNo  String?
+  prevPlotNo  String?
+  caneType    String?
+  caneVariety String?
+  ownership   String?
+  terrain     String?
+  hasLoss     String?
+  lossRai     Float?
+  targetYield Float?
+  note        String?
+  /// harvest = กลุ่มตัด, maintain = กลุ่มบำรุง
+  groupKind   String?
+  status      String?
 
-  farmer   User          @relation(fields: [farmerId], references: [id], onDelete: Cascade)
-  yields   YieldRecord[]
-  tasks    FieldTask[]
-  requests PlotRequest[]
+  requests PlotRequest[]  
+  /// Read and written with raw SQL in src/boundary.ts. Prisma Client cannot touch this column.
+  boundary   Unsupported("geometry(Polygon, 4326)")?
+  /// Bumped on every change. Offline edits must send the version they started from.
+  version    Int                                    @default(1)
+  surveyedAt DateTime?
+  createdAt  DateTime                               @default(now())
+  updatedAt  DateTime                               @updatedAt
+
+  farmer  User          @relation(fields: [farmerId], references: [id], onDelete: Cascade)
+  yields  YieldRecord[]
+  tasks   FieldTask[]
+  surveys PlotSurvey[]
 
   @@index([farmerId, createdAt, id])
+  @@index([farmerId, updatedAt])
+  @@index([farmerId, season])
   @@index([boundary], type: Gist)
+}
+
+/// Every walk around a plot, oldest first. The newest one is the plot's boundary.
+model PlotSurvey {
+  id         String   @id @default(cuid())
+  plotId     String
+  startedAt  DateTime
+  finishedAt DateTime
+  /// [{ latitude, longitude, accuracyM, capturedAt }] in walking order.
+  corners    Json
+  areaSqm    Float
+  createdAt  DateTime @default(now())
+  plot       Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  @@index([plotId, createdAt])
 }
 
 model YieldRecord {
@@ -101,35 +132,67 @@ model YieldRecord {
   plotId     String
   season     String
   weightTons Float
+  version    Int      @default(1)
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   plot       Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
 
   @@index([plotId, createdAt])
+  @@index([updatedAt])
 }
 
 model FieldTask {
-  id     String   @id @default(cuid())
-  plotId String
-  kind   TaskKind
-  date   DateTime @db.Date
-  done   Boolean  @default(false)
-  plot   Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
-
-  @@index([plotId, date])
-}
-
-/// คำขอจากแอปบนแปลง (status / edit / group) — รออนุมัติจนกว่า officer จะจัดการ
-model PlotRequest {
   id        String   @id @default(cuid())
   plotId    String
-  userId    String
-  kind      String
-  payload   Json
-  status    String   @default("รออนุมัติ")
-  createdAt DateTime @default(now())
+  kind      TaskKind
+  date      DateTime @db.Date
+  done      Boolean  @default(false)
+  version   Int      @default(1)
+  updatedAt DateTime @updatedAt
+  plot      Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
 
-  plot Plot @relation(fields: [plotId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([plotId, date])
+  @@index([updatedAt])
+}
+
+/// Lets offline devices learn about deletes. Deleting a plot also removes its yields and tasks.
+model DeletedRecord {
+  kind      RecordKind
+  recordId  String
+  farmerId  String
+  plotId    String?
+  /// Season of the deleted plot, so a sync for one season does not receive the others.
+  season    String?
+  deletedAt DateTime   @default(now())
+
+  @@id([kind, recordId])
+  @@index([farmerId, deletedAt])
+}
+
+model PlotRequest {
+  id        String  @id @default(cuid())
+  plotId    String
+  kind      String
+  value     String
+  createdAt DateTime @default(now())
+  plot      Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
 
   @@index([plotId, createdAt])
+}
+
+model FromOption {
+  group String
+  label String
+  sort  Int   @default(0)
+
+  @@id([group, label])
+}
+
+model Place {
+  province    String
+  district    String
+  subdistrict String
+  village     String
+
+  @@id([province, district, subdistrict, village])
 }

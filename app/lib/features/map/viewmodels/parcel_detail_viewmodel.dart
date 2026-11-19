@@ -68,8 +68,15 @@ class ParcelDetailViewModel extends ChangeNotifier {
   /// PATCH รูท/ลำดับ แล้ว refetch detail — listener (sheet/detail
   /// view) เห็นค่าใหม่ทันทีโดยไม่ต้อง reopen
   Future<void> updateRouteSeq({String? rootNo, String? sequenceNo}) async {
+    final current = await detail;
+    final rawVersion = current?['version'];
+    final version = rawVersion is int ? rawVersion : null;
+    if (version == null) {
+      throw Exception('ยังโหลดข้อมูลแปลงไม่ครบ ลองใหม่อีกครั้ง');
+    }
     await _service.updateParcelMeta(
       parcel.id,
+      version: version,
       rootNo: rootNo,
       sequenceNo: sequenceNo,
     );

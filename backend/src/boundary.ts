@@ -14,9 +14,31 @@ export type Box = {
 export type MapPlotRow = {
   id: string;
   name: string;
-  productionYear: string | null;
+  variety: string;
+  areaSqm: number;
+  centerLat: number;
+  centerLng: number;
+  version: number;
+  surveyedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  farmerId: string;
+  username: string;
+  displayName: string;
+  season: string;
   outline: string | null;
 };
+
+export type OverlapRow = {
+  id: string;
+  name: string;
+  farmerId: string;
+  areaSqm: number;
+  overlapSqm: number;
+};
+
+/** Any fixed number works. Every boundary write takes this lock so two overlapping saves cannot both pass the check. */
+const boundaryLockKey = 4_810_201;
 
 /** GeoJSON is [longitude, latitude] and a ring must end on its first corner. */
 function polygonGeoJson(ring: LatLng[]): string {
@@ -48,41 +70,77 @@ export async function readBoundary(plotId: string): Promise<LatLng[]> {
   return ringFromGeoJson(rows[0]?.geojson ?? null);
 }
 
-/** Plots whose outline touches the box — outlines return exactly
- *  as saved (no simplification; pins must match what was recorded).
- *  [years] filters productionYear; include `null` inside to also keep
- *  plots without a production year. undefined = no year filter. */
+export async function readBoundaries(plotIds: string[]): Promise<Map<string, LatLng[]>> {
+  if (plotIds.length === 0) return new Map();
+  const rows = await prisma.$queryRaw<Array<{ id: string; geojson: string | null }>>`
+    SELECT id, ST_AsGeoJSON(boundary) AS geojson FROM "Plot" WHERE id IN (${Prisma.join(plotIds)})
+  `;
+  return new Map(rows.map((row) => [row.id, ringFromGeoJson(row.geojson)]));
+}
+
+/** Held until the transaction ends. */
+export async function lockBoundaries(db: Db): Promise<void> {
+  await db.$executeRaw`SELECT pg_advisory_xact_lock(${boundaryLockKey}::bigint)`;
+}
+
+export async function isValidRing(db: Db, ring: LatLng[]): Promise<boolean> {
+  const rows = await db.$queryRaw<Array<{ valid: boolean }>>`
+    SELECT ST_IsValid(ST_SetSRID(ST_GeomFromGeoJSON(${polygonGeoJson(ring)}), 4326)) AS valid
+  `;
+  return rows[0]?.valid === true;
+}
+
+/** Every plot of any farmer that shares ground with the ring, with the shared area in square metres. */
+export async function overlappingPlots(
+  db: Db,
+  ring: LatLng[],
+  season: string,
+  excludePlotId?: string,
+): Promise<OverlapRow[]> {
+  return db.$queryRaw<OverlapRow[]>`
+    WITH drawn AS (SELECT ST_SetSRID(ST_GeomFromGeoJSON(${polygonGeoJson(ring)}), 4326) AS geom)
+    SELECT p.id, p.name, p."farmerId", p."areaSqm",
+           ST_Area(ST_Intersection(ST_MakeValid(p.boundary), drawn.geom)::geography) AS "overlapSqm"
+    FROM "Plot" p, drawn
+    WHERE p.season = ${season}
+      AND p.boundary && drawn.geom
+      AND ST_Intersects(p.boundary, drawn.geom)
+      AND p.id <> ${excludePlotId ?? ""}
+    ORDER BY "overlapSqm" DESC
+  `;
+}
+
+/** Plots whose outline touches the box, with corners thinned to the map's scale. */
 export async function plotsInBox(
   farmerIds: string[],
   box: Box,
   limit: number,
-  years?: (string | null)[],
+  years?: { seasons: string[]; includeBlank: boolean },
 ): Promise<MapPlotRow[]> {
-  const named = years?.filter((y): y is string => y != null) ?? [];
-  const yearFilter =
-    years === undefined
-      ? Prisma.empty
-      : years.length === 0
-        ? Prisma.sql`AND false` // เลือกไม่เลือกปีเลย = ไม่มีแปลง
-        : years.includes(null) && named.length === 0
-        ? Prisma.sql`AND p."productionYear" IS NULL`
-        : years.includes(null)
-          ? Prisma.sql`AND (p."productionYear" IN (${Prisma.join(named)}) OR p."productionYear" IS NULL)`
-          : Prisma.sql`AND p."productionYear" IN (${Prisma.join(named)})`;
-  // เลือกเฉพาะฟิลด์ที่แอปต้องใช้ render แผนที่ — meta/owner/
-  // variety หนักๆ ไม่ต้องส่ง bulk (แตะแปลงค่อย GET /plots/:id)
-  return prisma.$queryRaw<MapPlotRow[]>`
-    SELECT p.id, p.name, p."productionYear",
-           -- 6 ตำแหน่งทศนิยม ≈ ±0.1ม. (เกินความแม่น GPS แล้ว)
-           -- ลด payload ~25% โดยจุดยังครบเหมือนเดิม
-           ST_AsGeoJSON(p.boundary, 6) AS outline
-    FROM "Plot" p
-    WHERE p."farmerId" IN (${Prisma.join(farmerIds)})
-      AND p.boundary && ST_MakeEnvelope(
-        ${box.west}::float8, ${box.south}::float8, ${box.east}::float8, ${box.north}::float8, 4326
-      )
-      ${yearFilter}
-    ORDER BY p."areaSqm" DESC, p.id
-    LIMIT ${limit}
+  const seasons = years?.seasons ?? [];
+  const includeBlank = years?.includeBlank ?? false;
+  const yearSql =
+    seasons.length > 0 && includeBlank
+    ? Prisma.sql`AND (p.season IN (${Prisma.join(seasons)}) OR p.season = '')`
+    : seasons.length > 0 
+      ? Prisma.sql`AND p.season IN (${Prisma.join(seasons)})`
+      : includeBlank
+        ? Prisma.sql`AND p.season = ''`
+        : Prisma.empty;
+const tolerance = Math.max(box.east - box.west, box.north - box.south) / 2000;
+return prisma.$queryRaw<MapPlotRow[]>`
+  SELECT p.id, p.name, p.variety, p."areaSqm", p."centerLat", p."centerLng", p.version,
+         p."surveyedAt", p."createdAt", p."updatedAt", p."farmerId", p.season, p.status,
+         u.username, u."displayName",
+         ST_AsGeoJSON(ST_SimplifyPreserveTopology(p.boundary, ${tolerance}::float8)) AS outline
+  FROM "Plot" p
+  JOIN "User" u ON u.id = p."farmerId"
+  WHERE p."farmerId" IN (${Prisma.join(farmerIds)})
+    ${yearSql}
+    AND p.boundary && ST_MakeEnvelope(
+      ${box.west}::float8, ${box.south}::float8, ${box.east}::float8, ${box.north}::float8, 4326
+    )
+      ORDER BY p."areaSqm" DESC, p.id
+      LIMIT ${limit}
   `;
 }

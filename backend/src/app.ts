@@ -6,6 +6,9 @@ import { errorHandler } from "./http";
 import { accountRouter } from "./routes/account";
 import { metaRouter } from "./routes/meta";
 import { fieldRouter } from "./routes/plots";
+import { sessionRouter } from "./routes/session";
+import { syncRouter } from "./routes/sync";
+import { metaRouter } from "./routes/meta";
 
 export function createApp() {
   const app = express();
@@ -27,10 +30,12 @@ export function createApp() {
     res.json({ ok: true });
   });
 
+  app.use(sessionRouter);
   app.use(requireAuth);
   app.use(accountRouter);
   app.use(metaRouter);
   app.use(fieldRouter);
+  app.use(syncRouter);
   app.use((_req, res) => {
     res.status(404).json({ error: "ไม่พบเส้นทาง" });
   });

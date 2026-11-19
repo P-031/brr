@@ -1,217 +1,52 @@
 import { Router } from "express";
+import { currentUser } from "../auth";
 import { route } from "../http";
+import { farmerIdsForList } from "../plotAccess";
 import { prisma } from "../prisma";
 
 export const metaRouter = Router();
 
-// Master data for the measurement save form. Real admin divisions for
-// the BRR mill area (อ.คูเมือง จ.บุรีรัมย์); promote to DB tables when a
-// master-data admin UI exists.
-const ZONES = [
-  "เขตคูเมือง",
-  "เขตเมืองบุรีรัมย์",
-  "เขตแคนดง",
-  "เขตบ้านด่าน",
-  "เขตพุทไธสง",
-  "เขตลำปลายมาศ",
-];
-
-const PROVINCES = ["บุรีรัมย์", "นครราชสีมา", "สุรินทร์", "มหาสารคาม"];
-
-// ตำบลจริงต่ออำเภอ จ.บุรีรัมย์ — อ้างอิงรายชื่อเทศบาล/อบต.จาก
-// หน้า Wikipedia จังหวัดบุรีรัมย์ + หน้ารายอำเภอ (ไม่ครบทุกตำบล —
-// เพิ่มตำบลที่เหลือเมื่อมี master data).
-const DISTRICT_TAMBONS: Record<string, string[]> = {
-  เมืองบุรีรัมย์: ["ในเมือง", "อิสาณ", "เสม็ด", "ชุมเห็ด", "บ้านบัว", "สวายจีก", "หลักเขต", "หนองตาด"],
-  คูเมือง: ["คูเมือง", "ปะเคียบ", "บ้านแพ", "พรสำราญ", "หินเหล็กไฟ", "ตูมใหญ่", "หนองขมาร"],
-  กระสัง: ["กระสัง", "สองชั้น", "หนองเต็ง", "อุดมธรรม"],
-  นางรอง: ["นางรอง", "ทุ่งแสงทอง", "หนองโบสถ์"],
-  หนองกี่: ["หนองกี่", "ศาลเจ้าพ่อขุนศรี", "ดอนอะราง", "เมืองไผ่"],
-  ละหานทราย: ["ละหานทราย", "ตาจง", "หนองแวง", "สำโรงใหม่", "หนองตะครอง"],
-  ประโคนชัย: ["ประโคนชัย", "แสลงโทน", "โคกม้า", "เขาคอก", "ตะโกตาพิ"],
-  บ้านกรวด: ["บ้านกรวด", "ตลาดนิคมปราสาท", "บ้านกรวดปัญญาวัฒน์", "หนองไม้งาม", "จันทบเพชร", "โนนเจริญ", "บึงเจริญ", "ปราสาท"],
-  พุทไธสง: ["พุทไธสง"],
-  ลำปลายมาศ: ["ลำปลายมาศ", "ทะเมนชัย"],
-  สตึก: ["สตึก", "ศรีสตึก", "ดอนมนต์", "สะแก"],
-  ปะคำ: ["ปะคำ"],
-  นาโพธิ์: ["นาโพธิ์"],
-  หนองหงส์: ["หนองหงส์"],
-  พลับพลาชัย: ["พลับพลาชัย", "จันดุม", "โคกขมิ้น"],
-  ห้วยราช: ["ห้วยราช", "โคกเหล็ก", "สามแวง"],
-  โนนสุวรรณ: ["โนนสุวรรณ", "โกรกแก้ว", "ดงอีจาน", "ทุ่งจังหัน"],
-  ชำนิ: ["ชำนิ", "หนองปล่อง"],
-  บ้านใหม่ไชยพจน์: ["บ้านใหม่ไชยพจน์"],
-  โนนดินแดง: ["โนนดินแดง"],
-  บ้านด่าน: ["บ้านด่าน", "ปราสาท"],
-  แคนดง: ["แคนดง", "หัวฝาย"],
-  เฉลิมพระเกียรติ: ["พนมรุ้ง", "ยายแย้มวัฒนา", "ถาวร"],
-};
-
-// ตำบล อ.คูเมือง — real village names, 3 per tambon (อ้างอิงเว็บ
-// อบต./เทศบาลของแต่ละตำบล).
-const TAMBON_VILLAGES: Record<string, string[]> = {
-  คูเมือง: ["บ้านคูเมือง", "บ้านคูบอน", "บ้านโคกกลาง"],
-  ปะเคียบ: ["บ้านปะเคียบ", "บ้านหนองบัวแดง", "บ้านกระเบื้อง"],
-  บ้านแพ: ["บ้านโนนสูง", "บ้านโนนกลาง", "บ้านแพ"],
-  พรสำราญ: ["บ้านสระบัว", "บ้านโนนเมือง", "บ้านหนองขวาง"],
-  หินเหล็กไฟ: ["บ้านหินเหล็กไฟ", "บ้านสาวเอ้", "บ้านโนนมาลัย"],
-  ตูมใหญ่: ["บ้านตูมใหญ่", "บ้านปะคำสำโรง", "บ้านใหม่เจริญสุข"],
-  หนองขมาร: ["บ้านหนองขมาร", "บ้านหนองโฮง", "บ้านดงเค็ง"],
-};
-
-// จังหวัด → อำเภอ → ตำบล → [หมู่บ้าน] — nested so the form can
-// cascade-filter each level. ตำบลนอก อ.คูเมือง ใช้บ้านชื่อเดียวกับ
-// ตำบลเป็น seed ไปก่อน (เกือบทุกตำบลมีหมู่บ้านชื่อเดียวกัน).
-const LOCATIONS: Record<string, Record<string, Record<string, string[]>>> = {
-  บุรีรัมย์: Object.fromEntries(
-    Object.entries(DISTRICT_TAMBONS).map(([district, tambons]) => [
-      district,
-      Object.fromEntries(
-        tambons.map((t) => [t, TAMBON_VILLAGES[t] ?? [`บ้าน${t}`]]),
-      ),
-    ]),
-  ),
-  // Provinces outside the mill area — no master data yet, pickers
-  // will show "ยังไม่มีข้อมูล" until real district lists are added.
-  นครราชสีมา: {},
-  สุรินทร์: {},
-  มหาสารคาม: {},
-};
-
-const PROJECTS = ["โครงการอ้อยแปลงใหญ่", "โครงการเพิ่มผลผลิตต่อไร่", "โครงการน้ำช่วยอ้อย"];
-
-// อ้อยปลูกใหม่ vs อ้อยตอ — caneTypes รวมยังใช้ในฟอร์มวัดเดิม
-const CANE_TYPES_PLANT = [
-  "อ้อยต้นฝน",
-  "อ้อยปลายฝนขยาย",
-  "อ้อยปลายฝนรื้อตอ",
-];
-const CANE_TYPES_RATOON = [
-  "อ้อยตอ1",
-  "อ้อยตอ2",
-  "อ้อยตอ3",
-  "อ้อยมากกว่าตอ3",
-  "อ้อยตอ6000",
-];
-const CANE_TYPES = [...CANE_TYPES_PLANT, ...CANE_TYPES_RATOON];
-
-const CANE_VARIETIES = [
-  "KK3",
-  "LK92-11",
-  "UT84-12",
-  "M-บุรีรัมย์ 60",
-  "เพชรบีระ 60",
-  "สุพรรณบุรี 50",
-  "85-2-669",
-];
-
-// ตัวเลือก "ประเภทอ้อยหลักใหม่" ในคำขอแก้ไขประเภทอ้อย —
-// เลือกว่าจะไว้ตอเดิมหรือปลูกใหม่ (ประเภทอ้อยเฉพาะเจาะจงใช้
-// caneTypes อยู่แล้ว)
-const CANE_PLANT_MODES = ["ไว้ตอ", "ปลูกใหม่"];
-
-// ประเภทอ้อยละเอียดแยกตามโหมด — key = ค่าใน CANE_PLANT_MODES
-// (ไว้ตอ → เลือกตอ; ปลูกใหม่ → เลือกอ้อยปลูก)
-const CANE_TYPES_BY_MODE: Record<string, string[]> = {
-  ไว้ตอ: CANE_TYPES_RATOON,
-  ปลูกใหม่: CANE_TYPES_PLANT,
-};
-
-const CANE_GROUPS = [
-  "กลุ่มตัดหินเหล็กไฟ",
-  "กลุ่มตัดคูเมือง",
-  "กลุ่มตัดตูมใหญ่",
-  "กลุ่มบำรุงหินเหล็กไฟ",
-  "กลุ่มบำรุงคูเมือง",
-  "กลุ่มบำรุงตูมใหญ่",
-];
-
-const OWNERSHIPS = ["ของตนเอง", "เช่า", "เช่าเพาะปลูก"];
-
-const TERRAINS = ["ที่ราบลุ่ม", "ที่ดอน", "ที่ราบสูง"];
-
-// สาเหตุพื้นที่สูญเสีย — แปลงหนึ่งมีได้หลายอย่างพร้อมกัน ("ไม่มี" เป็น
-// exclusive ฝั่งแอปจัดการเองใน multi-select).
-const LOSS_OPTIONS = ["ต้นไม้", "สระน้ำ", "จอมปลวก", "อาคาร", "ไม่มี", "อื่น ๆ", "อ้อยแล้งตาย"];
-
-// สถานะแปลง + ประเภทคำขอแก้ไข — ตัวเลือกหน้า "ยื่นคำขออัปเดตสถานะ
-// แปลง1/2" บนแอป (endpoint คำขอยังไม่มี — ตัวเลือกนำหน้าไว้ก่อน)
-const PLOT_STATUSES = ["แปลงปกติ", "LY", "OT", "CL1", "CL2"];
-const PLOT_REQUEST_TYPES = ["ยกเลิกแปลง", "แก้ไขประเภทอ้อย", "แก้ไขชาวไร"];
-
-// เหตุผลประกอบสถานะแปลง — dropdown ที่สองในหน้าคำขอ1 โผล่เมื่อเลือก
-// สถานะที่อยู่ใน map นี้ (key = ชื่อสถานะตรง PLOT_STATUSES)
-const PLOT_STATUS_REASONS: Record<string, string[]> = {
-  LY: [
-    "ทำกิจกรรมไม่ถูกช่วงเวลาน้อยกว่า 5 ตัน/ไร่",
-    "ชาวไร่ไม่จัดการแปลงน้อยกว่า 5 ตัน/ไร่",
-    "พื้นที่ไม่เหมาะสมน้อยกว่า 5 ตัน/ไร่",
-    "ขาดกลุ่มบำรุงรับผิดชอบน้อยกว่า 5 ตัน/ไร่",
-  ],
-  OT: [
-    "เปลี่ยนเจ้าของแปลง ไม่มีแปลงทดแทน",
-    "ปลูกพืชชนิดอื่น ไม่มีแปลงทดแทน",
-    "พักดิน ไม่มีแปลงทดแทน",
-    "หมดสัญญาเช่า ไม่มีแปลงทดแทน",
-  ],
-  CL1: [
-    "เสียหายจากน้ำท่วม",
-    "เสียหายจากภัยแล้ง",
-    "เสียหายจากโรคพืช",
-    "เสียหายจากแมลง",
-  ],
-  CL2: [
-    "อ้อยผิดปกติ จากน้ำท่วมขัง",
-    "อ้อยผิดปกติ จากภาวะแล้ง",
-    "ได้รับผลกระทบจากโรคและแมลง",
-    "ได้รับผลกระทบจากฝนทิ้งช่วง",
-  ],
-};
-
-// แถบสถานะหน้า "สถานะแปลง" บนแอป + ตัวเลือกจุดเสี่ยงใน info sheet —
-// endpoint สถานะ/จุดเสี่ยงจริงยังไม่มี เลยเสิร์ฟเป็น master options
-// ไปก่อนเหมือนชุดอื่น
-const PARCEL_STATUSES = [
-  "รออนุมัติ",
-  "อนุมัติ",
-  "ไม่อนุมัติ",
-  "ยกเลิก",
-  "แปลงที่ลบแล้ว",
-  "แปลงรอยืนยัน",
-  "ยกเลิกแบบมีหนี้ค้าง",
-];
-const RISK_LEVELS = ["น้ำท่วม", "แล้ง", "50-50"];
-
 metaRouter.get(
-  "/meta/options",
-  route(async (_req, res) => {
-    // Previous plot numbers come from real plots — the picker offers
-    // existing plots to continue a sequence.
-    const plots = await prisma.plot.findMany({
-      select: { id: true, name: true },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
+    "/meta/options",
+    route(async (req, res) => {
+        const user = currentUser(req);
+        const farmerIds = await farmerIdsForList(user, undefined);
+        const [options, places, plots] = await Promise.all([
+            prisma.fromOption.findMany({ orderBy: [{ group: "asc"}, { sort: "asc"}, { label: "asc" }] }),
+            prisma.place.findMany(),
+            farmerIds.length === 0
+            ? Promise.resolve([])
+            : prisma.plot.findMany({
+                where: { farmerId: { in: farmerIds } },
+                select: {id: true, name: true },
+                orderBy: {name: "asc"},
+            }),
+        ]);
+    
+    const labels = (group: string) => options.filter((row) => row.group === group).map((row) => row.label);
+    const locations : Record<string, Record<string, Record<string, string[]>>> ={};
+    for (const place of places) {
+        const districts = (locations[place.province] ??= {});
+        const subdistricts = (districts[place.district] ??= {});
+        (subdistricts[place.subdistrict] ??= []).push(place.village);
+    }
 
     res.json({
-      zones: ZONES,
-      provinces: PROVINCES,
-      locations: LOCATIONS,
-      projects: PROJECTS,
-      caneGroups: CANE_GROUPS,
-      caneTypes: CANE_TYPES,
-      canePlantModes: CANE_PLANT_MODES,
-      caneTypesByMode: CANE_TYPES_BY_MODE,
-      caneVarieties: CANE_VARIETIES,
-      ownerships: OWNERSHIPS,
-      terrains: TERRAINS,
-      lossOptions: LOSS_OPTIONS,
-      plotStatuses: PLOT_STATUSES,
-      plotRequestTypes: PLOT_REQUEST_TYPES,
-      statusReasons: PLOT_STATUS_REASONS,
-      parcelStatuses: PARCEL_STATUSES,
-      riskLevels: RISK_LEVELS,
-      prevPlots: plots.map((p) => ({ code: p.id, name: p.name })),
+        projects: labels("projects"),
+        caneGroups: labels("caneGroups"),
+        zones: labels("zones"),
+        caneTypes: labels("caneTypes"),
+        caneVarieties: labels("caneVarieties"),
+        ownerships: labels("ownerships"),
+        terrains: labels("terrains"),
+        lossOptions: labels("lossOptions"),
+        plotStatuses: labels("plotStatuses"),
+        plotRequestTypes: labels("plotRequestTypes"),
+        parcelStatuses: labels("parcelStatuses"),
+        riskLevels: labels("riskLevels"),
+        provinces: Object.keys(locations),
+        locations,
+        prevPlots: plots.map((plot) => ({ code: plot.id, name: plot.name })),
     });
   }),
 );
