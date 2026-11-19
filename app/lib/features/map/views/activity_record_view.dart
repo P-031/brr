@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/image_source_sheet.dart';
+import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/activity_detail_view.dart';
 
@@ -44,16 +46,12 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
     if (source == null) return;
     // pickImage throw ได้ (already_active / camera busy บนบางเครื่อง)
     try {
-      final x = await ImagePicker().pickImage(
-        source: source,
-        maxWidth: 1600,
-      );
+      final x = await ImagePicker().pickImage(source: source, maxWidth: 1600);
       if (x != null) setState(() => _photos.add(x));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('เปิดกล้องไม่สำเร็จ')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('เปิดกล้องไม่สำเร็จ')));
     }
   }
 
@@ -73,9 +71,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
   Future<void> _needPhoto() => showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -95,9 +91,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.green,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.green),
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('ตกลง', style: TextStyle(fontSize: 16)),
             ),
@@ -135,18 +129,20 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
     }
     setState(() => _saving = true);
     try {
+      final user = context.read<AuthViewModel>().user;
       await widget.vm.saveActivityDraft(
         photoPaths: [for (final p in _photos) p.path],
         detailPending: true,
+        recordedBy: user?.displayName,
+        recordedByRole: user?.role,
       );
       if (mounted) {
         Navigator.of(context).pop('บันทึกลงเครื่องแล้ว — รอกรอกรายละเอียด');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -205,10 +201,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
                 if (cane.isEmpty) return const SizedBox.shrink();
                 return Text(
                   cane,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                  ),
+                  style: const TextStyle(fontSize: 14, color: Colors.white70),
                 );
               },
             ),
@@ -223,8 +216,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
               p.meta ??
               const {};
           final areaMap = snap.data?['area'] as Map<String, dynamic>?;
-          final rai =
-              (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
+          final rai = (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
           return ListView(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
             children: [
@@ -288,8 +280,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
                         child: ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: _photos.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(width: 10),
+                          separatorBuilder: (_, _) => const SizedBox(width: 10),
                           itemBuilder: (context, i) => Stack(
                             children: [
                               ClipRRect(
@@ -306,9 +297,8 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
                                 top: -4,
                                 right: -4,
                                 child: GestureDetector(
-                                  onTap: () => setState(
-                                    () => _photos.removeAt(i),
-                                  ),
+                                  onTap: () =>
+                                      setState(() => _photos.removeAt(i)),
                                   child: const CircleAvatar(
                                     radius: 11,
                                     backgroundColor: Colors.white,
@@ -335,9 +325,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
                             : null,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.green,
-                          side: const BorderSide(
-                            color: Color(0xFFDDDDDD),
-                          ),
+                          side: const BorderSide(color: Color(0xFFDDDDDD)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
@@ -366,10 +354,7 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
                 icon: const Icon(Iconsax.arrow_right_3, size: 22),
                 label: const Text(
                   'บันทึกภาพและกรอกรายละเอียดต่อ',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
               const SizedBox(height: 12),
@@ -377,20 +362,14 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.gold,
-                  side: const BorderSide(
-                    color: AppColors.gold,
-                    width: 1.5,
-                  ),
+                  side: const BorderSide(color: AppColors.gold, width: 1.5),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
                 onPressed: _saving ? null : _savePhotosOnly,
                 icon: const Icon(Iconsax.camera, size: 22),
                 label: const Text(
                   'บันทึกลงเครื่องทันที (มีแค่รูปภาพ)',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                 ),
               ),
             ],

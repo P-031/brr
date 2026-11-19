@@ -9,6 +9,14 @@ import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 /// ตามโจทย์: น้ำท่วม=แดง, แห้งแล้ง=ส้ม, น้ำท่วม-แล้ง 50-50=เหลือง
 /// backend ส่ง สูง/ปานกลาง/ต่ำ — map: สูง=น้ำท่วม กลาง=แล้ง ต่ำ=50-50
 /// ชื่อใหม่จาก backend ที่ยังไม่รู้จักได้ชุดเทา generic
+///
+/// label จาก backend → ชื่อชนิดภัยที่แสดงบน chip จริง
+String riskDisplayName(String name) {
+  if (name.contains('สูง')) return 'น้ำท่วม';
+  if (name.contains('กลาง')) return 'แห้งแล้ง';
+  if (name.contains('ต่ำ')) return '50-50';
+  return name;
+}
 (IconData, Color, Color) riskChipStyle(String name) {
   if (name.contains('ต่ำ')) {
     return (
@@ -341,7 +349,12 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
           FutureBuilder<FormOptions>(
             future: widget.vm.loadOptions(),
             builder: (context, snap) {
-              final levels = snap.data?.riskLevels ?? const <String>[];
+              // แสดงเป็นชื่อชนิดภัย + กลับลำดับ — น้ำท่วม(สูง)มาก่อน 50-50(ต่ำ)ท้าย
+              final levels = [
+                for (final l
+                    in snap.data?.riskLevels ?? const <String>[])
+                  riskDisplayName(l),
+              ].reversed.toList();
               if (levels.isEmpty) {
                 return const Text(
                   'โหลดตัวเลือกไม่สำเร็จ',

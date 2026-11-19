@@ -91,6 +91,8 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? seedCaneNote,
     String? suggestion,
     String? activityId,
+    String? recordedBy,
+    String? recordedByRole,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -138,6 +140,8 @@ class ParcelDetailViewModel extends ChangeNotifier {
     seedCaneNote: seedCaneNote,
     suggestion: suggestion,
     activityId: activityId,
+    recordedBy: recordedBy,
+    recordedByRole: recordedByRole,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

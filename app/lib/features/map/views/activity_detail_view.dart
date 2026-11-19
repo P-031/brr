@@ -3,12 +3,14 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/digit_formatter.dart';
 import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/core/widgets/thai_date_picker.dart';
+import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 
@@ -510,6 +512,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     ];
 
     try {
+      final user = context.read<AuthViewModel>().user;
       await widget.vm.saveActivityDraft(
         photoPaths: _photos,
         detailPending: draft,
@@ -555,6 +558,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         seedCaneNote: num(_seedNoteCtrl),
         suggestion: num(_suggestionCtrl),
         activityId: widget.draft?['id'] as String?,
+        recordedBy: user?.displayName,
+        recordedByRole: user?.role,
         plantedAt: iso(planted),
       );
       if (mounted) {

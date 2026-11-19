@@ -7,6 +7,7 @@ import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/activity_drafts_view.dart';
+import 'package:brr/features/map/views/activity_history_view.dart';
 import 'package:brr/features/map/views/activity_record_view.dart';
 import 'package:brr/features/map/views/parcel_detail_view.dart';
 import 'package:brr/features/map/views/parcel_edit_views.dart';
@@ -589,7 +590,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                     size: 30,
                   ),
                   title: 'ประวัติการบันทึกกิจกรรม',
-                  onTap: () => _todo('ประวัติการบันทึกกิจกรรม'),
+                  onTap: () =>
+                      _pushFullScreen(ActivityHistoryView(vm: widget.vm)),
                 ),
                 const SizedBox(height: 10),
                 FutureBuilder<List<Map<String, dynamic>>>(
@@ -745,7 +747,11 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                 FutureBuilder<FormOptions>(
                   future: _options,
                   builder: (context, snap) {
-                    final levels = snap.data?.riskLevels ?? const <String>[];
+                    // แสดงชื่อชนิดภัยเหมือนใน sheet — น้ำท่วมก่อน 50-50 ท้าย
+                    final levels = [
+                      for (final l in snap.data?.riskLevels ?? const <String>[])
+                        riskDisplayName(l),
+                    ].reversed.toList();
                     if (levels.isEmpty) return const SizedBox.shrink();
                     return FutureBuilder<Map<String, dynamic>?>(
                       future: _riskPoint,

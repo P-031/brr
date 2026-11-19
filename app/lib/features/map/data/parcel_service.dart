@@ -238,6 +238,9 @@ class ParcelService {
     // แก้ไขร่างเดิม — ส่ง id ของรายการเดิมมา จะเขียนทับแทนเพิ่มใหม่
     // (เก็บ id/createdAt/submitStatus เดิมไว้)
     String? activityId,
+    // ผู้บันทึก (แสดงในหน้าประวัติ) — มาจาก profile ผู้ใช้ที่ล็อกอิน
+    String? recordedBy,
+    String? recordedByRole,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -288,6 +291,8 @@ class ParcelService {
       'seedCane': ?seedCane,
       'seedCaneNote': ?seedCaneNote,
       'suggestion': ?suggestion,
+      'recordedBy': ?recordedBy,
+      'recordedByRole': ?recordedByRole,
     };
     // อัปเดตรายการเดิม — คงเวลาบันทึกแรก + สถานะการส่งไว้
     if (activityId != null) {
@@ -295,6 +300,9 @@ class ParcelService {
       if (i >= 0) {
         entry['createdAt'] = items[i]['createdAt'];
         entry['submitStatus'] = items[i]['submitStatus'] ?? 'pending';
+        // ผู้บันทึกเดิม — ถ้า call นี้ไม่ได้ส่งมาให้คงค่าเดิมไว้
+        entry['recordedBy'] ??= items[i]['recordedBy'];
+        entry['recordedByRole'] ??= items[i]['recordedByRole'];
         items[i] = entry;
         await prefs.setString(_activityKey, jsonEncode(items));
         return;
