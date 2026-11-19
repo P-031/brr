@@ -197,9 +197,10 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
             textAlign: TextAlign.end,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: const [DigitFormatter(decimal: true)],
-            style: const TextStyle(fontSize: 17),
+            style: const TextStyle(fontSize: 20),
             decoration: const InputDecoration(
               hintText: '0.0',
+              hintStyle: TextStyle(fontSize: 18),
               isDense: true,
               border: UnderlineInputBorder(),
             ),
