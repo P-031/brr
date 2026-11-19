@@ -239,13 +239,55 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
                     ),
                   ),
                   const Spacer(),
-                  TextButton.icon(
-                    onPressed: () =>
-                        setState(() => _newestFirst = !_newestFirst),
-                    icon: const Icon(Iconsax.sort, size: 18),
-                    label: Text(
-                      _newestFirst ? 'ใหม่สุดไปเก่าสุด' : 'เก่าสุดไปใหม่สุด',
-                      style: const TextStyle(fontSize: 14),
+                  PopupMenuButton<bool>(
+                    initialValue: _newestFirst,
+                    onSelected: (v) => setState(() => _newestFirst = v),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: true,
+                        child: Text(
+                          'ใหม่สุดไปเก่าสุด',
+                          style: TextStyle(fontSize: 15),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: false,
+                        child: Text(
+                          'เก่าสุดไปใหม่สุด',
+                          style: TextStyle(fontSize: 15),
+                        ),
+                      ),
+                    ],
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _newestFirst
+                                ? 'ใหม่สุดไปเก่าสุด'
+                                : 'เก่าสุดไปใหม่สุด',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Iconsax.arrow_circle_down,
+                            size: 20,
+                            color: Colors.black87,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],

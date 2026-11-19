@@ -160,6 +160,19 @@ class ParcelDetailViewModel extends ChangeNotifier {
     note: note,
   );
 
+  /// โครงการส่งเสริมที่เลือกไว้ของแปลง — เก็บในเครื่องรอ endpoint
+  Future<Map<String, dynamic>?> plotProject() =>
+      _service.plotProjectFor(parcel.id);
+
+  Future<void> savePlotProject({
+    required List<String> items,
+    required bool passed,
+  }) => _service.savePlotProject(
+    plotId: parcel.id,
+    items: items,
+    passed: passed,
+  );
+
   /// PATCH รูท/ลำดับ แล้ว refetch detail — listener (sheet/detail
   /// view) เห็นค่าใหม่ทันทีโดยไม่ต้อง reopen
   Future<void> updateRouteSeq({String? rootNo, String? sequenceNo}) async {

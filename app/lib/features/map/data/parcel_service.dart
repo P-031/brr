@@ -392,6 +392,50 @@ class ParcelService {
     await prefs.setString(_riskKey, jsonEncode(items));
   }
 
+  // ---- โครงการส่งเสริมแปลง (นสล.) — เก็บลงเครื่องก่อน รอ endpoint ----
+
+  static const _projectKey = 'plot_projects_v1';
+
+  Future<List<Map<String, dynamic>>> _loadPlotProjects() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_projectKey);
+    if (raw == null) return [];
+    try {
+      return [
+        for (final j in jsonDecode(raw) as List)
+          Map<String, dynamic>.from(j as Map),
+      ];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// โครงการที่เลือกไว้ของแปลง — {items: [ชื่อ], passed: bool}
+  Future<Map<String, dynamic>?> plotProjectFor(String plotId) async {
+    for (final r in await _loadPlotProjects()) {
+      if (r['plotId'] == plotId) return r;
+    }
+    return null;
+  }
+
+  /// บันทึกรายการโครงการที่ติ๊ก — passed = ครบเกณฑ์บังคับแล้ว
+  Future<void> savePlotProject({
+    required String plotId,
+    required List<String> items,
+    required bool passed,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final rows = await _loadPlotProjects();
+    rows.removeWhere((r) => r['plotId'] == plotId);
+    rows.add({
+      'plotId': plotId,
+      'items': items,
+      'passed': passed,
+      'updatedAt': DateTime.now().toIso8601String(),
+    });
+    await prefs.setString(_projectKey, jsonEncode(rows));
+  }
+
   /// Removes a stored draft by id (e.g. after it's pushed to the backend).
   Future<void> removeDraft(String id) async {
     final prefs = await SharedPreferences.getInstance();
