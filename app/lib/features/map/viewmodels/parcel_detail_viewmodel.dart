@@ -53,6 +53,13 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? organicDate,
     String? dolomiteRate,
     String? dolomiteDate,
+    bool? weedPresent,
+    bool? subsoiled,
+    String? subsoilDepth,
+    bool? diseasePresent,
+    String? diseaseType,
+    String? diseaseSpread,
+    bool? diseaseManaged,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -71,6 +78,13 @@ class ParcelDetailViewModel extends ChangeNotifier {
     organicDate: organicDate,
     dolomiteRate: dolomiteRate,
     dolomiteDate: dolomiteDate,
+    weedPresent: weedPresent,
+    subsoiled: subsoiled,
+    subsoilDepth: subsoilDepth,
+    diseasePresent: diseasePresent,
+    diseaseType: diseaseType,
+    diseaseSpread: diseaseSpread,
+    diseaseManaged: diseaseManaged,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

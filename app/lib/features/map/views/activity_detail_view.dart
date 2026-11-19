@@ -44,6 +44,13 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   DateTime? _organicDate;
   final _dolomiteRateCtrl = TextEditingController();
   DateTime? _dolomiteDate;
+  bool? _weedPresent;
+  bool? _subsoiled;
+  final _subsoilDepthCtrl = TextEditingController();
+  bool? _diseasePresent;
+  String? _diseaseType;
+  final _diseaseSpreadCtrl = TextEditingController();
+  bool? _diseaseManaged;
   bool _saving = false;
   late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
 
@@ -63,6 +70,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     _kCtrl.dispose();
     _organicRateCtrl.dispose();
     _dolomiteRateCtrl.dispose();
+    _subsoilDepthCtrl.dispose();
+    _diseaseSpreadCtrl.dispose();
     super.dispose();
   }
 
@@ -315,6 +324,13 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         organicDate: iso(_organicDate),
         dolomiteRate: num(_dolomiteRateCtrl),
         dolomiteDate: iso(_dolomiteDate),
+        weedPresent: _weedPresent,
+        subsoiled: _subsoiled,
+        subsoilDepth: num(_subsoilDepthCtrl),
+        diseasePresent: _diseasePresent,
+        diseaseType: _diseaseType,
+        diseaseSpread: num(_diseaseSpreadCtrl),
+        diseaseManaged: _diseaseManaged,
         plantedAt: iso(planted),
       );
       if (mounted) Navigator.of(context).pop('บันทึกกิจกรรมเรียบร้อย');
@@ -367,6 +383,47 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
           ),
         ),
       ),
+    ),
+  );
+
+  /// แถว label ชิดขวา + ปุ่ม toggle 2 ตัว (สไตล์เดียวกับ MPI)
+  /// [reversed] = แสดงปุ่ม false ก่อน (เช่น ยังไม่จัดการ | จัดการแล้ว)
+  Widget _toggleRow(
+    String label,
+    String trueLabel,
+    String falseLabel,
+    bool? value,
+    ValueChanged<bool> onSet, {
+    bool reversed = false,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 132,
+          child: Text(
+            '$label :',
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Row(
+            children: [
+              for (final e
+                  in reversed
+                      ? [(false, falseLabel), (true, trueLabel)]
+                      : [(true, trueLabel), (false, falseLabel)]) ...[
+                Expanded(
+                  child: _mpiButton(e.$2, value == e.$1, () => onSet(e.$1)),
+                ),
+                if (e.$1 != (reversed ? true : false)) const SizedBox(width: 8),
+              ],
+            ],
+          ),
+        ),
+      ],
     ),
   );
 
@@ -1043,6 +1100,154 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       () =>
                           _pickAnyDate(_dolomiteDate, (d) => _dolomiteDate = d),
                       icon: Icons.calendar_today,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดคุมวัชพืช — มี/ไม่มีวัชพืช
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'คุมวัชพืช ต้องไม่มีวัชพืช',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _mpiButton(
+                            'มีวัชพืช',
+                            _weedPresent == true,
+                            () => setState(() => _weedPresent = true),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _mpiButton(
+                            'ไม่มีวัชพืช',
+                            _weedPresent == false,
+                            () => setState(() => _weedPresent = false),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดไถระเบิดดินดาน — ทำแล้ว/ยังไม่ทำ + ความลึก
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ไถระเบิดดินดาน (ลึก > 40 ซม.)',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _toggleRow(
+                      'ไถระเบิดดินดาน',
+                      'ทำแล้ว',
+                      'ยังไม่ทำ',
+                      _subsoiled,
+                      (v) => setState(() => _subsoiled = v),
+                    ),
+                    _rateRow('ความลึก(ซม.)', _subsoilDepthCtrl),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดโรค — มี/ไม่มี + ชนิดโรค + ระบาด% + จัดการแล้ว/ยัง
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'โรค',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _toggleRow(
+                      'โรค',
+                      'มีโรค',
+                      'ไม่มีโรค',
+                      _diseasePresent,
+                      (v) => setState(() => _diseasePresent = v),
+                    ),
+                    _optRow('เลือกชนิดโรค', _diseaseType, 'เลือก', () async {
+                      // ชนิดโรคจาก backend — โหลดไม่สำเร็จ/ว่างแจ้งเตือน
+                      FormOptions opts;
+                      try {
+                        opts = await _optionsFut;
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('โหลดตัวเลือกไม่สำเร็จ'),
+                          ),
+                        );
+                        return;
+                      }
+                      if (opts.diseaseTypes.isEmpty) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('ยังไม่มีตัวเลือกชนิดโรค'),
+                          ),
+                        );
+                        return;
+                      }
+                      if (!context.mounted) return;
+                      final idx = await showOptionPopup(
+                        context,
+                        title: 'เลือกชนิดโรค',
+                        labels: opts.diseaseTypes,
+                        selectedIndex: _diseaseType == null
+                            ? null
+                            : opts.diseaseTypes.indexOf(_diseaseType!),
+                      );
+                      if (idx != null) {
+                        setState(() => _diseaseType = opts.diseaseTypes[idx]);
+                      }
+                    }),
+                    _rateRow('ระบาด (%)', _diseaseSpreadCtrl),
+                    _toggleRow(
+                      'การจัดการโรค',
+                      'จัดการแล้ว',
+                      'ยังไม่จัดการ',
+                      _diseaseManaged,
+                      (v) => setState(() => _diseaseManaged = v),
+                      reversed: true,
                     ),
                   ],
                 ),

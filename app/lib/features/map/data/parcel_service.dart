@@ -207,6 +207,13 @@ class ParcelService {
     String? organicDate,
     String? dolomiteRate,
     String? dolomiteDate,
+    bool? weedPresent,
+    bool? subsoiled,
+    String? subsoilDepth,
+    bool? diseasePresent,
+    String? diseaseType,
+    String? diseaseSpread,
+    bool? diseaseManaged,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -229,6 +236,13 @@ class ParcelService {
       'organicDate': ?organicDate,
       'dolomiteRate': ?dolomiteRate,
       'dolomiteDate': ?dolomiteDate,
+      'weedPresent': ?weedPresent,
+      'subsoiled': ?subsoiled,
+      'subsoilDepth': ?subsoilDepth,
+      'diseasePresent': ?diseasePresent,
+      'diseaseType': ?diseaseType,
+      'diseaseSpread': ?diseaseSpread,
+      'diseaseManaged': ?diseaseManaged,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));
