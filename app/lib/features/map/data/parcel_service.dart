@@ -202,6 +202,11 @@ class ParcelService {
     String? npkK,
     bool? mpiApplied,
     List<Map<String, dynamic>>? fertilizerRounds,
+    String? organicFertilizerType,
+    String? organicRate,
+    String? organicDate,
+    String? dolomiteRate,
+    String? dolomiteDate,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -219,6 +224,11 @@ class ParcelService {
       'npkK': ?npkK,
       'mpiApplied': ?mpiApplied,
       'fertilizerRounds': ?fertilizerRounds,
+      'organicFertilizerType': ?organicFertilizerType,
+      'organicRate': ?organicRate,
+      'organicDate': ?organicDate,
+      'dolomiteRate': ?dolomiteRate,
+      'dolomiteDate': ?dolomiteDate,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));

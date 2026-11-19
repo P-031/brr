@@ -39,6 +39,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
   String? _herbicide;
   bool? _mpiApplied;
   final _rounds = <_FertRound>[];
+  String? _organicType;
+  final _organicRateCtrl = TextEditingController();
+  DateTime? _organicDate;
+  final _dolomiteRateCtrl = TextEditingController();
+  DateTime? _dolomiteDate;
   bool _saving = false;
   late final Future<FormOptions> _optionsFut = widget.vm.loadOptions();
 
@@ -56,6 +61,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     _nCtrl.dispose();
     _pCtrl.dispose();
     _kCtrl.dispose();
+    _organicRateCtrl.dispose();
+    _dolomiteRateCtrl.dispose();
     super.dispose();
   }
 
@@ -94,6 +101,111 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
       });
     }
   }
+
+  /// เลือกวันที่เก็บลงตัวแปรที่ส่งมา — ใช้ร่วมกับช่องวันที่ของการ์ดต่างๆ
+  Future<void> _pickAnyDate(
+    DateTime? current,
+    ValueChanged<DateTime> set,
+  ) async {
+    final picked = await showThaiDatePicker(
+      context,
+      initialDate: current ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) setState(() => set(picked));
+  }
+
+  /// แถว label (ชิดขวา) + ช่องเทาแบบ dropdown ในการ์ด —
+  /// [icon] ใช้วงกลมลูกศรลงสำหรับเลือก / ปฏิทินสำหรับวันที่
+  Widget _optRow(
+    String label,
+    String? value,
+    String hint,
+    VoidCallback onTap, {
+    IconData icon = Iconsax.arrow_circle_down,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(
+            '$label :',
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: value == null ? Colors.grey.shade300 : AppColors.green,
+                  width: value == null ? 1 : 1.5,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      value ?? hint,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: value == null ? Colors.black38 : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  Icon(icon, size: 26, color: Colors.black87),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
+  /// แถว label + ช่องตัวเลขเส้นใต้ (อัตรา กก./ไร่)
+  Widget _rateRow(String label, TextEditingController c) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 110,
+          child: Text(
+            '$label :',
+            textAlign: TextAlign.end,
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: TextField(
+            controller: c,
+            textAlign: TextAlign.end,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: const [DigitFormatter(decimal: true)],
+            style: const TextStyle(fontSize: 17),
+            decoration: const InputDecoration(
+              hintText: '0.0',
+              isDense: true,
+              border: UnderlineInputBorder(),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 
   /// เปิด dialog กรอกรอบใส่ปุ๋ยใหม่ — บันทึกแล้วเพิ่มเข้า list
   Future<void> _addRound() async {
@@ -195,6 +307,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         npkK: num(_kCtrl),
         mpiApplied: _mpiApplied,
         fertilizerRounds: rounds.isEmpty ? null : rounds,
+        organicFertilizerType: _organicType,
+        organicRate: num(_organicRateCtrl),
+        organicDate: iso(_organicDate),
+        dolomiteRate: num(_dolomiteRateCtrl),
+        dolomiteDate: iso(_dolomiteDate),
         plantedAt: iso(planted),
       );
       if (mounted) Navigator.of(context).pop('บันทึกกิจกรรมเรียบร้อย');
@@ -818,6 +935,109 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดใส่ปุ๋ยอินทรีย์ — ชนิดปุ๋ยจาก /meta/options + อัตรา + วันที่
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ใส่ปุ๋ยอินทรีย์ (>500 กก/ไร่)',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _optRow('ชนิดปุ๋ย', _organicType, 'เลือก', () async {
+                      // ตัวเลือกจาก backend — โหลดไม่สำเร็จ/ว่างแจ้งเตือน
+                      FormOptions opts;
+                      try {
+                        opts = await _optionsFut;
+                      } catch (_) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('โหลดตัวเลือกไม่สำเร็จ'),
+                          ),
+                        );
+                        return;
+                      }
+                      if (opts.organicFertilizerTypes.isEmpty) {
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('ยังไม่มีตัวเลือกชนิดปุ๋ย'),
+                          ),
+                        );
+                        return;
+                      }
+                      if (!context.mounted) return;
+                      final idx = await showOptionPopup(
+                        context,
+                        title: 'ชนิดปุ๋ย',
+                        labels: opts.organicFertilizerTypes,
+                        selectedIndex: _organicType == null
+                            ? null
+                            : opts.organicFertilizerTypes.indexOf(
+                                _organicType!,
+                              ),
+                      );
+                      if (idx != null) {
+                        setState(
+                          () => _organicType = opts.organicFertilizerTypes[idx],
+                        );
+                      }
+                    }),
+                    _rateRow('อัตรา(กก./ไร่)', _organicRateCtrl),
+                    _optRow(
+                      'วันที่ใส่',
+                      _organicDate == null ? null : _fmtThai(_organicDate!),
+                      'เลือกวันที่',
+                      () => _pickAnyDate(_organicDate, (d) => _organicDate = d),
+                      icon: Icons.calendar_today,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              // การ์ดใส่โดโลไมท์ — อัตรา + วันที่
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ใส่โดโลไมท์ (50 - 100 กก/ไร่)',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _rateRow('อัตรา(กก./ไร่)', _dolomiteRateCtrl),
+                    _optRow(
+                      'วันที่ใส่',
+                      _dolomiteDate == null ? null : _fmtThai(_dolomiteDate!),
+                      'เลือกวันที่',
+                      () =>
+                          _pickAnyDate(_dolomiteDate, (d) => _dolomiteDate = d),
+                      icon: Icons.calendar_today,
                     ),
                   ],
                 ),

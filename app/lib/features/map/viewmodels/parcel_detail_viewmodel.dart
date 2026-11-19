@@ -48,6 +48,11 @@ class ParcelDetailViewModel extends ChangeNotifier {
     String? npkK,
     bool? mpiApplied,
     List<Map<String, dynamic>>? fertilizerRounds,
+    String? organicFertilizerType,
+    String? organicRate,
+    String? organicDate,
+    String? dolomiteRate,
+    String? dolomiteDate,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
@@ -61,6 +66,11 @@ class ParcelDetailViewModel extends ChangeNotifier {
     npkK: npkK,
     mpiApplied: mpiApplied,
     fertilizerRounds: fertilizerRounds,
+    organicFertilizerType: organicFertilizerType,
+    organicRate: organicRate,
+    organicDate: organicDate,
+    dolomiteRate: dolomiteRate,
+    dolomiteDate: dolomiteDate,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint

@@ -207,6 +207,7 @@ class FormOptions {
     this.riskLevels = const [],
     this.prevPlots = const [],
     this.fertilizerFormulas = const [],
+    this.organicFertilizerTypes = const [],
   });
 
   factory FormOptions.fromJson(Map<String, dynamic> j) {
@@ -241,6 +242,7 @@ class FormOptions {
           (code: '${v['code']}', name: '${v['name']}'),
       ],
       fertilizerFormulas: names('fertilizerFormulas'),
+      organicFertilizerTypes: names('organicFertilizerTypes'),
     );
   }
 
@@ -312,4 +314,8 @@ class FormOptions {
   /// สูตร/ชื่อปุ๋ยให้เลือกในรอบการใส่ปุ๋ย — มาจาก /meta/options
   /// (key `fertilizerFormulas`; backend ยังไม่ส่ง → ว่าง)
   final List<String> fertilizerFormulas;
+
+  /// ชนิดปุ๋ยอินทรีย์ให้เลือกในการ์ด "ใส่ปุ๋ยอินทรีย์" —
+  /// key `organicFertilizerTypes` ใน /meta/options
+  final List<String> organicFertilizerTypes;
 }
