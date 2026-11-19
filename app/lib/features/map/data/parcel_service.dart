@@ -152,6 +152,7 @@ class ParcelService {
     required List<String> photoPaths,
     bool detailPending = false,
     String? plantedAt,
+    String? caneGroup,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final items = await _loadActivities();
@@ -161,6 +162,7 @@ class ParcelService {
       'photos': photoPaths,
       'detailPending': detailPending,
       'plantedAt': ?plantedAt,
+      'caneGroup': ?caneGroup,
       'createdAt': DateTime.now().toIso8601String(),
     });
     await prefs.setString(_activityKey, jsonEncode(items));
