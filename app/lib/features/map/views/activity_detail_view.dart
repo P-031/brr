@@ -994,12 +994,12 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
     controller: c,
     keyboardType: const TextInputType.numberWithOptions(decimal: true),
     inputFormatters: const [DigitFormatter(decimal: true)],
-    style: const TextStyle(fontSize: 16),
+    style: const TextStyle(fontSize: 22),
     decoration: InputDecoration(
       labelText: label,
-      isDense: true,
+      labelStyle: const TextStyle(fontSize: 18),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
     ),
   );
 
