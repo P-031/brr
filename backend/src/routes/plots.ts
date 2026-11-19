@@ -119,7 +119,7 @@ const updateYieldBody = z
     message: "ไม่มีข้อมูลให้แก้",
   });
 
-const taskNames = ["ปลูก", "ใส่ปุ๋ย", "พ่นยา", "ตัดอ้อย"] as const;
+const taskNames = ["ปลูก", "ใส่ปุ๋ย", "พ่นยา", "ตัดอ้อย", "เตรียมแปลง", "ดูแล"] as const;
 
 const taskBody = z.object({
   id: clientId,

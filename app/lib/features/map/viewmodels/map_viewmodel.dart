@@ -300,6 +300,7 @@ class MapViewModel extends ChangeNotifier {
     if (!canDrawManually) return;
     _drawing = true;
     _draft.clear();
+    _dropWalkSurvey();
     notifyListeners();
     // subscribe position stream ด้วย — แผง GPS ในแถบล่างต้องมี
     // พิกัด/คลาดเคลื่อนจริงแม้โหมดแตะวาด (ไม่ได้เดินวัด)
@@ -421,6 +422,10 @@ class MapViewModel extends ChangeNotifier {
   void addDraftPoint(LatLng p) {
     if (!_drawing) return;
     _draft.add(p);
+    // จุดที่แตะบนแผนที่ไม่ได้มาจาก GPS — เลิกใช้ชุดเดินวัด
+    // ไม่งั้นจำนวนมุมไม่ตรง แล้วกฎความแม่นยำทั้งแปลงหาย
+    // หรือส่งรูปเดินรอบก่อนแทนจุดที่เห็น
+    _dropWalkSurvey();
     notifyListeners();
   }
 
@@ -485,27 +490,26 @@ class MapViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// ลากย้ายหมุด — update the point at [index] after a pin drag.
+  /// ลากย้ายหมุด — จุดที่ย้ายไม่ใช่ค่า GPS เดิม จึงไม่ส่งความแม่นยำเดิม
   void moveDraftPoint(int index, LatLng p) {
     if (index < 0 || index >= _draft.length) return;
     _draft[index] = p;
-    if (index < _corners.length) {
-      final corner = _corners[index];
-      _corners[index] = WalkCorner(
-        point: p,
-        accuracyM: corner.accuracyM,
-        capturedAt: corner.capturedAt,
-      );
-    }
+    _dropWalkSurvey();
     notifyListeners();
   }
 
   /// เริ่มใหม่ — clear every drafted point, stay in drawing mode.
   void clearDraft() {
-    if (_draft.isEmpty) return;
+    if (_draft.isEmpty && _corners.isEmpty && _walkStartedAt == null) return;
     _draft.clear();
-    _corners.clear();
+    _dropWalkSurvey();
     notifyListeners();
+  }
+
+  /// รูปที่เห็นไม่ตรงกับการเดินวัดแล้ว — ห้ามส่งความแม่นยำของรอบเดินเดิม
+  void _dropWalkSurvey() {
+    _corners.clear();
+    _walkStartedAt = null;
   }
 
   void cancelDrawing() {

@@ -22,6 +22,8 @@ export const taskKindByName = {
   ใส่ปุ๋ย: "FERTILIZE",
   พ่นยา: "SPRAY",
   ตัดอ้อย: "HARVEST",
+  เตรียมแปลง: "PREPARE",
+  ดูแล: "CARE",
 } as const;
 
 export function formatDate(date: Date): string {
