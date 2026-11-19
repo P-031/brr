@@ -146,14 +146,14 @@ class HomeView extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => DraftsView(
                         vm: DraftsViewModel.forApi(vm.api),
-                        isOfficer: vm.user?.role == 'OFFICER',
+                        isOfficer: vm.user?.isOfficer ?? false,
                         onStartMeasure: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => MapView(
                               createViewModel: () => MapViewModel(
                                 api: vm.api,
                                 canDrawManually:
-                                    vm.user?.role == 'OFFICER',
+                                    vm.user?.isOfficer ?? false,
                               ),
                             ),
                           ),
@@ -172,7 +172,7 @@ class HomeView extends StatelessWidget {
                         parcelBrowser: true,
                         createViewModel: () => MapViewModel(
                           api: vm.api,
-                          canDrawManually: vm.user?.role == 'OFFICER',
+                          canDrawManually: vm.user?.isOfficer ?? false,
                         ),
                       ),
                     ),

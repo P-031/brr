@@ -968,7 +968,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                 'พื้นที่สูญเสีย (ไร่)',
                 Iconsax.ruler,
                 // เลือก "ไม่มี" ในช่องสาเหตุ → เว้นว่างได้
-                required: !_losses.contains('ไม่มี'),
+                required: !_losses.contains(_noneName),
                 keyboard: const TextInputType.numberWithOptions(decimal: true),
                 formatters: const [_DigitFormatter(decimal: true)],
               ),
@@ -1274,6 +1274,10 @@ class _PickerSheetState extends State<_PickerSheet> {
   }
 }
 
+/// Backend loss-option that means "no cause" — exclusive inside
+/// [_MultiPickerSheet] and skips the loss-area field requirement.
+const _noneName = 'ไม่มี';
+
 /// Checkbox variant of [_PickerSheet] — returns the whole selected
 /// set on ตกลง. 'ไม่มี' is exclusive: picking it clears the rest,
 /// and picking anything else un-picks it.
@@ -1293,24 +1297,52 @@ class _MultiPickerSheet extends StatefulWidget {
 }
 
 class _MultiPickerSheetState extends State<_MultiPickerSheet> {
-  static const _noneName = 'ไม่มี';
   String _q = '';
-  late final Set<String> _selected = {...widget.initial};
+  List<PickerItem> _items = const [];
+  // Selection keyed by code, not name — two options sharing a
+  // display name don't collide. Initial names resolve once items
+  // load; names no longer in the list stay in [_extra] so a
+  // restored draft doesn't silently drop a removed option.
+  Set<String>? _selected;
+  final Set<String> _extra = {};
   late Future<List<PickerItem>> _future = widget.source();
 
   void _retry() => setState(() => _future = widget.source());
 
-  void _toggle(String name, bool on) {
+  void _init(List<PickerItem> items) {
+    if (_selected != null) return;
+    _items = items;
+    _selected = {
+      for (final it in items)
+        if (widget.initial.contains(it.name)) it.code,
+    };
+    _extra.addAll(
+      widget.initial.difference({for (final it in items) it.name}),
+    );
+  }
+
+  void _toggle(PickerItem it, bool on) {
     setState(() {
-      if (name == _noneName) {
-        _selected.clear();
-        if (on) _selected.add(name);
+      final sel = _selected!;
+      if (it.name == _noneName) {
+        sel.clear();
+        _extra.clear();
+        if (on) sel.add(it.code);
       } else {
-        _selected.remove(_noneName);
-        on ? _selected.add(name) : _selected.remove(name);
+        for (final n in _items) {
+          if (n.name == _noneName) sel.remove(n.code);
+        }
+        _extra.remove(_noneName);
+        on ? sel.add(it.code) : sel.remove(it.code);
       }
     });
   }
+
+  Set<String> _pickedNames() => {
+    ..._extra,
+    for (final it in _items)
+      if (_selected!.contains(it.code)) it.name,
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1361,6 +1393,7 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
                     if (snap.hasError) {
                       return _SheetError(onRetry: _retry);
                     }
+                    _init(snap.data ?? const <PickerItem>[]);
                     final items = fuzzySearch(
                       snap.data ?? const <PickerItem>[],
                       _q,
@@ -1381,8 +1414,8 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
                         final it = items[i];
                         return Card(
                           child: CheckboxListTile(
-                            value: _selected.contains(it.name),
-                            onChanged: (v) => _toggle(it.name, v ?? false),
+                            value: _selected!.contains(it.code),
+                            onChanged: (v) => _toggle(it, v ?? false),
                             title: Text(
                               it.name,
                               style: const TextStyle(fontSize: 18),
@@ -1404,7 +1437,10 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
-                    onPressed: () => Navigator.pop(context, _selected),
+                    onPressed: () => Navigator.pop(
+                      context,
+                      _selected == null ? widget.initial : _pickedNames(),
+                    ),
                     child: const Text('ตกลง', style: TextStyle(fontSize: 17)),
                   ),
                 ],

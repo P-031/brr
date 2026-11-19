@@ -26,6 +26,11 @@ class UserProfile {
   /// 'OFFICER' / 'FARMER' — from the Keycloak realm roles.
   final String? role;
 
+  static const roleOfficer = 'OFFICER';
+  static const roleFarmer = 'FARMER';
+
+  bool get isOfficer => role == roleOfficer;
+
   /// เขตที่รับผิดชอบ — จาก custom claim `zone` ของ token (null ถ้า
   /// Keycloak ยังไม่ส่งมา)
   final String? zone;
@@ -34,8 +39,8 @@ class UserProfile {
     final access = claims['realm_access'];
     if (access is! Map || access['roles'] is! List) return null;
     final roles = (access['roles'] as List).cast<String>();
-    if (roles.contains('officer')) return 'OFFICER';
-    if (roles.contains('farmer')) return 'FARMER';
+    if (roles.contains('officer')) return roleOfficer;
+    if (roles.contains('farmer')) return roleFarmer;
     return null;
   }
 

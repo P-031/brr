@@ -247,6 +247,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
         );
       },
     );
+    ctrl.dispose();
     if (parsed != null) {
       setState(() {
         _selected = parsed;
