@@ -293,6 +293,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                           style: const TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w600,
+                            color: AppColors.green,
                           ),
                         ),
                       ),
