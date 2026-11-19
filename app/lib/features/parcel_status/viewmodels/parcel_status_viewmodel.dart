@@ -42,11 +42,23 @@ class ParcelStatusViewModel extends ChangeNotifier {
   List<PlotRequestEntry> requestsOf(String status) =>
       _requests.where((r) => r.status == status).toList();
 
+  bool _disposed = false;
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
   Future<void> load() async {
     _loading = true;
     _error = null;
     _requestsError = null;
-    notifyListeners();
+    _safeNotify();
     final service = _service;
     if (service != null) {
       // โหลดสองส่วนแยกกัน — อย่าให้ request endpoint ที่ยังไม่มี
@@ -63,6 +75,6 @@ class ParcelStatusViewModel extends ChangeNotifier {
       }
     }
     _loading = false;
-    notifyListeners();
+    _safeNotify();
   }
 }

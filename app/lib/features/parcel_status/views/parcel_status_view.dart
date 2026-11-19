@@ -126,6 +126,27 @@ class _BodyState extends State<_Body> {
                     ),
                   ),
                 )
+              : vm.loading
+              ? const Center(child: CircularProgressIndicator())
+              : vm.error != null
+              // แถบสถานะมาไม่ได้เลย — บอกสาเหตุกลางจอ ไม่ใช่โชว์
+              // "ไม่มีข้อมูล" ทั้งที่ปัญหาคือติดต่อ server ไม่ได้
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        vm.error!.replaceFirst('Exception: ', ''),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      TextButton.icon(
+                        onPressed: vm.load,
+                        icon: const Icon(Iconsax.refresh, size: 18),
+                        label: const Text('ลองใหม่'),
+                      ),
+                    ],
+                  ),
+                )
               : items.isEmpty
               ? const Center(
                   child: Text('ไม่มีข้อมูล', style: TextStyle(fontSize: 16)),

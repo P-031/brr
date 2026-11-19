@@ -156,7 +156,7 @@ class MapViewModel extends ChangeNotifier {
   void setYearFilter(String? year) {
     _yearFilter = year;
     _invalidateRender();
-    notifyListeners();
+    _safeNotify();
   }
 
   /// Viewport refetch in progress — drives the thin top progress bar.
@@ -212,11 +212,11 @@ class MapViewModel extends ChangeNotifier {
             b.s >= cov.s &&
             b.e <= cov.e &&
             b.n <= cov.n)) {
-      if (moved) notifyListeners();
+      if (moved) _safeNotify();
       return;
     }
     _loadingViewport = true;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _service.fetchParcels(
         box: 'west=$west&south=$south&east=$east&north=$north&limit=2000',
@@ -251,7 +251,7 @@ class MapViewModel extends ChangeNotifier {
       _viewportError = '$e'.replaceFirst('Exception: ', '');
     }
     _loadingViewport = false;
-    notifyListeners();
+    _safeNotify();
   }
 
   bool get loading => _loading;
@@ -264,8 +264,17 @@ class MapViewModel extends ChangeNotifier {
   bool get autoPaused => _autoPaused;
   LatLng? get lastFix => _lastFix;
 
+  bool _disposed = false;
+
+  /// fetch ที่ค้างอยู่อาจกลับมาหลังหน้าปิดไปแล้ว — notify บน VM
+  /// ที่ disposed แล้วจะ crash, ข้ามเงียบๆ แทน
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
   @override
   void dispose() {
+    _disposed = true;
     _posSub?.cancel();
     super.dispose();
   }
@@ -297,7 +306,7 @@ class MapViewModel extends ChangeNotifier {
     _loading = false;
     _error = null;
     _invalidateRender();
-    notifyListeners();
+    _safeNotify();
   }
 
   /// Dropdown options for the save form — views never touch the
@@ -314,7 +323,7 @@ class MapViewModel extends ChangeNotifier {
     _loading = true;
     _error = null;
     _coverage = null;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _service.fetchParcels();
       _parcels = page.items;
@@ -328,7 +337,7 @@ class MapViewModel extends ChangeNotifier {
       _invalidateRender();
     }
     _loading = false;
-    notifyListeners();
+    _safeNotify();
   }
 
   /// เพิ่มพิกัด — enter drawing mode (officers/admins only).
@@ -336,7 +345,7 @@ class MapViewModel extends ChangeNotifier {
     if (!canDrawManually) return;
     _drawing = true;
     _draft.clear();
-    notifyListeners();
+    _safeNotify();
     // subscribe position stream ด้วย — แผง GPS ในแถบล่างต้องมี
     // พิกัด/คลาดเคลื่อนจริงแม้โหมดแตะวาด (ไม่ได้เดินวัด)
     if (await _location.ensurePermission()) {
@@ -359,7 +368,7 @@ class MapViewModel extends ChangeNotifier {
   /// One-shot locate — view animates the camera to the result.
   Future<LatLng?> locate() async {
     _userPos = await _location.currentPosition();
-    if (_userPos != null) notifyListeners();
+    if (_userPos != null) _safeNotify();
     return _userPos;
   }
 
@@ -377,7 +386,7 @@ class MapViewModel extends ChangeNotifier {
     _draft.clear();
     _corners.clear();
     _walkStartedAt = DateTime.now();
-    notifyListeners();
+    _safeNotify();
     _posSub = _location
         .positionStream()
         .listen(_onPosition, onError: (_) {});
@@ -390,7 +399,7 @@ class MapViewModel extends ChangeNotifier {
     _walkPaused = !_walkPaused;
     _autoPaused = false;
     _badFixStreak = 0;
-    notifyListeners();
+    _safeNotify();
   }
 
   /// Stops tracking; the drawn boundary stays for review/saving.
@@ -401,7 +410,7 @@ class MapViewModel extends ChangeNotifier {
     _walkPaused = false;
     _autoPaused = false;
     _badFixStreak = 0;
-    notifyListeners();
+    _safeNotify();
   }
 
   void _onPosition(Position p) {
@@ -409,12 +418,12 @@ class MapViewModel extends ChangeNotifier {
     _lastFix = LatLng(p.latitude, p.longitude);
     // โหมดแตะวาด — อัปเดตพิกัด/คลาดเคลื่อนให้แผง GPS อย่างเดียว
     if (!_walking) {
-      notifyListeners();
+      _safeNotify();
       return;
     }
     // อัพเดท badge แม้ตอนพัก — ผู้วัดเห็นสัญญาณฟื้นตัวก่อนกดเดินต่อ
     if (_walkPaused) {
-      notifyListeners();
+      _safeNotify();
       return;
     }
     // สัญญาณแย่เกิน — badge เปลี่ยนสีแต่ไม่ลงจุด
@@ -426,38 +435,38 @@ class MapViewModel extends ChangeNotifier {
         _walkPaused = true;
         _autoPaused = true;
       }
-      notifyListeners();
+      _safeNotify();
       return;
     }
     _badFixStreak = 0;
     // ลงจุดเฉพาะ fix ที่แม่นพอ (≤6ม.) — แย่กว่านั้น
     // เดินผ่านไปแต่ไม่ปัก เพื่อขอบแม่นสุด
     if (p.accuracy > 6) {
-      notifyListeners();
+      _safeNotify();
       return;
     }
     if (_draft.isNotEmpty) {
       const dist = Distance();
       final d = dist.as(LengthUnit.Meter, _draft.last, _lastFix!);
       if (d < 2.5) {
-        notifyListeners();
+        _safeNotify();
         return;
       }
       // GPS spike — กระโดด >25ม. ในไม่กี่วิ เดินไปไม่ถึง
       // เป็น error ไม่ใช่จุดจริง ปฏิเสธไม่ลงขอบ
       if (d > 25) {
-        notifyListeners();
+        _safeNotify();
         return;
       }
     }
     _addWalkPoint(_lastFix!, p.accuracy);
-    notifyListeners();
+    _safeNotify();
   }
 
   void addDraftPoint(LatLng p) {
     if (!_drawing) return;
     _draft.add(p);
-    notifyListeners();
+    _safeNotify();
   }
 
   /// ปักพิกัดปัจจุบันด้วยมือระหว่างเดินวัด — คืนข้อความ error
@@ -478,7 +487,7 @@ class MapViewModel extends ChangeNotifier {
       if (d > 25) return 'พิกัดกระโดดผิดปกติ — ไม่สามารถบันทึกค่าได้';
     }
     _addWalkPoint(fix, acc);
-    notifyListeners();
+    _safeNotify();
     return null;
   }
 
@@ -518,7 +527,7 @@ class MapViewModel extends ChangeNotifier {
   void undoDraftPoint() {
     if (_draft.isNotEmpty) _draft.removeLast();
     if (_corners.length > _draft.length) _corners.removeLast();
-    notifyListeners();
+    _safeNotify();
   }
 
   /// ลากย้ายหมุด — update the point at [index] after a pin drag.
@@ -533,7 +542,7 @@ class MapViewModel extends ChangeNotifier {
         capturedAt: corner.capturedAt,
       );
     }
-    notifyListeners();
+    _safeNotify();
   }
 
   /// เริ่มใหม่ — clear every drafted point, stay in drawing mode.
@@ -541,7 +550,7 @@ class MapViewModel extends ChangeNotifier {
     if (_draft.isEmpty) return;
     _draft.clear();
     _corners.clear();
-    notifyListeners();
+    _safeNotify();
   }
 
   void cancelDrawing() {
@@ -553,7 +562,7 @@ class MapViewModel extends ChangeNotifier {
     _draft.clear();
     _corners.clear();
     _walkStartedAt = null;
-    notifyListeners();
+    _safeNotify();
   }
 
   /// เสร็จสิ้น — save the drafted boundary (backend or local).
@@ -589,7 +598,7 @@ class MapViewModel extends ChangeNotifier {
     // เป็นสำเร็จแล้วขึ้น snackbar "บันทึกสำเร็จ" มั่ว)
     if (_saving) return 'กำลังบันทึกอยู่ กรุณารอสักครู่';
     _saving = true;
-    notifyListeners();
+    _safeNotify();
     try {
       final p = await _service.createParcel(
         name: name,
@@ -645,7 +654,7 @@ class MapViewModel extends ChangeNotifier {
       return '$e';
     } finally {
       _saving = false;
-      notifyListeners();
+      _safeNotify();
     }
   }
 }
