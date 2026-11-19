@@ -1021,94 +1021,99 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
       content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                _label('วันที่ใส่ :'),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _pickerField(
-                    'เลือกวันที่',
-                    _date == null ? null : _fmtThai(_date!),
-                    _pickDate,
+        child: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  _label('วันที่ใส่ :'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _pickerField(
+                      'เลือกวันที่',
+                      _date == null ? null : _fmtThai(_date!),
+                      _pickDate,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _label('อัตรา(กก./ไร่) :'),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _rateCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: const [DigitFormatter(decimal: true)],
+                      style: const TextStyle(fontSize: 18),
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: UnderlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: _label('สูตรปุ๋ย :'),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _pickerField('เลือก', _formula, _pickFormula),
+                  ),
+                ],
+              ),
+              if (_formula == _other) ...[
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _customCtrl,
+                  style: const TextStyle(fontSize: 17),
+                  decoration: InputDecoration(
+                    hintText: 'ระบุสูตรปุ๋ย',
+                    hintStyle: const TextStyle(
+                      fontSize: 17,
+                      color: Colors.black38,
+                    ),
+                    isDense: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 10,
+                    ),
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _label('อัตรา(กก./ไร่) :'),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: _rateCtrl,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    inputFormatters: const [DigitFormatter(decimal: true)],
-                    style: const TextStyle(fontSize: 18),
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: UnderlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: _label('สูตรปุ๋ย :'),
-                ),
-                const SizedBox(width: 10),
-                Expanded(child: _pickerField('เลือก', _formula, _pickFormula)),
-              ],
-            ),
-            if (_formula == _other) ...[
+              const SizedBox(height: 14),
+              const Text(
+                'สูตรปุ๋ย NPK',
+                style: TextStyle(fontSize: 17, color: Colors.black87),
+              ),
               const SizedBox(height: 8),
-              TextField(
-                controller: _customCtrl,
-                style: const TextStyle(fontSize: 17),
-                decoration: InputDecoration(
-                  hintText: 'ระบุสูตรปุ๋ย',
-                  hintStyle: const TextStyle(
-                    fontSize: 17,
-                    color: Colors.black38,
-                  ),
-                  isDense: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 10,
-                  ),
-                ),
+              Row(
+                children: [
+                  Expanded(child: _npkBox('N', _nCtrl)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _npkBox('P', _pCtrl)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _npkBox('K', _kCtrl)),
+                ],
               ),
             ],
-            const SizedBox(height: 14),
-            const Text(
-              'สูตรปุ๋ย NPK',
-              style: TextStyle(fontSize: 17, color: Colors.black87),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _npkBox('N', _nCtrl)),
-                const SizedBox(width: 8),
-                Expanded(child: _npkBox('P', _pCtrl)),
-                const SizedBox(width: 8),
-                Expanded(child: _npkBox('K', _kCtrl)),
-              ],
-            ),
-          ],
+          ),
         ),
       ),
       actions: [
