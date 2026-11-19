@@ -381,12 +381,15 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     ),
   );
 
-  Future<void> _save() async {
+  /// [draft] = บันทึกลงเครื่องแบบฉบับร่าง — เก็บเท่าที่กรอก
+  /// (วันที่ผิดรูปปล่อยเป็น null) และคง detailPending ไว้ให้
+  /// กลับมากรอกต่อจากรายการรอ; ปุ่มหลัก = บันทึกสมบูรณ์
+  Future<void> _save({bool draft = false}) async {
     if (_saving) return;
     var planted = _plantedAt;
     if (planted == null && _dateCtrl.text.trim().isNotEmpty) {
       planted = _parseThai(_dateCtrl.text);
-      if (planted == null) {
+      if (planted == null && !draft) {
         _warnDate();
         return;
       }
@@ -419,7 +422,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     try {
       await widget.vm.saveActivityDraft(
         photoPaths: _photos,
-        detailPending: false,
+        detailPending: draft,
         caneGroup: _caneGroup,
         herbicideUsed: _herbicide,
         fertilizerRate: num(_rateCtrl),
@@ -463,7 +466,10 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         suggestion: num(_suggestionCtrl),
         plantedAt: iso(planted),
       );
-      if (mounted) Navigator.of(context).pop('บันทึกกิจกรรมเรียบร้อย');
+      if (mounted) {
+        Navigator.of(context)
+            .pop(draft ? 'บันทึกฉบับร่างไว้แล้ว' : 'บันทึกกิจกรรมเรียบร้อย');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -2039,6 +2045,19 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: OutlinedButton.icon(
+                  onPressed: _saving ? null : () => _save(draft: true),
+                  icon: const Icon(Iconsax.save_2),
+                  label: const Text(
+                    'บันทึกลงเครื่อง (ฉบับร่าง)',
+                    style: TextStyle(fontSize: 16),
                   ),
                 ),
               ),
