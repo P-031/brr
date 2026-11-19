@@ -149,7 +149,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
         detailPending: false,
         caneGroup: _caneGroup,
         herbicideUsed: _herbicide,
-        toppingRate: num(_rateCtrl),
+        fertilizerRate: num(_rateCtrl),
         npkN: num(_nCtrl),
         npkP: num(_pCtrl),
         npkK: num(_kCtrl),
@@ -521,7 +521,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                     Row(
                       children: [
                         const Text(
-                          'อัตรา(กก./ไร่) :',
+                          'อัตราการใส่ปุ๋ย(กก./ไร่) :',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
