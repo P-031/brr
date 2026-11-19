@@ -305,7 +305,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                           color: Colors.black45,
                         ),
                       ),
-                      TextButton(
+                      OutlinedButton(
                         onPressed: () => setState(() {
                           // clamp เข้ากรอบ first/last — ไม่งั้น "วันนี้"
                           // เลือกวันนอกช่วงที่อนุญาตได้แล้วตกลงคืนค่าเพี้ยน
@@ -318,11 +318,26 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                           _selected = t;
                           _visible = DateTime(t.year, t.month);
                         }),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.green,
+                          side: const BorderSide(
+                            color: AppColors.green,
+                            width: 1.4,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
                         child: const Text(
                           'วันนี้',
                           style: TextStyle(
                             fontSize: 18,
-                            color: AppColors.green,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
