@@ -14,7 +14,7 @@ const _projectItems = [
   ('ใช้ยาคุมแห้ง', false),
 ];
 
-const _purple = Color(0xFF7B1FA2);
+const _lightGreen = Color(0xFFEAF4EA);
 
 /// Sheet "ข้อมูลโครงการส่งเสริมแปลง" — เปิดจากการ์ดม่วงใน info sheet:
 /// ติ๊กเลือกเกณฑ์ 6 ข้อ + แจ้งเตือนเมื่อเกณฑ์บังคับยังไม่ครบ
@@ -73,15 +73,16 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
     setState(() => _saving = true);
     try {
       await widget.vm.savePlotProject(
-        items: [for (final i in _selected.toList()..sort()) _projectItems[i].$1],
+        items: [
+          for (final i in _selected.toList()..sort()) _projectItems[i].$1,
+        ],
         passed: _missingRequired.isEmpty,
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -95,16 +96,15 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
       padding: const EdgeInsets.symmetric(vertical: 5),
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => setState(
-          () => selected ? _selected.remove(i) : _selected.add(i),
-        ),
+        onTap: () =>
+            setState(() => selected ? _selected.remove(i) : _selected.add(i)),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFFF3E8FB) : Colors.white,
+            color: selected ? _lightGreen : Colors.white,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? _purple : Colors.grey.shade300,
+              color: selected ? AppColors.green : Colors.grey.shade300,
               width: selected ? 1.5 : 1,
             ),
           ),
@@ -116,10 +116,9 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                 child: Checkbox(
                   value: selected,
                   onChanged: (_) => setState(
-                    () =>
-                        selected ? _selected.remove(i) : _selected.add(i),
+                    () => selected ? _selected.remove(i) : _selected.add(i),
                   ),
-                  activeColor: _purple,
+                  activeColor: AppColors.green,
                   side: BorderSide(color: Colors.grey.shade400, width: 1.5),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   visualDensity: VisualDensity.compact,
@@ -139,16 +138,16 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                     vertical: 5,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF3E8FB),
+                    color: Colors.red.shade50,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: _purple),
+                    border: Border.all(color: Colors.red.shade300),
                   ),
-                  child: const Text(
+                  child: Text(
                     'จำเป็น',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: _purple,
+                      color: Colors.red.shade700,
                     ),
                   ),
                 ),
@@ -175,8 +174,8 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
             children: [
               const CircleAvatar(
                 radius: 20,
-                backgroundColor: Color(0xFFF3E8FB),
-                child: Icon(Iconsax.star_1, color: _purple, size: 22),
+                backgroundColor: _lightGreen,
+                child: Icon(Iconsax.star_1, color: AppColors.green, size: 22),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -188,7 +187,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1A237E),
+                        color: AppColors.navy,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -212,18 +211,18 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
             ],
           ),
           const SizedBox(height: 14),
-          // กล่องเงื่อนไขสีม่วงอ่อน
+          // กล่องเงื่อนไข — เขียวอ่อนชุดเดียวกับกล่อง info ของแอป
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFFF3E8FB),
+              color: _lightGreen,
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Iconsax.info_circle, size: 20, color: _purple),
+                Icon(Iconsax.info_circle, size: 20, color: AppColors.green),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
@@ -233,7 +232,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: _purple,
+                      color: AppColors.green,
                       height: 1.45,
                     ),
                   ),
@@ -259,7 +258,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                   padding: const EdgeInsets.symmetric(horizontal: 6),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  foregroundColor: _purple,
+                  foregroundColor: AppColors.navy,
                 ),
                 onPressed: () => setState(() {
                   _selected
