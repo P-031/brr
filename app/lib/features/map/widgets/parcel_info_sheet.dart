@@ -602,7 +602,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
             _actionCard(
               color: AppColors.sky,
               leading: const Icon(
-                Iconsax.calendar_edit,
+                Icons.edit_calendar,
                 color: Colors.white,
                 size: 36,
               ),

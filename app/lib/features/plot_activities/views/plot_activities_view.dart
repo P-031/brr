@@ -344,7 +344,7 @@ class _BodyState extends State<_Body> {
                 // ทำให้หาแปลงที่ยังไม่ระบุปีได้ (เดิมเลือกไม่ได้เลย)
                 _filterMulti<String?>(
                   label: 'ปีการผลิต',
-                  icon: Iconsax.calendar,
+                  icon: Icons.calendar_month,
                   selected: years,
                   options: {
                     null: 'ไม่มีปีการผลิต',

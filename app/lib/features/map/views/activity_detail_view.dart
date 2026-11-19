@@ -262,7 +262,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         ),
                         suffixIcon: IconButton(
                           icon: const Icon(
-                            Iconsax.calendar_1,
+                            Icons.calendar_month,
                             color: AppColors.green,
                             size: 26,
                           ),
