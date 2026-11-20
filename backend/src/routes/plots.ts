@@ -645,7 +645,13 @@ fieldRouter.patch(
         data: { status: body.status },
         include: { plot: { select: { name: true, season: true } } },
       });
-     if (body.status === "อนุมัติ" && existing.kind === "edit") {
+      if (body.status === "อนุมัติ" && existing.kind === "status" && existing.value) {
+        await tx.plot.update({
+          where: { id: existing.plotId },
+          data: { status: existing.value, version: { increment: 1 } },
+        });
+      }
+      if (body.status === "อนุมัติ" && existing.kind === "edit") {
       const caneType = payloadText(existing.payload, "caneTypeNew");
       const farmerId = payloadText(existing.payload, "newFarmerId");
       const code = payloadText(existing.payload, "newPlotCode");
@@ -663,7 +669,7 @@ fieldRouter.patch(
           where: { id: existing.plotId },
           data: {
             caneType,
-            name: code ? `${land}#${code}` : undefined,
+            name: code ? `${land} #${code}` : undefined,
             farmer: farmerId ? { connect: { id: farmerId } } : undefined,
             version: { increment: 1 },
           },
