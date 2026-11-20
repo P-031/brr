@@ -322,6 +322,7 @@ fieldRouter.get(
           { rootNo: { contains: search, mode: "insensitive" } },
           { sequenceNo: { contains: search, mode: "insensitive" } },
           { farmer: { displayName: { contains: search, mode: "insensitive"} } },
+          { farmer: { username: { contains: search, mode: "insensitive" } } },
         ],
       });
     } 
@@ -510,28 +511,93 @@ fieldRouter.get(
   }),
 );
 
-fieldRouter.post(
-  "/plots/:plotId/requests",
-  route(async (req, res) => {
-    const user = currentUser(req);
-    const plotId = pathId(req.params.plotId);
-    await visiblePlot(user, plotId);
-    const body = z
-      .object({
-        kind: z.enum(["status", "edit"]),
-        value: z.string().trim().min(1).max(200),
-      })
-      .parse(req.body);
-    if (body.kind === "status") {
-      const allowed = await prisma.fromOption.findUnique({
-        where: { group_label: { group: "plotStatuses", label: body.value} },
+
+  
+    const plotRequestBody = z.object({
+      kind: z.enum(["status", "edit", "group"]),
+      value: z.string().trim().min(1).max(200).optional(),
+      reason: z.string().trim().max(200).optional(),
+      canePlantMode: z.string().trim().max(80).optional(),
+      caneTypeNew: z.string().trim().max(80).optional(),
+      newPlotCode: z.string().trim().max(80).optional(),
+      newFarmer: z.string().trim().max(120).optional(),
+      maintainGroup: z.string().trim().max(120).optional(),
+      harvestGroup: z.string().trim().max(120).optional(),
+    });
+
+  fieldRouter.post(
+    "/plots/:plotId/requests",
+    route(async (req, res) => {
+      const user = currentUser(req);
+      const plotId = pathId(req.params.plotId);
+      await visiblePlot(user, plotId);
+      const body = plotRequestBody.parse(req.body);
+      if (body.kind === "status") {
+        if (!body.value) throw new HttpError(400, "ยังไม่ได้เลือกสถานะ");
+        const allowed = await prisma.fromOption.findUnique({
+          where: { group_label: { group: "plotStatuses", label: body.value } },
+        });
+        if (!allowed) throw new HttpError(400, "สถานะไม่อยู่ในตัวเลือก");
+      }
+      const payload = Object.fromEntries(
+        Object.entries({
+          value: body.value,
+          reason: body.reason,
+          canePlantMode: body.canePlantMode,
+          caneTypeNew: body.caneTypeNew,
+          newPlotCode: body.newPlotCode,
+          newFarmer: body.newFarmer,
+          maintainGroup: body.maintainGroup,
+          harvestGroup: body.harvestGroup,
+        }).filter((entry) => entry[1] !== undefined),
+      );
+      const created = await prisma.plotRequest.create({
+        data: {
+          plotId,
+          kind: body.kind,
+          value: body.value ?? "",
+          status: "รออนุมัติ",
+          requester: user.displayName,
+          payload,
+        },
       });
-      if (!allowed) throw new HttpError(400, "สถานะไม่อยู่ในตัวเลือก");
-    }
-    await prisma.plotRequest.create({ data: { plotId, kind: body.kind, value: body.value } });
-    res.status(201).json({ kind: body.kind, value: body.value, status: "รออนุมัติ" });
-  }),
-);
+      res.status(201).json({ id: created.id, kind: created.kind, value: created.value, status: created.status });
+    }),
+  );
+
+  fieldRouter.get(
+    "/plot-requests",
+    route(async (req, res) => {
+      const farmerIds = await farmerIdsForList(currentUser(req), undefined);
+      if (farmerIds.length === 0) {
+        res.json({ items: [] } );
+        return;
+      }
+      const rows = await prisma.plotRequest.findMany({
+        where: { plot: { farmerId: {in: farmerIds } } },
+        orderBy: { createdAt: "desc" },
+        include: { plot: { select: { name: true, season: true } } },
+      });
+      const outlines = await readBoundaries(rows.map((row) => row.plotId));
+      res.json({
+        items: rows.map((row) => ({
+          id: row.id,
+          plotId: row.plotId,
+          plotName: row.plot.name,
+          productionYear: row.plot.season === "" ? null : row.plot.season,
+          requester: row.requester,
+          kind: row.kind,
+          payload: row.payload ?? {},
+          status: row.status,
+          createdAt: row.createdAt.toISOString(),
+          outline: outlines.get(row.plotId) ?? [],
+        })),
+      });
+    }),
+  );
+  
+
+ 
 
 fieldRouter.patch(
   "/plots/:plotId",

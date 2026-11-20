@@ -186,11 +186,14 @@ model PlotRequest {
   id        String  @id @default(cuid())
   plotId    String
   kind      String
-  value     String
-  createdAt DateTime @default(now())
-  plot      Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
-
+  value     String  @default("")
+  status    String  @default("รออนุมัติ")
+  requester String?
+  payload   Json?
+  createdAt DateTime  @default(now())
+  plot      Plot      @relation(fields: [plotId], references: [id], onDelete: Cascade)
   @@index([plotId, createdAt])
+  @@index([status, createdAt])
 }
 
 model FromOption {
