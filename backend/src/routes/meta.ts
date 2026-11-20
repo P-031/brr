@@ -3,6 +3,7 @@ import { currentUser } from "../auth";
 import { route } from "../http";
 import { farmerIdsForList } from "../plotAccess";
 import { prisma } from "../prisma";
+import { taskKindByName  }  from "../serialize";
 
 export const metaRouter = Router();
 
@@ -44,6 +45,7 @@ metaRouter.get(
         plotRequestTypes: labels("plotRequestTypes"),
         parcelStatuses: labels("parcelStatuses"),
         riskLevels: labels("riskLevels"),
+        taskKinds: Object.keys(taskKindByName),
         provinces: Object.keys(locations),
         locations,
         prevPlots: plots.map((plot) => ({ code: plot.id, name: plot.name })),
