@@ -26,6 +26,8 @@ export const taskKindByName = {
   ดูแล: "CARE",
 } as const;
 
+export const cutStatuses = ["เปิดแปลง", "ตัดอ้อย", "ปิดแปลง"] as const;
+
 export function formatDate(date: Date): string {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -79,6 +81,7 @@ export function plotSummary(plot: {
   note?: string | null;
   groupKind?: string | null;
   status?: string | null;
+  cutStatus?: string | null;
   farmer: { id: string; username: string; displayName: string };
 }) {
   return {
@@ -126,6 +129,7 @@ export function plotMeta(plot: Parameters<typeof plotSummary>[0]) {
     targetYield: plot.targetYield ?? null,
     note: plot.note ?? null,
     groupKind: plot.groupKind ?? null,
+    cutStatus: plot.cutStatus ?? null,
   }
 }
 

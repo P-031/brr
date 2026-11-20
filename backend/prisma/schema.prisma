@@ -91,6 +91,8 @@ model Plot {
   /// harvest = กลุ่มตัด, maintain = กลุ่มบำรุง
   groupKind   String?
   status      String?
+  /// เปิดแปลง / ตัดอ้อย / ปิดแปลง
+  cutStatus String?
 
   requests PlotRequest[]  
   /// Read and written with raw SQL in src/boundary.ts. Prisma Client cannot touch this column.
