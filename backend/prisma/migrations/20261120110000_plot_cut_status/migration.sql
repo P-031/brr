@@ -1,0 +1,1 @@
+ALTER TABLE "Plot" ADD COLUMN "cutStatus" TEXT;

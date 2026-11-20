@@ -14,6 +14,7 @@ import { normalizeRing, polygonAreaSqm, ringCenter, type LatLng } from "../area"
 import { readBoundaries } from "../boundary";
 import { firstCrossingEdge, measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
 import { plotMeta } from "../serialize"
+import { cutStatuses  } from "../serialize";
 
 const isoTime = z
   .string()
@@ -91,6 +92,7 @@ const updatePlotBody = z
   productionYear: seasonText.optional(),
   ...formFields,
   survey: surveySchema.optional(),
+  cutStatus: z.enum(cutStatuses).optional(),
 })
 .refine((value) => Object.entries(value).some(([key, item]) => key !== "version" && item !== undefined), {
   message: "ไม่มีข้อมูลให้แก้",
@@ -567,6 +569,7 @@ fieldRouter.patch(
         targetYield: body.targetYield,
         note: body.note,
         groupKind: body.groupKind,
+        cutStatus: body.cutStatus,
         areaSqm: measured?.areaSqm,
         centerLat: measured?.center.latitude,
         centerLng: measured?.center.longitude,
