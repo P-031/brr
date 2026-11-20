@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { currentUser } from "../auth";
@@ -826,3 +826,73 @@ fieldRouter.delete(
     res.status(204).send();
   }),
 );
+
+function riskJson(row: {
+  plotId: string;
+  type: string;
+  name: string | null;
+  note: string | null;
+  severity: number | null;
+  updatedAt: Date;
+}) {
+  return{
+    plotId: row.plotId,
+    type: row.type,
+    name: row.name,
+    severity: row.severity,
+    note: row.note,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+const riskBody = z.object({
+  type: z.string().trim().min(1).max(80),
+  name: z.string().trim().max(200).nullish(),
+  note: z.string().trim().max(500).nullish(),
+  severity: z.number().int().min(1).max(5).nullish(),
+});
+
+fieldRouter.get(
+  "/risk-points",
+  route(async (req, res) => {
+    const farmerIds = await farmerIdsForList(currentUser(req), undefined);
+    if (farmerIds.length === 0) {
+      res.json({ items: [] });
+      return;
+    }
+    const rows = await prisma.riskPoint.findMany({
+      where: { plot: { farmerId: { in: farmerIds } } },
+    });
+    res.json({ items: rows.map(riskJson) });
+  }),
+);
+
+fieldRouter.put(
+  "/plots/:plotId/risk-point",
+  route(async (req, res) => {
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const body = riskBody.parse(req.body);
+    const existing = await prisma.fromOption.findUnique({
+      where: { group_label: { group: "riskLevels", label: body.type } },
+    });
+    if (!existing) throw new HttpError(400, "ประเภทจุดเสี่ยงไม่อยู่ในตัวเลือก");
+
+    const row = await prisma.riskPoint.upsert({
+      where: { plotId: plot.id },
+      create: {
+        plotId: plot.id,
+        type: body.type,
+        name: body.name ?? null,
+        note: body.note ?? null,
+        severity: body.severity ?? null,
+      },
+      update: {
+        type: body.type,
+        name: body.name ?? null,
+        note: body.note ?? null,
+        severity: body.severity ?? null,
+      },
+    });
+    res.json(riskJson(row));
+  })
+)
