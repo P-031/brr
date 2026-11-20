@@ -580,24 +580,76 @@ fieldRouter.get(
       });
       const outlines = await readBoundaries(rows.map((row) => row.plotId));
       res.json({
-        items: rows.map((row) => ({
-          id: row.id,
-          plotId: row.plotId,
-          plotName: row.plot.name,
-          productionYear: row.plot.season === "" ? null : row.plot.season,
-          requester: row.requester,
-          kind: row.kind,
-          payload: row.payload ?? {},
-          status: row.status,
-          createdAt: row.createdAt.toISOString(),
-          outline: outlines.get(row.plotId) ?? [],
-        })),
+       items: rows.map((row) => plotRequestJson(row, outlines.get(row.plotId) ?? [])),
       });
     }),
   );
   
-
+function plotRequestJson(
+  row: {
+    id: string;
+    plotId: string;
+    kind: string;
+    status: string;
+    requester: string | null;
+    payload: unknown;
+    createdAt: Date;
+    plot: { name: string; season: string };
+  },
+  outline: LatLng[],
+) {
+  return {
+    id: row.id,
+    plotId: row.plotId,
+    plotName: row.plot.name,
+    productionYear: row.plot.season === "" ? null : row.plot.season,
+    requester: row.requester,
+    kind: row.kind,
+    payload: row.payload ?? {},
+    status: row.status,
+    createdAt: row.createdAt.toISOString(),
+    outline,
+  };
+}
  
+fieldRouter.patch(
+  "/plot-requests/:requestId",
+  route(async (req, res) => {
+    const user = currentUser(req);
+    if (user.role !== "OFFICER") throw new HttpError(403, "เฉพาะเจ้าหน้าที่ที่เปลี่ยนสถานะคำขอได้");
+    const requestId = pathId(req.params.requestId);
+    const body = z.object({ status: z.string().trim().min(1).max(80) }).parse(req.body);
+    const allowed = await prisma.fromOption.findUnique({
+      where: { group_label: { group: "parcelStatuses", label: body.status } },
+    });
+    if (!allowed) throw new HttpError(400, "สถานะไม่อยู่ในตัวเลือก");
+
+    const existing = await prisma.plotRequest.findUnique({
+      where: { id: requestId },
+      include: { plot: {select: { name: true, season: true } } },
+    });
+    if (!existing) throw new HttpError(404, "ไม่พบคำขอ");
+    await visiblePlot(user, existing.plotId);
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const updated = await tx.plotRequest.update({
+        where: { id: requestId },
+        data: { status: body.status },
+        include: { plot: { select: { name: true, season: true } } },
+      });
+      if (body.status === "อนุมัติ" && existing.kind === "status" && existing.value) {
+        await tx.plot.update({
+          where: { id: existing.plotId },
+          data: {status: existing.value, version: { increment: 1 } },
+        });
+      }
+      return updated;
+    });
+
+    const outlines = await readBoundaries([saved.plotId]);
+    res.json(plotRequestJson(saved, outlines.get(saved.plotId) ?? []));
+  }),
+);
 
 fieldRouter.patch(
   "/plots/:plotId",
