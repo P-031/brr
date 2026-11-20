@@ -521,6 +521,7 @@ fieldRouter.get(
       caneTypeNew: z.string().trim().max(80).optional(),
       newPlotCode: z.string().trim().max(80).optional(),
       newFarmer: z.string().trim().max(120).optional(),
+      newFarmerId: z.string().trim().min(1).max(64).optional(),
       maintainGroup: z.string().trim().max(120).optional(),
       harvestGroup: z.string().trim().max(120).optional(),
     });
@@ -547,6 +548,7 @@ fieldRouter.get(
           caneTypeNew: body.caneTypeNew,
           newPlotCode: body.newPlotCode,
           newFarmer: body.newFarmer,
+          newFarmerId: body.newFarmerId,
           maintainGroup: body.maintainGroup,
           harvestGroup: body.harvestGroup,
         }).filter((entry) => entry[1] !== undefined),
@@ -584,6 +586,12 @@ fieldRouter.get(
       });
     }),
   );
+
+function payloadText(payload: unknown, key: string): string | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const value = (payload as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
   
 function plotRequestJson(
   row: {
@@ -637,12 +645,31 @@ fieldRouter.patch(
         data: { status: body.status },
         include: { plot: { select: { name: true, season: true } } },
       });
-      if (body.status === "อนุมัติ" && existing.kind === "status" && existing.value) {
+     if (body.status === "อนุมัติ" && existing.kind === "edit") {
+      const caneType = payloadText(existing.payload, "caneTypeNew");
+      const farmerId = payloadText(existing.payload, "newFarmerId");
+      const code = payloadText(existing.payload, "newPlotCode");
+      if (farmerId) {
+        const farmer = await tx.user.findUnique({ where: { id: farmerId } });
+        if (!farmer || farmer.role !== "FARMER") throw new HttpError(400, "ไม่พบชาวไร่คนใหม่");
+        const link = await tx.farmerCare.findUnique({
+          where: { officerId_farmerId: { officerId: user.id, farmerId } },
+        });
+        if (!link) throw new HttpError(400, "ชาวไร่คนนี้ไม่อยู่ในความดูแล");
+      }
+      if (caneType || farmerId || code) {
+        const land = existing.plot.name.replace(/\s*#\d+\s*$/, "");
         await tx.plot.update({
           where: { id: existing.plotId },
-          data: {status: existing.value, version: { increment: 1 } },
+          data: {
+            caneType,
+            name: code ? `${land}#${code}` : undefined,
+            farmer: farmerId ? { connect: { id: farmerId } } : undefined,
+            version: { increment: 1 },
+          },
         });
       }
+     } 
       return updated;
     });
 
