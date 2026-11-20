@@ -744,7 +744,7 @@ fieldRouter.post(
   "/plots/:plotId/tasks",
   route(async (req, res) => {
     const user = currentUser(req);
-    const plot = await ownedPlot(user, pathId(req.params.plotId));
+    const plot = await visiblePlot(user, pathId(req.params.plotId));
     const body = taskBody.parse(req.body);
 
     const existing = await prisma.fieldTask.findUnique({ where: { id: body.id } });
