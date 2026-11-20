@@ -105,6 +105,7 @@ model Plot {
   yields  YieldRecord[]
   tasks   FieldTask[]
   surveys PlotSurvey[]
+  riskPoint RiskPoint?
 
   @@index([farmerId, createdAt, id])
   @@index([farmerId, updatedAt])
@@ -153,6 +154,16 @@ model FieldTask {
 
   @@index([plotId, date])
   @@index([updatedAt])
+}
+
+model RiskPoint{
+  plotId    String  @id
+  type      String
+  name      String?
+  note      String?
+  severity  Int?
+  updatedAt DateTime  @updatedAt
+  plot      Plot      @relation(fields: [plotId],references: [id], onDelete: Cascade)
 }
 
 /// Lets offline devices learn about deletes. Deleting a plot also removes its yields and tasks.
