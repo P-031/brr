@@ -651,7 +651,7 @@ fieldRouter.patch(
 
     const existing = await prisma.plotRequest.findUnique({
       where: { id: requestId },
-      include: { plot: {select: { name: true, season: true } } },
+      include: { plot: { select: {name: true, season: true , farmerId: true } } },
     });
     if (!existing) throw new HttpError(404, "ไม่พบคำขอ");
     if (existing.status !== "รออนุมัติ") throw new HttpError(409, "คำขอนี้ตัดสินไปแล้ว");
@@ -680,6 +680,22 @@ fieldRouter.patch(
           where: { officerId_farmerId: { officerId: user.id, farmerId } },
         });
         if (!link) throw new HttpError(400, "ชาวไร่คนนี้ไม่อยู่ในความดูแล");
+      }
+      if (farmerId && farmerId !== existing.plot.farmerId) {
+        await tx.deletedRecord.upsert({
+          where: {kind_recordId: {kind: "PLOT", recordId: existing.plotId } },
+          create: {
+            kind: "PLOT",
+            recordId: existing.plotId,
+            farmerId: existing.plot.farmerId,
+            season: existing.plot.season,
+          },
+          update: {
+            farmerId: existing.plot.farmerId,
+            season: existing.plot.season,
+            deletedAt: new Date(),
+          },
+        });
       }
       if (caneType || farmerId || code) {
         const land = existing.plot.name.replace(/\s*#\d+\s*$/, "");
@@ -798,8 +814,10 @@ fieldRouter.delete(
     const removed = await prisma.$transaction(async (tx) => {
       const result = await tx.plot.deleteMany({ where: { id: plotId, ...(version ? { version } : {}) } });
       if (result.count === 0) return false;
-      await tx.deletedRecord.create({
-        data: { kind: "PLOT", recordId: plotId, farmerId: user.id, season: plot.season },
+      await tx.deletedRecord.upsert({
+        where: {kind_recordId: {kind: "PLOT", recordId: plotId } },
+        create: { kind: "PLOT", recordId: plotId, farmerId: user.id, season: plot.season },
+        update: { farmerId: user.id, season: plot.season, deletedAt: new Date() },
       });
       return true;
     });
