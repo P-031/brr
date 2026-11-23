@@ -4,12 +4,13 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/activity_detail_view.dart';
 
 /// หน้า "นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง" — list กิจกรรมของแปลง
 /// ที่บันทึกลงเครื่อง (รูปเท่านั้นรอรายละเอียด / กรอกครบรอนำส่ง)
-/// ลบรายการได้; นำส่งจริงรอ endpoint backend
+/// ลบรายการได้; นำส่งเรียก `POST /plots/:id/activities` (รอ backend)
 class ActivityDraftsView extends StatefulWidget {
   const ActivityDraftsView({super.key, required this.vm});
 
@@ -22,7 +23,9 @@ class ActivityDraftsView extends StatefulWidget {
 class _ActivityDraftsViewState extends State<ActivityDraftsView> {
   late Future<List<Map<String, dynamic>>> _items = widget.vm.activityDrafts();
 
-  void _reload() => setState(() => _items = widget.vm.activityDrafts());
+  void _reload() => setState(() {
+    _items = widget.vm.activityDrafts();
+  });
 
   static String _fmtThai(String? iso) {
     final d = DateTime.tryParse('$iso');
@@ -73,8 +76,32 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
     }
   }
 
+  String? _sendingId;
+
+  /// นำส่งร่างขึ้นระบบ — สำเร็จไปแท็บ "ส่งสำเร็จ" / พลาดไป
+  /// "ส่งไม่สำเร็จ" (endpoint ยังไม่มี → ตก failed ซื่อสัตย์)
+  Future<void> _submit(Map<String, dynamic> a) async {
+    final id = '${a['id']}';
+    setState(() => _sendingId = id);
+    try {
+      await widget.vm.submitActivity(a);
+      if (!mounted) return;
+      _reload();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('นำส่งกิจกรรมสำเร็จ')));
+    } catch (e) {
+      if (!mounted) return;
+      _reload();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('นำส่งไม่สำเร็จ — $e')));
+    } finally {
+      if (mounted) setState(() => _sendingId = null);
+    }
+  }
+
   Widget _thumb(Map<String, dynamic> a) {
-    final photos = a['photos'] as List? ?? const [];
+    final rawPhotos = a['photos'];
+    final photos = rawPhotos is List ? rawPhotos : const [];
     if (photos.isEmpty) {
       return Container(
         width: 76,
@@ -149,7 +176,8 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
 
   Widget _card(int no, Map<String, dynamic> a) {
     final pending = a['detailPending'] == true;
-    final photos = a['photos'] as List? ?? const [];
+    final rawPhotos = a['photos'];
+    final photos = rawPhotos is List ? rawPhotos : const [];
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -157,78 +185,143 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _thumb(a),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _thumb(a),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        'กิจกรรม ครั้งที่ $no',
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'กิจกรรม ครั้งที่ $no',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
+                        _statusChip(pending),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'รูป ${photos.length} ใบ'
+                      '${a['plantedAt'] != null ? '  •  ปลูก ${_fmtThai('${a['plantedAt']}')}' : ''}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black54,
                       ),
                     ),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => _openEdit(no, a),
-                      child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(
-                          Iconsax.edit,
-                          size: 22,
-                          color: AppColors.green,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => _confirmDelete(a),
-                      child: const Padding(
-                        padding: EdgeInsets.all(4),
-                        child: Icon(Iconsax.trash, size: 22, color: Colors.red),
+                    Text(
+                      'บันทึกเมื่อ ${_fmtThaiTime('${a['createdAt']}')}',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black54,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 6),
-                _statusChip(pending),
-                const SizedBox(height: 8),
-                Text(
-                  'รูป ${photos.length} ใบ'
-                  '${a['plantedAt'] != null ? '  •  ปลูก ${_fmtThai('${a['plantedAt']}')}' : ''}',
-                  style: const TextStyle(fontSize: 14, color: Colors.black54),
-                ),
-                Text(
-                  'บันทึกเมื่อ ${_fmtThaiTime('${a['createdAt']}')}',
-                  style: const TextStyle(fontSize: 14, color: Colors.black54),
-                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // ปุ่มล่างการ์ด: แก้ไข / ลบ / นำส่ง (นำส่งเฉพาะรายการที่ยังไม่ส่งสำเร็จ)
+          Row(
+            children: [
+              _actionBtn(
+                icon: Iconsax.trash,
+                label: 'ลบ',
+                color: Colors.red,
+                onTap: () => _confirmDelete(a),
+              ),
+              const SizedBox(width: 8),
+              _actionBtn(
+                icon: Iconsax.edit,
+                label: 'แก้ไข',
+                color: Colors.amber.shade800,
+                onTap: () => _openEdit(no, a),
+              ),
+              if ('${a['submitStatus'] ?? 'pending'}' != 'sent') ...[
+                const SizedBox(width: 8),
+                _sendingId == '${a['id']}'
+                    ? const Expanded(
+                        child: Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      )
+                    : _actionBtn(
+                        icon: Iconsax.send_2,
+                        label: 'นำส่ง',
+                        color: AppColors.green,
+                        onTap: () => _submit(a),
+                      ),
               ],
-            ),
+            ],
           ),
         ],
       ),
     );
   }
 
+  /// ปุ่ม action ล่างการ์ด — ไอคอน+label กรอบบางสีตาม action
+  Widget _actionBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) => Expanded(
+    child: InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF4F4F4),
-    appBar: AppBar(
-      backgroundColor: AppColors.green,
-      title: const Text(
-        'นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง',
-        style: TextStyle(fontSize: 18),
-      ),
+    appBar: brrAppBar(
+      'นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง',
+      actions: [
+        IconButton(
+          tooltip: 'รีเฟรช',
+          icon: const Icon(Icons.refresh, size: 26),
+          onPressed: _reload,
+        ),
+      ],
     ),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: _items,
@@ -260,9 +353,9 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
                 child: TabBar(
                   isScrollable: true,
                   tabAlignment: TabAlignment.start,
-                  labelColor: AppColors.green,
+                  labelColor: Colors.black87,
                   unselectedLabelColor: Colors.black54,
-                  indicatorColor: AppColors.green,
+                  indicatorColor: AppColors.gold,
                   labelPadding: const EdgeInsets.symmetric(horizontal: 20),
                   labelStyle: const TextStyle(
                     fontSize: 17,

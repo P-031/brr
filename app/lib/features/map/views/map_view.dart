@@ -18,6 +18,7 @@ import 'package:brr/features/map/widgets/map_bottom_bar.dart';
 import 'package:brr/features/map/widgets/map_skeleton.dart';
 import 'package:brr/features/map/widgets/map_widgets.dart';
 import 'package:brr/features/map/widgets/parcel_info_sheet.dart';
+import 'package:brr/features/map/widgets/risk_point_sheet.dart';
 
 /// Area-measurement screen — plots parcel boundaries from the backend
 /// as polygons + pins, and supports drafting a new parcel by tapping
@@ -153,11 +154,11 @@ class _MapBodyState extends State<_MapBody> {
     );
   }
 
-  /// Numbered sky-pin bitmaps for draft points — สีเดียวกับเส้น
-  /// polygon ที่กำลังวาด (ฟ้า=กำลังวาด/ทอง=ร่าง/แดง=บันทึกแล้ว)
+  /// Numbered green-pin bitmaps for draft points — สีเดียวกับเส้น
+  /// polygon ที่กำลังวาด/ร่างไว้ (เขียว=ร่าง ฟ้า=บันทึกไม่มีสถานะ)
   final _pinIcons = <int, BitmapDescriptor>{};
 
-  /// Green-ringed variants shown while a pin is selected for moving.
+  /// Gold-ringed variants shown while a pin is selected for moving.
   final _pinSelIcons = <int, BitmapDescriptor>{};
 
   /// Draft pin index currently armed for tap-to-move (0-based).
@@ -184,10 +185,25 @@ class _MapBodyState extends State<_MapBody> {
   /// Memoized saved-parcel polygons — rebuilt only when the
   /// renderable list instance changes (not on every GPS fix).
   List<Parcel>? _polySrc;
+  Map<String, String>? _riskSrc;
   Set<Polygon> _polyCache = const {};
 
-  /// Renders a numbered gold pin (ring + white bold index) as a marker
-  /// bitmap — draft pins show their tap order like survey stakes.
+  /// สีพื้น/เส้นของแปลง — ร่าง=เขียว / ไม่มีสถานะจุดเสี่ยง=ฟ้า /
+  /// กำหนดจุดเสี่ยงแล้ว=สีตามชนิดภัย (ชุดเดียวกับ chip ใน info sheet)
+  (Color, Color) _parcelColors(Parcel p, Map<String, String> risks) {
+    if (p.isDraft) {
+      return (AppColors.green.withValues(alpha: 0.3), AppColors.green);
+    }
+    final type = risks[p.id] ?? '';
+    if (type.isEmpty) {
+      return (AppColors.sky.withValues(alpha: 0.3), AppColors.sky);
+    }
+    final (_, bg, fg) = riskChipStyle(type);
+    return (bg.withValues(alpha: 0.6), fg);
+  }
+
+  /// Renders a numbered green pin (ring + white bold index) as a
+  /// marker bitmap — draft pins show their tap order like stakes.
   static Future<BitmapDescriptor> _numberedPin(
     int n, {
     ui.Color ring = Colors.white,
@@ -199,7 +215,7 @@ class _MapBodyState extends State<_MapBody> {
     final canvas = ui.Canvas(recorder);
     const c = ui.Offset(size / 2, size / 2);
     canvas
-      ..drawCircle(c, size / 2 - 2 * ratio, ui.Paint()..color = AppColors.sky)
+      ..drawCircle(c, size / 2 - 2 * ratio, ui.Paint()..color = AppColors.green)
       ..drawCircle(
         c,
         size / 2 - 2 * ratio,
@@ -226,8 +242,13 @@ class _MapBodyState extends State<_MapBody> {
     final pic = recorder.endRecording();
     return pic.toImage(size.toInt(), size.toInt()).then((img) async {
       final bytes = await img.toByteData(format: ui.ImageByteFormat.png);
+      // encode ล้มเหลวได้ (เครื่องหน่วยความจำต่ำ) — คืนหมุดเขียว
+      // fallback ตัวเดียวกับ marker แทนที่จะ throw ทิ้งทั้งชุด
+      if (bytes == null) {
+        return BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+      }
       return BitmapDescriptor.bytes(
-        bytes!.buffer.asUint8List(),
+        bytes.buffer.asUint8List(),
         imagePixelRatio: ratio,
       );
     });
@@ -245,14 +266,14 @@ class _MapBodyState extends State<_MapBody> {
   }
 
   /// Tap a draft pin to arm/disarm it for moving; the next map tap
-  /// relocates it. A green ring marks the armed pin.
+  /// relocates it. A gold ring marks the armed pin.
   void _toggleMovePin(int i) {
     setState(() {
       _movingIndex = _movingIndex == i ? null : i;
     });
     if (_movingIndex != null && _pinSelIcons[i + 1] == null) {
       final n = i + 1;
-      _numberedPin(n, ring: AppColors.greenLight).then((icon) {
+      _numberedPin(n, ring: AppColors.gold).then((icon) {
         if (mounted) setState(() => _pinSelIcons[n] = icon);
       });
     }
@@ -353,7 +374,8 @@ class _MapBodyState extends State<_MapBody> {
         ),
       );
     } else {
-      final c = p.centerOverride ?? (p.points.isNotEmpty ? p.points.first : null);
+      final c =
+          p.centerOverride ?? (p.points.isNotEmpty ? p.points.first : null);
       if (c != null) {
         await _controller?.animateCamera(
           CameraUpdate.newLatLngZoom(_ll(c), 17),
@@ -446,24 +468,26 @@ class _MapBodyState extends State<_MapBody> {
   /// (กัน allocate Polygon ใหม่หลายพันตัวทุก GPS fix)
   Set<Polygon> _polygons(MapViewModel vm) {
     final src = vm.renderableParcels;
-    if (!identical(src, _polySrc)) {
+    final risks = vm.riskTypes;
+    // rebuild เมื่อ list แปลงหรือสถานะจุดเสี่ยงเปลี่ยน
+    if (!identical(src, _polySrc) || !identical(risks, _riskSrc)) {
       _polySrc = src;
+      _riskSrc = risks;
       _polyCache = {
         for (final p in src)
-          Polygon(
-            polygonId: PolygonId(p.id),
-            points: [for (final x in p.points) _ll(x)],
-            fillColor: (p.isDraft ? AppColors.gold : Colors.red).withValues(
-              alpha: 0.3,
-            ),
-            strokeColor: p.isDraft ? AppColors.gold : Colors.red,
-            strokeWidth: 3,
-            // โหมดแผนที่แปลง — แตะแปลงเด้งข้อมูลขึ้นมา
-            consumeTapEvents: widget.parcelBrowser,
-            onTap: widget.parcelBrowser
-                ? () => _showParcelInfo(p, vm)
-                : null,
-          ),
+          () {
+            final (fill, stroke) = _parcelColors(p, risks);
+            return Polygon(
+              polygonId: PolygonId(p.id),
+              points: [for (final x in p.points) _ll(x)],
+              fillColor: fill,
+              strokeColor: stroke,
+              strokeWidth: 3,
+              // โหมดแผนที่แปลง — แตะแปลงเด้งข้อมูลขึ้นมา
+              consumeTapEvents: widget.parcelBrowser,
+              onTap: widget.parcelBrowser ? () => _showParcelInfo(p, vm) : null,
+            );
+          }(),
       };
     }
     return {
@@ -473,8 +497,8 @@ class _MapBodyState extends State<_MapBody> {
         Polygon(
           polygonId: const PolygonId('draft'),
           points: [for (final x in vm.draft) _ll(x)],
-          fillColor: AppColors.sky.withValues(alpha: 0.3),
-          strokeColor: AppColors.sky,
+          fillColor: AppColors.green.withValues(alpha: 0.3),
+          strokeColor: AppColors.green,
           strokeWidth: 3,
         ),
     };
@@ -494,6 +518,9 @@ class _MapBodyState extends State<_MapBody> {
         }
       },
     ).whenComplete(() {
+      // sheet ปิดแล้ว — โหลดสถานะจุดเสี่ยงใหม่ (อาจเพิ่งบันทึก)
+      // เพื่อทาสี polygon ตามสถานะล่าสุด
+      vm.refreshRiskTypes();
       // sheet ถูกปิดทิ้งตอนทับอยู่ — mount แผนที่กลับ
       if (mounted && _infoSheetCovered) {
         setState(() => _infoSheetCovered = false);
@@ -573,104 +600,103 @@ class _MapBodyState extends State<_MapBody> {
                     // view แล้วสร้างใหม่ขณะ transition ทำให้บน
                     // emulator/เครื่องบางรุ่น render ดำค้าง
                     GoogleMap(
-                        // ตำแหน่งจริงเฉพาะ mount แรกที่ locate() เสร็จ
-                        // แล้ว — remount หลังปิดฟอร์มใช้ _camera เดิม
-                        // เพื่อไม่กระโดดกลับจุดผู้ใช้ทิ้งตำแหน่งที่เลื่อนไว้
-                        initialCameraPosition:
-                            widget.focusParcel != null &&
-                                _focusCenter != null
-                            ? CameraPosition(target: _ll(_focusCenter!), zoom: 15)
-                            : (!_didInitialLocate && vm.userPos != null
-                                  ? CameraPosition(
-                                      target: _ll(vm.userPos!),
-                                      zoom: 17,
-                                    )
-                                  : _camera),
-                        onMapCreated: (c) {
-                          _controller = c;
-                          if (!_didInitialLocate) {
-                            _didInitialLocate = true;
-                            final v = context.read<MapViewModel>();
-                            if (widget.focusParcel != null) {
-                              _focusInitialParcel(v);
-                            } else {
-                              _initialLocate(v);
-                            }
+                      // ตำแหน่งจริงเฉพาะ mount แรกที่ locate() เสร็จ
+                      // แล้ว — remount หลังปิดฟอร์มใช้ _camera เดิม
+                      // เพื่อไม่กระโดดกลับจุดผู้ใช้ทิ้งตำแหน่งที่เลื่อนไว้
+                      initialCameraPosition:
+                          widget.focusParcel != null && _focusCenter != null
+                          ? CameraPosition(target: _ll(_focusCenter!), zoom: 15)
+                          : (!_didInitialLocate && vm.userPos != null
+                                ? CameraPosition(
+                                    target: _ll(vm.userPos!),
+                                    zoom: 17,
+                                  )
+                                : _camera),
+                      onMapCreated: (c) {
+                        _controller = c;
+                        if (!_didInitialLocate) {
+                          _didInitialLocate = true;
+                          final v = context.read<MapViewModel>();
+                          if (widget.focusParcel != null) {
+                            _focusInitialParcel(v);
+                          } else {
+                            _initialLocate(v);
                           }
-                        },
-                        onCameraMove: (pos) {
-                          // rebuild เฉพาะตอนหมุนแผนที่ (bearing เปลี่ยน)
-                          // เพื่อให้เข็มทิศหมุนตาม — pan ปกติไม่ setState
-                          final rotated =
-                              (pos.bearing - _camera.bearing).abs() > 0.5;
-                          _camera = pos;
-                          if (rotated) setState(() {});
-                        },
-                        // เลื่อน/ซูมเสร็จ → โหลดแปลงเฉพาะกรอบที่เห็น
-                        // ใหม่ (แถบโหลดบางๆ ขึ้นด้านบนขณะรอ)
-                        onCameraIdle: () async {
-                          final r = await _controller?.getVisibleRegion();
-                          if (r == null || !context.mounted) return;
-                          context.read<MapViewModel>().loadViewport(
-                            r.southwest.longitude,
-                            r.southwest.latitude,
-                            r.northeast.longitude,
-                            r.northeast.latitude,
-                          );
-                        },
-                        onTap: (p) => _onMapTap(p, vm),
-                        mapType: _mapType,
-                        // satellite/hybrid ไม่รองรับ indoor แล้ว — ปิดไว้
-                        // กัน deprecation warning จาก Maps SDK
-                        indoorViewEnabled: false,
-                        compassEnabled: true,
-                        zoomControlsEnabled: false,
-                        // ดันเนื้อแผนที่ขึ้นเหนือแถบวัดที่ลอยทับ —
-                        // หมุด/draft ใกล้ขอบล่างไม่จมใต้แถบขาว
-                        padding: EdgeInsets.only(
-                          bottom: widget.parcelBrowser
-                              ? 0
-                              : vm.drawing
-                              ? (vm.walking ? 210 : 160)
-                              : 110,
-                        ),
-                        myLocationEnabled: _locationGranted && !_formOpen,
-                        myLocationButtonEnabled: false,
-                        polygons: _polygons(vm),
-                        markers: {
-                          // Red pin marks the user's position — updated
-                          // by the GPS button or live fixes while walking.
-                          if (vm.userPos != null)
-                            Marker(
-                              markerId: const MarkerId('me'),
-                              position: _ll(vm.userPos!),
-                              icon: BitmapDescriptor.defaultMarkerWithHue(
-                                BitmapDescriptor.hueRed,
-                              ),
-                            ),
-                          for (var i = 0; i < vm.draft.length; i++)
-                            Marker(
-                              markerId: MarkerId('draft-$i'),
-                              position: _ll(vm.draft[i]),
-                              anchor: const Offset(0.5, 0.5),
-                              zIndexInt: 2,
-                              draggable: true,
-                              consumeTapEvents: true,
-                              onTap: () => _toggleMovePin(i),
-                              onDragEnd: (pos) => vm.moveDraftPoint(
-                                i,
-                                ll.LatLng(pos.latitude, pos.longitude),
-                              ),
-                              icon:
-                                  (_movingIndex == i
-                                      ? _pinSelIcons[i + 1] ?? _pinIcons[i + 1]
-                                      : _pinIcons[i + 1]) ??
-                                  BitmapDescriptor.defaultMarkerWithHue(
-                                    BitmapDescriptor.hueAzure,
-                                  ),
-                            ),
-                        },
+                        }
+                      },
+                      onCameraMove: (pos) {
+                        // rebuild เฉพาะตอนหมุนแผนที่ (bearing เปลี่ยน)
+                        // เพื่อให้เข็มทิศหมุนตาม — pan ปกติไม่ setState
+                        final rotated =
+                            (pos.bearing - _camera.bearing).abs() > 0.5;
+                        _camera = pos;
+                        if (rotated) setState(() {});
+                      },
+                      // เลื่อน/ซูมเสร็จ → โหลดแปลงเฉพาะกรอบที่เห็น
+                      // ใหม่ (แถบโหลดบางๆ ขึ้นด้านบนขณะรอ)
+                      onCameraIdle: () async {
+                        final r = await _controller?.getVisibleRegion();
+                        if (r == null || !context.mounted) return;
+                        context.read<MapViewModel>().loadViewport(
+                          r.southwest.longitude,
+                          r.southwest.latitude,
+                          r.northeast.longitude,
+                          r.northeast.latitude,
+                        );
+                      },
+                      onTap: (p) => _onMapTap(p, vm),
+                      mapType: _mapType,
+                      // satellite/hybrid ไม่รองรับ indoor แล้ว — ปิดไว้
+                      // กัน deprecation warning จาก Maps SDK
+                      indoorViewEnabled: false,
+                      compassEnabled: true,
+                      zoomControlsEnabled: false,
+                      // ดันเนื้อแผนที่ขึ้นเหนือแถบวัดที่ลอยทับ —
+                      // หมุด/draft ใกล้ขอบล่างไม่จมใต้แถบขาว
+                      padding: EdgeInsets.only(
+                        bottom: widget.parcelBrowser
+                            ? 0
+                            : vm.drawing
+                            ? (vm.walking ? 210 : 160)
+                            : 110,
                       ),
+                      myLocationEnabled: _locationGranted && !_formOpen,
+                      myLocationButtonEnabled: false,
+                      polygons: _polygons(vm),
+                      markers: {
+                        // Red pin marks the user's position — updated
+                        // by the GPS button or live fixes while walking.
+                        if (vm.userPos != null)
+                          Marker(
+                            markerId: const MarkerId('me'),
+                            position: _ll(vm.userPos!),
+                            icon: BitmapDescriptor.defaultMarkerWithHue(
+                              BitmapDescriptor.hueRed,
+                            ),
+                          ),
+                        for (var i = 0; i < vm.draft.length; i++)
+                          Marker(
+                            markerId: MarkerId('draft-$i'),
+                            position: _ll(vm.draft[i]),
+                            anchor: const Offset(0.5, 0.5),
+                            zIndexInt: 2,
+                            draggable: true,
+                            consumeTapEvents: true,
+                            onTap: () => _toggleMovePin(i),
+                            onDragEnd: (pos) => vm.moveDraftPoint(
+                              i,
+                              ll.LatLng(pos.latitude, pos.longitude),
+                            ),
+                            icon:
+                                (_movingIndex == i
+                                    ? _pinSelIcons[i + 1] ?? _pinIcons[i + 1]
+                                    : _pinIcons[i + 1]) ??
+                                BitmapDescriptor.defaultMarkerWithHue(
+                                  BitmapDescriptor.hueGreen,
+                                ),
+                          ),
+                      },
+                    ),
                     // พื้นทึบคลุมแผนที่ตอนฟอร์ม/sheet ทับอยู่ — กันแตะ
                     // แผนที่รอดผ่าน + หน้าจอไม่ดำตอน remount
                     if (_formOpen || _infoSheetCovered)
@@ -771,10 +797,7 @@ class _MapBodyState extends State<_MapBody> {
                           child: InkWell(
                             borderRadius: BorderRadius.circular(24),
                             onTap: () async {
-                              final labels = [
-                                'ทุกปีการผลิต',
-                                ...vm.years,
-                              ];
+                              final labels = ['ทุกปีการผลิต', ...vm.years];
                               final i = await showOptionPopup(
                                 context,
                                 title: 'ปีการผลิต',

@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/features/auth/models/user_profile.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
-import 'package:brr/features/map/views/activity_detail_view.dart';
+import 'package:brr/features/map/views/activity_view_view.dart';
 
 /// หน้า "ประวัติบันทึกกิจกรรม" — list กิจกรรมที่บันทึกในเครื่อง
 /// ของแปลง (เลขแปลง + เวลาบันทึก + ผู้บันทึก + สถานะ + รูป)
@@ -24,7 +25,9 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
   late Future<List<Map<String, dynamic>>> _items = widget.vm.activityDrafts();
   bool _newestFirst = true;
 
-  void _reload() => setState(() => _items = widget.vm.activityDrafts());
+  void _reload() => setState(() {
+    _items = widget.vm.activityDrafts();
+  });
 
   static String _fmtThaiTime(String? iso) {
     final d = DateTime.tryParse('$iso');
@@ -52,25 +55,18 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
   }
 
   Future<void> _openItem(Map<String, dynamic> a) async {
-    final msg = await Navigator.of(context).push<String>(
+    await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) => ActivityDetailView(
-          vm: widget.vm,
-          photoPaths: const [],
-          activityNo: 0,
-          draft: a,
-        ),
+        builder: (_) => ActivityViewView(vm: widget.vm, activity: a),
       ),
     );
     if (!mounted) return;
     _reload();
-    if (msg != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-    }
   }
 
   Widget _thumb(Map<String, dynamic> a) {
-    final photos = a['photos'] as List? ?? const [];
+    final rawPhotos = a['photos'];
+    final photos = rawPhotos is List ? rawPhotos : const [];
     if (photos.isEmpty) {
       return Container(
         width: 96,
@@ -124,12 +120,46 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
             Row(
               children: [
                 Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${widget.vm.parcel.plotCode != null ? '[${widget.vm.parcel.plotCode}] ' : ''}'
+                        '${widget.vm.parcel.landNo}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'บันทึกเมื่อ: ${_fmtThaiTime('${a['createdAt']}')}',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black54,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: color == AppColors.green
+                        ? const Color(0xFFE8F5E9)
+                        : const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: color),
+                  ),
                   child: Text(
-                    '[${widget.vm.parcel.plotCode}] บันทึกเมื่อ: '
-                    '${_fmtThaiTime('${a['createdAt']}')}',
-                    style: const TextStyle(
-                      fontSize: 16,
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
+                      color: color,
                     ),
                   ),
                 ),
@@ -156,25 +186,6 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
               ],
             ),
             const SizedBox(height: 10),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: color == AppColors.green
-                    ? const Color(0xFFE8F5E9)
-                    : const Color(0xFFFFF3E0),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: color),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
             _thumb(a),
           ],
         ),
@@ -185,10 +196,7 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: const Color(0xFFF4F4F4),
-    appBar: AppBar(
-      backgroundColor: AppColors.green,
-      title: const Text('ประวัติบันทึกกิจกรรม', style: TextStyle(fontSize: 18)),
-    ),
+    appBar: brrAppBar('ประวัติบันทึกกิจกรรม'),
     body: FutureBuilder<List<Map<String, dynamic>>>(
       future: _items,
       builder: (context, snap) {
@@ -212,55 +220,66 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
                     color: Colors.black54,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    'กิจกรรมทั้งหมด',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Flexible(
+                          child: Text(
+                            'กิจกรรมทั้งหมด',
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '${items.length}',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '${items.length}',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black54,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
                   PopupMenuButton<bool>(
+                    tooltip: 'เรียงลำดับ',
                     initialValue: _newestFirst,
                     onSelected: (v) => setState(() => _newestFirst = v),
                     itemBuilder: (_) => const [
                       PopupMenuItem(
                         value: true,
+                        height: 56,
                         child: Text(
                           'ใหม่สุดไปเก่าสุด',
-                          style: TextStyle(fontSize: 15),
+                          style: TextStyle(fontSize: 17),
                         ),
                       ),
                       PopupMenuItem(
                         value: false,
+                        height: 56,
                         child: Text(
                           'เก่าสุดไปใหม่สุด',
-                          style: TextStyle(fontSize: 15),
+                          style: TextStyle(fontSize: 17),
                         ),
                       ),
                     ],
                     child: Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 8,
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
@@ -268,25 +287,31 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _newestFirst
-                                ? 'ใหม่สุดไปเก่าสุด'
-                                : 'เก่าสุดไปใหม่สุด',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Icon(
-                            Iconsax.arrow_circle_down,
-                            size: 20,
-                            color: Colors.black87,
-                          ),
-                        ],
+                      child: const Icon(
+                        Iconsax.setting_4,
+                        size: 24,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: _reload,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: const Icon(
+                        Icons.refresh,
+                        size: 22,
+                        color: Colors.black87,
                       ),
                     ),
                   ),

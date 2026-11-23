@@ -61,6 +61,7 @@ Future<int?> showOptionPopup(
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
                     child: TextField(
+                      textAlign: TextAlign.center,
                       autofocus: true,
                       style: const TextStyle(fontSize: 18),
                       onChanged: (q) => setDialogState(() => query = q),

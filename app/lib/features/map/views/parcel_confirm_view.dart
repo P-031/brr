@@ -6,11 +6,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
+import 'package:brr/core/widgets/discard_guard.dart';
 import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
+import 'package:brr/core/utils/json_safe.dart';
 
 /// หน้า "ยืนยันแปลงข้ามปี" — การ์ดสรุปแปลง + เลือกปีเป้าหมาย +
 /// สถานะแปลง + ข้อเสนอแนะ + รูปถ่าย (สูงสุด 3)
@@ -32,6 +35,11 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
   String? _status;
   final _photos = <String>[];
   bool _saving = false;
+  late String _baseline;
+
+  /// signature ข้อมูลฟอร์ม — เทียบ baseline ตอนกดย้อน
+  String _formSig() =>
+      [_noteCtrl.text, '$_targetYear', '$_status', _photos.join(',')].join('|');
 
   late final Future<
     ({List<String> years, FormOptions? opts, Map meta, double rai})
@@ -56,11 +64,10 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
     } catch (_) {}
     // meta/พื้นที่ล่าสุดจาก /plots/:id — fallback ข้อมูลแปลงที่มีอยู่
     final meta =
-        (detail?['meta'] as Map<String, dynamic>?) ??
-        widget.vm.parcel.meta ??
-        const {};
+        asStringMap(detail?['meta']) ?? widget.vm.parcel.meta ?? const {};
+    final rawArea = detail?['area'];
     final rai =
-        ((detail?['area'] as Map?)?['raiDecimal'] as num?)?.toDouble() ??
+        toDoubleOrNull(rawArea is Map ? rawArea['raiDecimal'] : null) ??
         widget.vm.parcel.areaRai;
     return (years: years, opts: opts, meta: meta, rai: rai);
   }
@@ -69,6 +76,7 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
   void initState() {
     super.initState();
     _recoverLostPhoto();
+    _baseline = _formSig();
     // เติมค่ายืนยันเดิมถ้าเคยบันทึกไว้
     widget.vm.parcelConfirm().then((r) {
       if (r == null || !mounted) return;
@@ -78,10 +86,13 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
             : '${r['targetYear']}';
         _status = '${r['status'] ?? ''}'.isEmpty ? null : '${r['status']}';
         _noteCtrl.text = '${r['note'] ?? ''}';
-        for (final p in r['photos'] as List? ?? const []) {
+        final recPhotos = r['photos'];
+        for (final p in recPhotos is List ? recPhotos : const []) {
           if (_photos.length >= _maxPhotos) break;
           _photos.add('$p');
         }
+        // baseline หลังเติมค่าเดิม — เทียบตอนกดย้อน
+        _baseline = _formSig();
       });
     });
   }
@@ -98,7 +109,7 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
     if (source == null) return;
     try {
       final x = await ImagePicker().pickImage(source: source, maxWidth: 1600);
-      if (x != null) setState(() => _photos.add(x.path));
+      if (x != null && mounted) setState(() => _photos.add(x.path));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -181,7 +192,7 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
     }
   }
 
-  /// แถว label + dropdown กรอบเทา — label ชิดขวา / กรอบเขียว
+  /// label อยู่บน + dropdown กรอบเทาเต็มความกว้าง — กรอบเขียว
   /// เมื่อเลือกแล้ว แบบเดียวกับแถวเลือกในหน้าบันทึกกิจกรรม
   Widget _optRow(
     String label,
@@ -189,54 +200,52 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
     String hint,
     VoidCallback onTap,
   ) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 5,
-          child: Text(
-            '$label :',
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
           ),
         ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 6,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: value == null ? Colors.grey.shade300 : AppColors.green,
-                  width: value == null ? 1 : 1.5,
-                ),
+        const SizedBox(height: 6),
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: value == null ? Colors.grey.shade300 : AppColors.green,
+                width: value == null ? 1 : 1.5,
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value ?? hint,
-                      textAlign: TextAlign.center,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: value == null ? Colors.black38 : Colors.black87,
-                      ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value ?? hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: value == null ? Colors.black38 : Colors.black87,
                     ),
                   ),
-                  const Icon(
-                    Iconsax.arrow_circle_down,
-                    size: 26,
-                    color: Colors.black87,
-                  ),
-                ],
-              ),
+                ),
+                const Icon(
+                  Iconsax.arrow_circle_down,
+                  size: 26,
+                  color: Colors.black87,
+                ),
+              ],
             ),
           ),
         ),
@@ -275,217 +284,273 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
   @override
   Widget build(BuildContext context) {
     final p = widget.vm.parcel;
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F4F4),
-      appBar: AppBar(
-        backgroundColor: AppColors.green,
-        title: const Text('ยืนยันแปลงข้ามปี', style: TextStyle(fontSize: 18)),
-      ),
-      body:
-          FutureBuilder<
-            ({List<String> years, FormOptions? opts, Map meta, double rai})
-          >(
-            future: _dataFut,
-            builder: (context, snap) {
-              final meta = snap.data?.meta ?? const {};
-              final rai = snap.data?.rai ?? p.areaRai;
-              final years = snap.data?.years ?? const <String>[];
-              final opts = snap.data?.opts;
-              return ListView(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
-                children: [
-                  // การ์ดสรุปแปลง — เทาชุดเดียวกับหน้าคำขอ/บันทึกกิจกรรม
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade200,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        _infoRow(
-                          'ปีการผลิต',
-                          '${meta['productionYear'] ?? p.productionYear ?? '—'}',
-                        ),
-                        _infoRow('หมายเลขแปลง', p.plotCode),
-                        _infoRow('พื้นที่สำรวจ(ไร่)', rai.toStringAsFixed(2)),
-                        _infoRow('ประเภทอ้อย', '${meta['caneType'] ?? '—'}'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  // ปีเป้าหมาย + สถานะแปลง — การ์ดขาวรวมแถวเลือก
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        _optRow(
-                          'ปีการผลิตเป้าหมาย',
-                          _targetYear,
-                          'เลือก',
-                          () => _pickYear(years),
-                        ),
-                        _optRow(
-                          'สถานะแปลง',
-                          _status,
-                          'เลือก',
-                          () => opts == null
-                              ? _toast('กำลังโหลดตัวเลือก')
-                              : _pickStatus(opts),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  // ข้อเสนอแนะ
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: TextField(
-                      controller: _noteCtrl,
-                      maxLines: 3,
-                      style: const TextStyle(fontSize: 16),
-                      decoration: const InputDecoration(
-                        labelText: 'ข้อเสนอแนะ',
-                        isDense: true,
-                        focusedBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(
-                            color: AppColors.gold,
-                            width: 2,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (_formSig() != _baseline) {
+          if (await confirmDiscardChanges(context) && context.mounted) {
+            Navigator.of(context).pop();
+          }
+        } else if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF4F4F4),
+        appBar: brrAppBar('ยืนยันแปลงข้ามปี'),
+        body:
+            FutureBuilder<
+              ({List<String> years, FormOptions? opts, Map meta, double rai})
+            >(
+              future: _dataFut,
+              builder: (context, snap) {
+                final meta = snap.data?.meta ?? const {};
+                final rai = snap.data?.rai ?? p.areaRai;
+                final years = snap.data?.years ?? const <String>[];
+                final opts = snap.data?.opts;
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+                  children: [
+                    // การ์ดสรุปแปลง — เทาชุดเดียวกับหน้าคำขอ/บันทึกกิจกรรม
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          _infoRow(
+                            'ปีการผลิต',
+                            '${meta['productionYear'] ?? p.productionYear ?? '—'}',
                           ),
-                        ),
+                          _infoRow('หมายเลขแปลง', p.plotCode),
+                          _infoRow('พื้นที่สำรวจ(ไร่)', rai.toStringAsFixed(2)),
+                          _infoRow('ประเภทอ้อย', '${meta['caneType'] ?? '—'}'),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  // ภาพถ่าย — pattern เดียวกับหน้าบันทึกกิจกรรม
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(height: 14),
+                    // ปีเป้าหมาย + สถานะแปลง — การ์ดขาวรวมแถวเลือก
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          _optRow(
+                            'ปีการผลิตเป้าหมาย',
+                            _targetYear,
+                            'เลือก',
+                            () => _pickYear(years),
+                          ),
+                          _optRow(
+                            'สถานะแปลง',
+                            _status,
+                            'เลือก',
+                            () => opts == null
+                                ? _toast('กำลังโหลดตัวเลือก')
+                                : _pickStatus(opts),
+                          ),
+                        ],
+                      ),
                     ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            const Expanded(
-                              child: Text(
-                                'ภาพถ่าย',
-                                style: TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                    const SizedBox(height: 10),
+                    // ข้อเสนอแนะ
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'ข้อเสนอแนะ',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
                             ),
-                            Text(
-                              '${_photos.length}/$_maxPhotos',
-                              style: const TextStyle(color: Colors.black54),
-                            ),
-                          ],
-                        ),
-                        if (_photos.isNotEmpty) ...[
-                          const SizedBox(height: 12),
+                          ),
+                          const SizedBox(height: 6),
                           SizedBox(
-                            height: 88,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _photos.length,
-                              separatorBuilder: (_, _) =>
-                                  const SizedBox(width: 10),
-                              itemBuilder: (context, i) => Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: Image.file(
-                                      File(_photos[i]),
-                                      width: 88,
-                                      height: 88,
-                                      cacheWidth: 176,
-                                      fit: BoxFit.cover,
-                                    ),
+                            height: 96,
+                            child: TextField(
+                              textAlign: TextAlign.center,
+                              textAlignVertical: TextAlignVertical.center,
+                              controller: _noteCtrl,
+                              expands: true,
+                              maxLines: null,
+                              style: const TextStyle(fontSize: 16),
+                              decoration: InputDecoration(
+                                hintText: 'พิมพ์ข้อเสนอแนะ',
+                                isDense: true,
+                                filled: true,
+                                fillColor: Colors.grey.shade100,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
                                   ),
-                                  Positioned(
-                                    top: -4,
-                                    right: -4,
-                                    child: GestureDetector(
-                                      onTap: () =>
-                                          setState(() => _photos.removeAt(i)),
-                                      child: const CircleAvatar(
-                                        radius: 11,
-                                        backgroundColor: Colors.white,
-                                        child: Icon(
-                                          Iconsax.close_circle,
-                                          size: 16,
-                                          color: Colors.black87,
-                                        ),
-                                      ),
-                                    ),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: Colors.grey.shade300,
                                   ),
-                                ],
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: const BorderSide(
+                                    color: AppColors.gold,
+                                    width: 2,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
                         ],
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 46,
-                          child: OutlinedButton.icon(
-                            onPressed: _photos.length < _maxPhotos
-                                ? _pickPhoto
-                                : null,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: AppColors.green,
-                              side: const BorderSide(color: AppColors.green),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // ภาพถ่าย — pattern เดียวกับหน้าบันทึกกิจกรรม
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              const Expanded(
+                                child: Text(
+                                  'ภาพถ่าย',
+                                  style: TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              Text(
+                                '${_photos.length}/$_maxPhotos',
+                                style: const TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                          if (_photos.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 88,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _photos.length,
+                                separatorBuilder: (_, _) =>
+                                    const SizedBox(width: 10),
+                                itemBuilder: (context, i) => Stack(
+                                  clipBehavior: Clip.none,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: Image.file(
+                                        File(_photos[i]),
+                                        width: 88,
+                                        height: 88,
+                                        cacheWidth: 176,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, _, _) => Container(
+                                          color: Colors.black12,
+                                          child: const Icon(
+                                            Iconsax.gallery_slash,
+                                            color: Colors.black38,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: -4,
+                                      right: -4,
+                                      child: GestureDetector(
+                                        onTap: () =>
+                                            setState(() => _photos.removeAt(i)),
+                                        child: const CircleAvatar(
+                                          radius: 11,
+                                          backgroundColor: Colors.white,
+                                          child: Icon(
+                                            Iconsax.close_circle,
+                                            size: 16,
+                                            color: Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            icon: const Icon(Iconsax.camera, size: 24),
-                            label: const Text(
-                              'เพิ่มรูปภาพ',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                          ],
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: OutlinedButton.icon(
+                              onPressed: _photos.length < _maxPhotos
+                                  ? _pickPhoto
+                                  : null,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppColors.green,
+                                side: const BorderSide(color: AppColors.green),
+                              ),
+                              icon: const Icon(Iconsax.camera, size: 24),
+                              label: const Text(
+                                'เพิ่มรูปภาพ',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.green,
-                      padding: const EdgeInsets.symmetric(vertical: 15),
-                    ),
-                    onPressed: _saving ? null : _save,
-                    child: Text(
-                      _saving ? 'กำลังบันทึก…' : 'บันทึกยืนยัน',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.bold,
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              );
-            },
-          ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.green,
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                      ),
+                      onPressed: _saving ? null : _save,
+                      child: Text(
+                        _saving ? 'กำลังบันทึก…' : 'บันทึกยืนยัน',
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+      ),
     );
   }
 }

@@ -44,7 +44,7 @@ class LocationService {
       return LatLng(p.latitude, p.longitude);
     } catch (_) {
       // fix ใหม่ไม่ได้ — ทิ้ง fix เก่าไปดีกว่าส่งพิกัดผิด
-      return last != null ? LatLng(last.latitude, last.longitude) : null;
+      return null;
     }
   }
 

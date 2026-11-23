@@ -30,6 +30,8 @@ class MapViewModel extends ChangeNotifier {
     // จะพร้อมก่อน GoogleMap mount → initialCamera ชี้ตำแหน่งจริง
     // ได้เลยไม่ต้องรอ animate หลัง onMapCreated
     initialLocate = locate();
+    // โหลดสถานะจุดเสี่ยงทันที — polygon ทาสีตามค่านี้
+    unawaited(refreshRiskTypes());
     // Seeded from the download screen — skip the initial fetch.
     if (initialParcels != null) {
       _parcels = initialParcels;
@@ -181,6 +183,20 @@ class MapViewModel extends ChangeNotifier {
   /// Viewport refetch in progress — drives the thin top progress bar.
   bool _loadingViewport = false;
   bool get loadingViewport => _loadingViewport;
+
+  /// ประเภทจุดเสี่ยงล่าสุดต่อ plotId — แผนที่ทาสี polygon ตามค่านี้
+  /// (มีสถานะ = สีตามชนิดภัย / บันทึกแล้วไม่มีสถานะ = ฟ้า / ร่าง = เขียว)
+  Map<String, String> _riskTypes = const {};
+  Map<String, String> get riskTypes => _riskTypes;
+
+  /// โหลดจุดเสี่ยงจากเครื่องใหม่ — เรียกตอนเปิดแผนที่และหลัง sheet
+  /// แปลงปิด (บันทึกจุดเสี่ยงใน info sheet → สี polygon เปลี่ยนทันที)
+  Future<void> refreshRiskTypes() async {
+    try {
+      _riskTypes = await _service.riskPointTypes();
+    } catch (_) {}
+    _safeNotify();
+  }
 
   /// ขอบเขตที่ _parcels ครอบคลุม "ครบ" — กรอบใหม่ที่อยู่ภายในครอบนี้
   /// ข้อมูลมีอยู่แล้ว ไม่ต้อง fetch (download เต็มก็นับ coverage)
@@ -367,11 +383,30 @@ class MapViewModel extends ChangeNotifier {
     // subscribe position stream ด้วย — แผง GPS ในแถบล่างต้องมี
     // พิกัด/คลาดเคลื่อนจริงแม้โหมดแตะวาด (ไม่ได้เดินวัด)
     if (await _location.ensurePermission()) {
-      _posSub ??= _location.positionStream().listen(
-        _onPosition,
-        onError: (_) {},
+      _ensurePosSub();
+    }
+  }
+
+  /// subscribe position stream จุดเดียว — stream ตายเงียบ (GPS ดับ/
+  /// ถูกถอนสิทธิ์กลางทาง) ต้อง resub ใหม่ได้ ไม่งั้นตำแหน่งหยุด
+  /// อัปเดตโดยไม่มีใครรู้ (`_posSub` ยัง non-null แต่ stream ตายแล้ว)
+  void _ensurePosSub() {
+    void revive() {
+      final dead = _posSub;
+      _posSub = null;
+      dead?.cancel();
+      unawaited(
+        Future.delayed(const Duration(seconds: 3), () {
+          if (!_disposed && (_walking || _drawing)) _ensurePosSub();
+        }),
       );
     }
+
+    _posSub ??= _location.positionStream().listen(
+      _onPosition,
+      onDone: revive,
+      onError: (_) => revive(),
+    );
   }
 
   /// Last known user position — set by [locate] (GPS button) or live
@@ -406,7 +441,11 @@ class MapViewModel extends ChangeNotifier {
     _corners.clear();
     _walkStartedAt = DateTime.now();
     _safeNotify();
-    _posSub = _location.positionStream().listen(_onPosition, onError: (_) {});
+    // sub เก่าอาจค้างจาก startDrawing — ต้องปิดก่อนไม่งั้น
+    // 2 stream ยิง _onPosition ซ้อน → ลงจุดซ้ำทุก fix
+    await _posSub?.cancel();
+    _posSub = null;
+    _ensurePosSub();
     return null;
   }
 
@@ -670,6 +709,12 @@ class MapViewModel extends ChangeNotifier {
         } catch (_) {}
       }
       cancelDrawing();
+      // POST หลุดกลางทาง → createParcel fallback เซฟเป็นร่าง —
+      // ต้องบอกตรงๆ ไม่ใช่ "สำเร็จ" เดี๋ยว user คิดว่าขึ้นระบบแล้ว
+      if (!draft && p.isDraft) {
+        return 'ส่งขึ้นเซิร์ฟเวอร์ไม่ได้ — บันทึกเป็นฉบับร่างไว้แล้ว '
+            'ยืนยันส่งใหม่ได้จากรายการร่างแปลง';
+      }
       return null;
     } catch (e) {
       return '$e';

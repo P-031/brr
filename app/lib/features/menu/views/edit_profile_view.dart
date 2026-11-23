@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 
@@ -44,16 +45,12 @@ class _EditProfileViewState extends State<EditProfileView> {
     if (source == null) return;
     // pickImage throw ได้ (already_active / camera busy บนบางเครื่อง)
     try {
-      final x = await ImagePicker().pickImage(
-        source: source,
-        maxWidth: 1024,
-      );
-      if (x != null) setState(() => _photo = x);
+      final x = await ImagePicker().pickImage(source: source, maxWidth: 1024);
+      if (x != null && mounted) setState(() => _photo = x);
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('เลือกรูปไม่สำเร็จ')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('เลือกรูปไม่สำเร็จ')));
     }
   }
 
@@ -64,9 +61,9 @@ class _EditProfileViewState extends State<EditProfileView> {
       photoPath: _photo?.path,
     );
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('บันทึกโปรไฟล์ในเครื่องแล้ว')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('บันทึกโปรไฟล์ในเครื่องแล้ว')));
     Navigator.pop(context);
   }
 
@@ -74,7 +71,7 @@ class _EditProfileViewState extends State<EditProfileView> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthViewModel>().user;
     return Scaffold(
-      appBar: AppBar(title: const Text('แก้ไขโปรไฟล์')),
+      appBar: brrAppBar('แก้ไขโปรไฟล์'),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -94,6 +91,10 @@ class _EditProfileViewState extends State<EditProfileView> {
                           : (user?.photoPath != null
                                 ? FileImage(File(user!.photoPath!))
                                 : null),
+                      onBackgroundImageError:
+                          _photo != null || user?.photoPath != null
+                          ? (_, _) {}
+                          : null,
                       child: _photo == null && user?.photoPath == null
                           ? Text(
                               (user?.displayName.isNotEmpty == true
@@ -135,6 +136,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           ),
           const SizedBox(height: 28),
           TextFormField(
+            textAlign: TextAlign.center,
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
@@ -145,6 +147,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           ),
           const SizedBox(height: 16),
           TextFormField(
+            textAlign: TextAlign.center,
             controller: _phoneCtrl,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(

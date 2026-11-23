@@ -12,6 +12,7 @@ import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/auth/data/auth_service.dart';
 import 'package:brr/features/auth/data/avatar_store.dart';
 import 'package:brr/features/auth/data/session_store.dart';
+import 'package:brr/features/map/data/parcel_service.dart';
 
 enum AuthStatus { restoring, unauthenticated, authenticating, authenticated }
 
@@ -69,10 +70,9 @@ class AuthViewModel extends ChangeNotifier {
     if (s == null) return;
     // Persist the picked photo first so the stored path points at a
     // durable copy, not the picker cache.
-    final saved =
-        photoPath != null
-            ? await _avatars.persist(photoPath, s.user.username)
-            : null;
+    final saved = photoPath != null
+        ? await _avatars.persist(photoPath, s.user.username)
+        : null;
     final u = s.user.copyWith(
       email: email,
       phone: phone,
@@ -117,8 +117,12 @@ class AuthViewModel extends ChangeNotifier {
         'newPassword': newPassword,
       });
       if (res.statusCode == 204) return null;
-      final body = jsonDecode(res.body);
-      if (body is Map && body['error'] is String) return body['error'] as String;
+      try {
+        final body = jsonDecode(res.body);
+        if (body is Map && body['error'] is String) {
+          return body['error'] as String;
+        }
+      } catch (_) {}
       return 'เปลี่ยนรหัสผ่านไม่สำเร็จ (${res.statusCode})';
     } catch (_) {
       return 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้';
@@ -137,7 +141,7 @@ class AuthViewModel extends ChangeNotifier {
     final expiry = session.accessTokenExpiry;
     final fresh = expiry == null || expiry.isBefore(DateTime.now());
     if (fresh && session.refreshToken != null) {
-      await refresh();
+      await _refreshDedup();
     }
     final token = _session?.accessToken;
     return (token == null || token.isEmpty) ? null : token;
@@ -168,10 +172,7 @@ class AuthViewModel extends ChangeNotifier {
     }
     try {
       _session = await _attachPhoto(
-        await _auth.refresh(
-          saved.refreshToken,
-          fallbackIdToken: saved.idToken,
-        ),
+        await _auth.refresh(saved.refreshToken, fallbackIdToken: saved.idToken),
       );
       _status = AuthStatus.authenticated;
       _offline = false;
@@ -274,16 +275,27 @@ class AuthViewModel extends ChangeNotifier {
     // server-side, or saved accounts' refresh tokens would die too
     // and the account picker on the login screen would be useless.
     await _clear();
+    // badge "ดูแล้ว" เป็นสถานะตามผู้ใช้ — ล้างไม่ให้คนถัดไปบนเครื่อง
+    // เดียวกันเห็น badge ตามการดูของคนก่อน (ร่าง/คิวส่งไม่แตะ)
+    unawaited(ParcelService.clearActivitySeen());
     notifyListeners();
   }
+
+  /// สถานะเน็ตล่าสุดที่ listener เห็น — ใช้ตรวจจังหวะ
+  /// offline→online (ไม่ใช่แค่สลับ wifi↔cellular)
+  bool _netWasDown = false;
 
   /// Retries the token refresh when connectivity returns and the
   /// session is in offline mode.
   void _onConnectivityChanged(List<ConnectivityResult> results) {
     final online = results.any((r) => r != ConnectivityResult.none);
-    if (online && isAuthenticated && _offline) {
-      refresh();
-    }
+    final becameOnline = online && _netWasDown;
+    _netWasDown = !online;
+    if (!online || !isAuthenticated) return;
+    if (_offline) unawaited(_refreshDedup());
+    // คิว PATCH ที่ค้างจากตอนออฟไลน์ — ส่งอัตโนมัติเมื่อเน็ตกลับ
+    // ไม่ต้องรอผู้ใช้เปิดหน้ารายละเอียดแปลงอีกครั้ง
+    if (becameOnline) unawaited(ParcelService(api).flushPendingEdits());
   }
 
   @override
@@ -291,6 +303,15 @@ class AuthViewModel extends ChangeNotifier {
     _connectivitySub?.cancel();
     super.dispose();
   }
+
+  /// refresh ที่กำลังทำอยู่ — Keycloak rotate refresh token ทุกครั้ง
+  /// ถ้า 2 request ยิง refresh ซ้อน (getAccessToken จากหลาย call
+  /// พร้อมกัน / connectivity event) ตัวที่สองจะโดนปฏิเสธแล้วไหลเข้า
+  /// AuthException → _clear() = ผู้ใช้หลุดออกทั้งที่ token ยังดี
+  Future<void>? _refreshing;
+
+  Future<void> _refreshDedup() =>
+      _refreshing ??= refresh().whenComplete(() => _refreshing = null);
 
   /// Refreshes the access token using the stored refresh token.
   /// Call when the app resumes or connectivity returns.
@@ -303,6 +324,9 @@ class AuthViewModel extends ChangeNotifier {
       );
       _offline = false;
       await _store.save(_session!);
+      // token สด + server ติดต่อได้ — จังหวะดีสุดในการส่งคิว
+      // PATCH ที่ค้างจากตอนออฟไลน์
+      unawaited(ParcelService(api).flushPendingEdits());
     } on AuthException {
       await _clear();
     } catch (_) {

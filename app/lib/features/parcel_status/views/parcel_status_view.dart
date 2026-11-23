@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/skeleton.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
 import 'package:brr/features/map/widgets/satellite_thumb.dart';
 import 'package:brr/features/parcel_status/models/plot_request.dart';
@@ -151,8 +152,11 @@ class _BodyState extends State<_Body> {
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: items.length,
-                  itemBuilder: (context, i) =>
-                      _RequestCard(r: items[i], status: tabs[_tab]),
+                  itemBuilder: (context, i) => _RequestCard(
+                    r: items[i],
+                    status: tabs[_tab],
+                    loader: vm.satThumb,
+                  ),
                 ),
         ),
       ],
@@ -218,10 +222,15 @@ class _BodyState extends State<_Body> {
 /// การ์ดคำขอแปลง 1 รายการ — ชื่อแปลง + ประเภทคำขอ + ค่าที่ขอ +
 /// ผู้ส่ง/วันที่ + chip สถานะ (ตรง tab ที่เลือก)
 class _RequestCard extends StatelessWidget {
-  const _RequestCard({required this.r, required this.status});
+  const _RequestCard({
+    required this.r,
+    required this.status,
+    required this.loader,
+  });
 
   final PlotRequestEntry r;
   final String status;
+  final SatThumbLoader loader;
 
   String _thaiDate(DateTime? d) {
     if (d == null) return '';
@@ -245,6 +254,7 @@ class _RequestCard extends StatelessWidget {
             SatelliteThumb(
               points: r.points,
               cacheKey: 'req-${r.id}',
+              loader: loader,
               fallback: ParcelOutline(points: r.points),
             ),
             const SizedBox(width: 12),

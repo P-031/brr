@@ -43,6 +43,17 @@ class ParcelDetailViewModel extends ChangeNotifier {
   Future<void> removeActivityDraft(String id) =>
       _service.removeActivityDraft(id);
 
+  /// นำส่งกิจกรรมร่างขึ้นระบบ — สำเร็จย้ายไปแท็บ "ส่งสำเร็จ",
+  /// พลาดย้ายไป "ส่งไม่สำเร็จ" (throw เพื่อให้ UI แจ้งเหตุผล)
+  Future<void> submitActivity(Map<String, dynamic> activity) =>
+      _service.submitActivity(parcel.id, activity);
+
+  /// จำนวนกิจกรรมใหม่ที่ยังไม่ได้เปิดดู — badge บนปุ่มเมนู
+  Future<int> unseenActivityCount() => _service.unseenActivityCount(parcel.id);
+
+  /// ทำเครื่องหมายว่าดูกิจกรรมครบแล้ว — badge หาย
+  Future<void> markActivitiesSeen() => _service.markActivitiesSeen(parcel.id);
+
   /// การยืนยันแปลงข้ามปีล่าสุดของแปลง — เก็บในเครื่องรอ endpoint
   Future<Map<String, dynamic>?> parcelConfirm() =>
       _service.parcelConfirmFor(parcel.id);
@@ -191,9 +202,14 @@ class ParcelDetailViewModel extends ChangeNotifier {
 
   Future<void> savePlotProject({
     required List<String> items,
+    Map<String, String> choices = const {},
     required bool passed,
-  }) =>
-      _service.savePlotProject(plotId: parcel.id, items: items, passed: passed);
+  }) => _service.savePlotProject(
+    plotId: parcel.id,
+    items: items,
+    choices: choices,
+    passed: passed,
+  );
 
   /// สถานะแปลงตัดที่บันทึกไว้ในเครื่อง — เก็บในเครื่องรอ endpoint
   Future<Map<String, dynamic>?> cutStatus() => _service.cutStatusFor(parcel.id);
@@ -217,21 +233,27 @@ class ParcelDetailViewModel extends ChangeNotifier {
 
   /// PATCH รูท/ลำดับ แล้ว refetch detail — listener (sheet/detail
   /// view) เห็นค่าใหม่ทันทีโดยไม่ต้อง reopen
-  Future<void> updateRouteSeq({String? rootNo, String? sequenceNo}) async {
+  /// คืน true เมื่อออฟไลน์ → บันทึกเข้าคิวในเครื่อง ส่งเองเมื่อเน็ตกลับ
+  Future<bool> updateRouteSeq({String? rootNo, String? sequenceNo}) async {
     final current = await detail;
     final rawVersion = current?['version'];
     final version = rawVersion is int ? rawVersion : null;
     if (version == null) {
       throw Exception('ยังโหลดข้อมูลแปลงไม่ครบ ลองใหม่อีกครั้ง');
     }
-    await _service.updateParcelMeta(
-      parcel.id,
-      version: version,
-      rootNo: rootNo,
-      sequenceNo: sequenceNo,
-    );
+    try {
+      await _service.updateParcelMeta(
+        parcel.id,
+        version: version,
+        rootNo: rootNo,
+        sequenceNo: sequenceNo,
+      );
+    } on PendingEditQueued {
+      return true;
+    }
     _detail = _service.fetchParcelDetail(parcel.id);
     notifyListeners();
+    return false;
   }
 
   /// ส่งคำขออัปเดตแปลง — `kind` = 'status' (คำขอ1) / 'edit' (คำขอ2)

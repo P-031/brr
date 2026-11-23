@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/data/satellite_thumb_service.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/parcel_status/models/plot_request.dart';
 
 /// ViewModel ของหน้า "สถานะแปลง" — แถบ tab สถานะดึงจาก backend
@@ -26,6 +28,10 @@ class ParcelStatusViewModel extends ChangeNotifier {
       ParcelStatusViewModel.forApi(context.read<ApiClient>());
 
   final ParcelService? _service;
+
+  /// loader รูปดาวเทียมให้ widget SatelliteThumb — view ไม่เห็น
+  /// ชั้น data ตรงๆ
+  SatThumbLoader get satThumb => SatelliteThumbService.load;
 
   List<String> _statuses = const [];
   List<PlotRequestEntry> _requests = const [];

@@ -79,6 +79,11 @@ class HomeView extends StatelessWidget {
                     backgroundImage: user?.photoPath != null
                         ? FileImage(File(user!.photoPath!))
                         : null,
+                    // ไฟล์รูปถูกลบภายนอก → provider throw; กัน error
+                    // spam แล้ว fallback เป็นวงกลมว่างเหมือนเดิม
+                    onBackgroundImageError: user?.photoPath != null
+                        ? (_, _) {}
+                        : null,
                     child: user?.photoPath == null
                         ? Text(
                             name.isNotEmpty ? name[0].toUpperCase() : '?',

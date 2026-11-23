@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/data/satellite_thumb_service.dart';
 import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/models/measurement_result.dart';
 
@@ -77,6 +79,10 @@ class DraftsViewModel extends ChangeNotifier {
   /// id ของร่างที่กำลังยืนยัน/แก้ไขอยู่ — ปิดปุ่มใบนั้นกันกดซ้ำ
   String? get busyId => _busyId;
 
+  /// loader รูปดาวเทียมให้ widget SatelliteThumb — view ผูกเข้า
+  /// widget ไม่เห็นชั้น data ตรงๆ
+  SatThumbLoader get satThumb => SatelliteThumbService.load;
+
   /// fetcher ของหน้าฟอร์มแก้ไขร่าง — ส่งต่อ service เหมือน
   /// MapViewModel ทำให้หน้าบันทึกการวัด
   Future<List<String>> fetchOfficers() => _service.fetchOfficers();
@@ -111,7 +117,7 @@ class DraftsViewModel extends ChangeNotifier {
   Future<String?> confirm(Parcel p) {
     return _save(
       p,
-      (service, points) => service.createParcel(
+      (points) => _service.createParcel(
         name: p.name,
         variety: p.variety ?? '',
         productionYear: p.productionYear ?? _s(p, 'productionYear'),
@@ -140,12 +146,12 @@ class DraftsViewModel extends ChangeNotifier {
             ? null
             : '${p.meta?['targetYield']}',
         note: _s(p, 'note'),
-        photos: [for (final x in p.meta?['photos'] as List? ?? const []) '$x'],
+        photos: _photosOf(p),
         points: points,
         survey: _surveyOf(p),
       ),
       confirm: true,
-      photos: [for (final x in p.meta?['photos'] as List? ?? const []) '$x'],
+      photos: _photosOf(p),
     );
   }
 
@@ -155,7 +161,7 @@ class DraftsViewModel extends ChangeNotifier {
   Future<String?> applyEdit(Parcel old, MeasurementResult r) {
     return _save(
       old,
-      (service, points) => service.createParcel(
+      (points) => _service.createParcel(
         name: r.name,
         productionYear: r.productionYear,
         officerName: r.officerName,
@@ -208,18 +214,26 @@ class DraftsViewModel extends ChangeNotifier {
     return Map<String, Object?>.from(raw);
   }
 
+  /// meta['photos'] จาก backend/เครื่องอาจไม่ใช่ List เสมอ
+  /// (field ผิดชนิด) — cast ดิบจะพังทั้งหน้ารายการ
+  static List<String> _photosOf(Parcel p) {
+    final raw = p.meta?['photos'];
+    return raw is List ? [for (final x in raw) '$x'] : const [];
+  }
+
   /// สร้าง parcel ผ่าน callback → สำเร็จแล้วจัดการร่างต้นทาง
   /// (ยืนยัน = stamp confirmed; แก้ไข = ลบทิ้งเพราะถูกแทนด้วยร่างใหม่)
+  /// callback ปิดล้อม _service ไว้ใน VM — ไม่รั่วชนิด service ออกนอกชั้น
   Future<String?> _save(
     Parcel source,
-    Future<Parcel> Function(ParcelService, List<LatLng>) create, {
+    Future<Parcel> Function(List<LatLng>) create, {
     bool confirm = false,
     List<String> photos = const [],
   }) async {
     _busyId = source.id;
     notifyListeners();
     try {
-      final created = await create(_service, source.points);
+      final created = await create(source.points);
       if (confirm) {
         // รูปประกอบการวัดไม่มี endpoint อัปโหลด — เก็บเป็น activity
         // draft ผูกกับแปลงจริงที่สร้าง กันรูปหายเงียบๆ ตอนยืนยัน

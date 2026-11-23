@@ -211,6 +211,8 @@ class _MapBottomBarState extends State<MapBottomBar>
   }
 
   void _dragPanel(DragUpdateDetails d) {
+    // height 0 ระหว่าง layout เฟรมแรก → หารศูนย์ได้ NaN
+    if (_panelHeight <= 0) return;
     _ctrl.value = (_ctrl.value - d.delta.dy / _panelHeight).clamp(0.0, 1.0);
   }
 

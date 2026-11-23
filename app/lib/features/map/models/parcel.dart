@@ -1,6 +1,8 @@
 import 'package:latlong2/latlong.dart';
 import 'package:maps_toolkit/maps_toolkit.dart' as mt;
 
+import 'package:brr/features/map/models/geo_outline.dart';
+
 /// A land parcel fetched from the backend — boundary coordinates plus
 /// a display name. Area is computed locally with the shoelace formula.
 class Parcel {
@@ -47,37 +49,37 @@ class Parcel {
   /// Backend shape — `/plots/map` returns `outline`, while `POST /plots`
   /// and `/plots/:id` return `points`; both are `{latitude, longitude}`.
   factory Parcel.fromJson(Map<String, dynamic> json) {
-    final raw = (json['outline'] ?? json['points']) as List? ?? [];
     // พิกัดเสียข้ามไปแทนที่จะล้มทั้งแปลง — payload หลักหมื่นแปลง
-    // อาจมี item เพี้ยนอยู่สักตัว
-    final points = <LatLng>[
-      for (final c in raw)
-        if (c is Map && c['latitude'] is num && c['longitude'] is num)
-          LatLng(
-            (c['latitude'] as num).toDouble(),
-            (c['longitude'] as num).toDouble(),
-          ),
-    ];
-    final farmer = json['farmer'] as Map<String, dynamic>?;
-    final center = json['center'] as Map<String, dynamic>?;
+    // อาจมี item เพี้ยนอยู่สักตัว (parser รับทั้ง list lat/lng + GeoJSON)
+    final points = outlineLatLngs(json['outline'] ?? json['points']);
+    // cast แบบดิบจะทำทั้งแปลงหลุดถ้า backend เปลี่ยนชนิด field
+    // (เช่น meta ส่งเป็น List) — เช็ก is ก่อนเสมอ
+    final farmer = json['farmer'] is Map
+        ? json['farmer'] as Map<String, dynamic>
+        : null;
+    final center = json['center'] is Map
+        ? json['center'] as Map<String, dynamic>
+        : null;
+    final meta = json['meta'] is Map
+        ? json['meta'] as Map<String, dynamic>
+        : null;
     return Parcel(
       id: '${json['id'] ?? ''}',
       name: '${json['name'] ?? ''}',
-      variety: json['variety'] as String?,
-      owner: farmer?['displayName'] as String?,
-      status: json['status'] as String?,
+      variety: json['variety']?.toString(),
+      owner: farmer?['displayName']?.toString(),
+      status: json['status']?.toString(),
       // "" จาก backend นับเป็นไม่ระบุปี (null) — ให้ตรงกลุ่มกับ
       // หน้าเลือกดาวน์โหลดและ yearAllowlist ของแผนที่
       productionYear: () {
         final y =
-            (json['meta'] as Map<String, dynamic>?)?['productionYear']
-                as String? ??
-            json['productionYear'] as String?;
+            meta?['productionYear']?.toString() ??
+            json['productionYear']?.toString();
         return (y == null || y.isEmpty) ? null : y;
       }(),
       points: points,
       isDraft: json['isDraft'] == true,
-      meta: json['meta'] as Map<String, dynamic>?,
+      meta: meta,
       savedAt: DateTime.tryParse('${json['savedAt'] ?? ''}'),
       centerOverride:
           center == null ||
@@ -186,7 +188,9 @@ typedef OptionItem = ({String code, String name});
 
 /// `{name, required}` — เกณฑ์โครงการส่งเสริมแปลงแต่ละข้อ;
 /// required = เกณฑ์บังคับที่ต้องครบถึงผ่าน Brr Model
-typedef CriteriaItem = ({String name, bool required});
+/// เกณฑ์โครงการ — `options` = ตัวเลือกย่อยที่ backend ส่งมากับเกณฑ์
+/// (เช่น ชนิดปุ๋ยอินทรีย์) ว่างถ้าเกณฑ์นั้นไม่มีให้เลือกเพิ่ม
+typedef CriteriaItem = ({String name, bool required, List<String> options});
 
 /// หน้าของรายการแปลงจาก backend — items + flag ว่าข้อมูล
 /// ถูกตัด (limit) ไหม
@@ -224,14 +228,28 @@ class FormOptions {
   });
 
   factory FormOptions.fromJson(Map<String, dynamic> j) {
-    List<String> names(String k) => [
-      for (final v in j[k] as List? ?? const []) '$v',
-    ];
-    Map<String, List<String>> mapList(String k) => {
-      if (j[k] is Map)
-        for (final e in (j[k] as Map).entries)
-          '${e.key}': [for (final v in e.value as List? ?? const []) '$v'],
-    };
+    // field ผิดชนิด (backend ส่ง Map/String แทน List) → ข้าม field นั้น
+    // ไม่ล้มทั้ง options — cast ดิบเคยทำฟอร์มพังทั้งหน้า
+    List<String> names(String k) {
+      final raw = j[k];
+      return [
+        if (raw is List)
+          for (final v in raw) '$v',
+      ];
+    }
+
+    Map<String, List<String>> mapList(String k) {
+      final raw = j[k];
+      return {
+        if (raw is Map)
+          for (final e in raw.entries)
+            '${e.key}': [
+              if (e.value is List)
+                for (final v in e.value as List) '$v',
+            ],
+      };
+    }
+
     return FormOptions(
       zones: names('zones'),
       provinces: names('provinces'),
@@ -251,8 +269,9 @@ class FormOptions {
       parcelStatuses: names('parcelStatuses'),
       riskLevels: names('riskLevels'),
       prevPlots: [
-        for (final v in j['prevPlots'] as List? ?? const [])
-          (code: '${v['code']}', name: '${v['name']}'),
+        if (j['prevPlots'] is List)
+          for (final v in j['prevPlots'] as List)
+            if (v is Map) (code: '${v['code']}', name: '${v['name']}'),
       ],
       fertilizerFormulas: names('fertilizerFormulas'),
       organicFertilizerTypes: names('organicFertilizerTypes'),
@@ -262,29 +281,40 @@ class FormOptions {
       // รองรับทั้ง object {name, required} และ string ล้วน;
       // ตัด entry ที่ชื่อว่างออก กันแถวเปล่าใน UI
       projectCriteria: [
-        for (final v in j['projectCriteria'] as List? ?? const [])
-          if (v is Map
-              ? '${v['name'] ?? v['label'] ?? ''}'.isNotEmpty
-              : '$v'.isNotEmpty)
-            v is Map
-                ? (
-                    name: '${v['name'] ?? v['label'] ?? ''}',
-                    required: v['required'] == true,
-                  )
-                : (name: '$v', required: false),
+        if (j['projectCriteria'] is List)
+          for (final v in j['projectCriteria'] as List)
+            if (v is Map
+                ? '${v['name'] ?? v['label'] ?? ''}'.isNotEmpty
+                : '$v'.isNotEmpty)
+              v is Map
+                  ? (
+                      name: '${v['name'] ?? v['label'] ?? ''}',
+                      required: v['required'] == true,
+                      // ตัวเลือกย่อยของเกณฑ์ — backend อาจส่ง
+                      // ["a","b"] หรือ [{name}] เผื่อรูปแบบเปลี่ยน
+                      options: [
+                        if (v['options'] is List)
+                          for (final o in v['options'] as List)
+                            o is Map
+                                ? '${o['name'] ?? o['label'] ?? ''}'
+                                : '$o',
+                      ],
+                    )
+                  : (name: '$v', required: false, options: const []),
       ],
       // รองรับทั้ง object {code, name} และ string ล้วน (code = name)
       cutStatuses: [
-        for (final v in j['cutStatuses'] as List? ?? const [])
-          if (v is Map
-              ? '${v['name'] ?? v['label'] ?? v['code'] ?? ''}'.isNotEmpty
-              : '$v'.isNotEmpty)
-            v is Map
-                ? (
-                    code: '${v['code'] ?? v['name'] ?? ''}',
-                    name: '${v['name'] ?? v['label'] ?? v['code'] ?? ''}',
-                  )
-                : (code: '$v', name: '$v'),
+        if (j['cutStatuses'] is List)
+          for (final v in j['cutStatuses'] as List)
+            if (v is Map
+                ? '${v['name'] ?? v['label'] ?? v['code'] ?? ''}'.isNotEmpty
+                : '$v'.isNotEmpty)
+              v is Map
+                  ? (
+                      code: '${v['code'] ?? v['name'] ?? ''}',
+                      name: '${v['name'] ?? v['label'] ?? v['code'] ?? ''}',
+                    )
+                  : (code: '$v', name: '$v'),
       ],
     );
   }
@@ -295,7 +325,8 @@ class FormOptions {
   ) {
     if (j is! Map) return const {};
     List<String> strs(dynamic v) => [
-      for (final e in v as List? ?? const []) '$e',
+      if (v is List)
+        for (final e in v) '$e',
     ];
     Map<String, List<String>> tambons(dynamic v) => {
       if (v is Map)

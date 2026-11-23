@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
+import 'package:brr/features/map/viewmodels/failed_edits_viewmodel.dart';
+import 'package:brr/features/map/views/failed_edits_view.dart';
 import 'package:brr/features/menu/views/change_password_view.dart';
 import 'package:brr/features/menu/views/edit_profile_view.dart';
 
@@ -21,123 +23,126 @@ class MenuView extends StatelessWidget {
     return SafeArea(
       child: Column(
         children: [
-        Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 34,
-                backgroundColor: AppColors.gold,
-                child: CircleAvatar(
-                  radius: 32,
-                  backgroundColor: Colors.white,
-                backgroundImage: user?.photoPath != null
-                    ? FileImage(File(user!.photoPath!))
-                    : null,
-                child: user?.photoPath == null
-                    ? Text(
-                        (user?.displayName.isNotEmpty == true
-                                ? user!.displayName[0]
-                                : '?')
-                            .toUpperCase(),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 34,
+                  backgroundColor: AppColors.gold,
+                  child: CircleAvatar(
+                    radius: 32,
+                    backgroundColor: Colors.white,
+                    backgroundImage: user?.photoPath != null
+                        ? FileImage(File(user!.photoPath!))
+                        : null,
+                    onBackgroundImageError: user?.photoPath != null
+                        ? (_, _) {}
+                        : null,
+                    child: user?.photoPath == null
+                        ? Text(
+                            (user?.displayName.isNotEmpty == true
+                                    ? user!.displayName[0]
+                                    : '?')
+                                .toUpperCase(),
+                            style: const TextStyle(
+                              color: AppColors.green,
+                              fontSize: 26,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          )
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.displayName ?? 'ผู้ใช้',
                         style: const TextStyle(
-                          color: AppColors.green,
-                          fontSize: 26,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
                         ),
-                      )
-                    : null,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user?.displayName ?? 'ผู้ใช้',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        _badge(user?.email ?? '-'),
-                        // เขตจาก claim ของ token — แสดงเฉพาะตอน
-                        // backend/Keycloak ส่งมาจริง
-                        if (user?.zone != null) ...[
-                          const SizedBox(width: 6),
-                          _badge('Zone: ${user!.zone}'),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          _badge(user?.email ?? '-'),
+                          // เขตจาก claim ของ token — แสดงเฉพาะตอน
+                          // backend/Keycloak ส่งมาจริง
+                          if (user?.zone != null) ...[
+                            const SizedBox(width: 6),
+                            _badge('Zone: ${user!.zone}'),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Card(
-            child: Column(
-              children: [
-                _item(
-                  context,
-                  Iconsax.user,
-                  'แก้ไขโปรไฟล์',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const EditProfileView(),
-                    ),
+                      ),
+                    ],
                   ),
-                ),
-                _item(context, Iconsax.setting_2, 'ตั้งค่า'),
-                _item(
-                  context,
-                  Iconsax.lock,
-                  'เปลี่ยนรหัสผ่าน',
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ChangePasswordView(),
-                    ),
-                  ),
-                ),
-                _item(
-                  context,
-                  Iconsax.message,
-                  'เชื่อมต่อ Line',
-                  iconColor: AppColors.greenLight,
-                  divider: false,
                 ),
               ],
             ),
           ),
-        ),
-        const SizedBox(height: 20),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Card(
-            child: ListTile(
-              leading: const Icon(Iconsax.logout, color: Colors.red),
-              title: const Text(
-                'ออกจากระบบ',
-                style: TextStyle(color: Colors.red, fontSize: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              child: Column(
+                children: [
+                  _item(
+                    context,
+                    Iconsax.user,
+                    'แก้ไขโปรไฟล์',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const EditProfileView(),
+                      ),
+                    ),
+                  ),
+                  _item(context, Iconsax.setting_2, 'ตั้งค่า'),
+                  _item(
+                    context,
+                    Iconsax.lock,
+                    'เปลี่ยนรหัสผ่าน',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const ChangePasswordView(),
+                      ),
+                    ),
+                  ),
+                  _item(
+                    context,
+                    Iconsax.message,
+                    'เชื่อมต่อ Line',
+                    iconColor: AppColors.greenLight,
+                  ),
+                  const _FailedEditsTile(),
+                ],
               ),
-              onTap: vm.signOut,
             ),
           ),
-        ),
-        const Spacer(),
-        const Padding(
-          padding: EdgeInsets.only(bottom: 16),
-          child: Text(
-            'BRR เวอร์ชั่น 1.0.0',
-            style: TextStyle(color: Colors.black38, fontSize: 13),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              child: ListTile(
+                leading: const Icon(Iconsax.logout, color: Colors.red),
+                title: const Text(
+                  'ออกจากระบบ',
+                  style: TextStyle(color: Colors.red, fontSize: 16),
+                ),
+                onTap: vm.signOut,
+              ),
+            ),
           ),
-        ),
+          const Spacer(),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 16),
+            child: Text(
+              'BRR เวอร์ชั่น 1.0.0',
+              style: TextStyle(color: Colors.black38, fontSize: 13),
+            ),
+          ),
         ],
       ),
     );
@@ -170,11 +175,83 @@ class MenuView extends StatelessWidget {
           title: Text(label, style: const TextStyle(fontSize: 15)),
           onTap:
               onTap ??
-              () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('ยังไม่เปิดใช้งาน')),
-              ),
+              () => ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('ยังไม่เปิดใช้งาน'))),
         ),
         if (divider) const Divider(height: 1, indent: 16, endIndent: 16),
+      ],
+    );
+  }
+}
+
+/// เมนู "การแก้ไขที่ส่งไม่สำเร็จ" — badge นับรายการ PATCH ที่
+/// server ปฏิเสธค้างในเครื่อง; stateful เพื่อ refresh count
+/// หลังผู้ใช้กลับจากหน้ารายการ (retry/discard เปลี่ยนจำนวน)
+class _FailedEditsTile extends StatefulWidget {
+  const _FailedEditsTile();
+
+  @override
+  State<_FailedEditsTile> createState() => _FailedEditsTileState();
+}
+
+class _FailedEditsTileState extends State<_FailedEditsTile> {
+  int _count = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  Future<void> _reload() async {
+    // context.read ข้างใน failedCountFor throw ถ้า widget unmount
+    // ไปแล้ว — guard ก่อนใช้ context เสมอ
+    if (!mounted) return;
+    final n = await FailedEditsViewModel.failedCountFor(context);
+    if (mounted) setState(() => _count = n);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        ListTile(
+          leading: Icon(
+            Iconsax.warning_2,
+            color: _count > 0 ? Colors.orange : AppColors.green,
+          ),
+          title: const Text(
+            'การแก้ไขที่ส่งไม่สำเร็จ',
+            style: TextStyle(fontSize: 15),
+          ),
+          trailing: _count > 0
+              ? Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '$_count',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                )
+              : null,
+          onTap: () async {
+            await Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const FailedEditsView()));
+            _reload();
+          },
+        ),
       ],
     );
   }

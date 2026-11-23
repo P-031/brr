@@ -9,6 +9,7 @@ import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/utils/fuzzy_search.dart';
 import 'package:brr/core/widgets/skeleton.dart';
 import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
 import 'package:brr/features/map/widgets/map_widgets.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
@@ -615,6 +616,7 @@ class _BodyState extends State<_Body> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
                       child: TextField(
+                        textAlign: TextAlign.center,
                         autofocus: true,
                         style: const TextStyle(fontSize: 18),
                         onChanged: (q) => setSheet(() => query = q),
@@ -818,6 +820,7 @@ class _BodyState extends State<_Body> {
                 children: [
                   Expanded(
                     child: TextField(
+                      textAlign: TextAlign.center,
                       onChanged: vm.setSearch,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
@@ -971,6 +974,7 @@ class _BodyState extends State<_Body> {
           final item = vm.items[displayIndex(i)];
           return _PlotCard(
             item: item,
+            loader: vm.satThumb,
             selected: vm.selectedId == item.id,
             onSelect: () => _openParcelMap(item, vm),
             onTap: () {
@@ -1035,11 +1039,13 @@ class _FilterButton extends StatelessWidget {
 class _PlotCard extends StatelessWidget {
   const _PlotCard({
     required this.item,
+    required this.loader,
     required this.selected,
     required this.onSelect,
     required this.onTap,
   });
 
+  final SatThumbLoader loader;
   final PlotListItem item;
   final bool selected;
   final VoidCallback onSelect;
@@ -1072,6 +1078,7 @@ class _PlotCard extends StatelessWidget {
               SatelliteThumb(
                 points: p.points,
                 cacheKey: p.id,
+                loader: loader,
                 fallback: ParcelOutline(points: p.points),
               ),
               const SizedBox(width: 12),

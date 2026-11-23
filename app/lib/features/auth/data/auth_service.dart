@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:brr/core/config/keycloak_config.dart';
 import 'package:brr/features/auth/models/auth_session.dart';
 import 'package:brr/features/auth/models/user_profile.dart';
+import 'package:brr/core/utils/json_safe.dart';
 
 /// Thrown when the user closes the Keycloak login page without signing in.
 class AuthCancelledException implements Exception {
@@ -61,24 +62,33 @@ class AuthService {
     String username,
     String password,
   ) async {
-    final res = await http.post(
-      Uri.parse('${KeycloakConfig.issuer}/protocol/openid-connect/token'),
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: {
-        'grant_type': 'password',
-        'client_id': KeycloakConfig.clientId,
-        'username': username,
-        'password': password,
-        'scope': KeycloakConfig.scopes.join(' '),
-      },
-    );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final res = await http
+        .post(
+          Uri.parse('${KeycloakConfig.issuer}/protocol/openid-connect/token'),
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: {
+            'grant_type': 'password',
+            'client_id': KeycloakConfig.clientId,
+            'username': username,
+            'password': password,
+            'scope': KeycloakConfig.scopes.join(' '),
+          },
+        )
+        // ไม่มี timeout = login ค้างนิ่งนานหลายนาทีบนเน็ตตาย
+        .timeout(const Duration(seconds: 30));
+    // ตอบกลับไม่ใช่ JSON (proxy/เกทเวย์ล้ม) → error อ่านได้แทน FormatException
+    final Map<String, dynamic> json;
+    try {
+      json = jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw AuthException('ติดต่อเซิร์ฟเวอร์ไม่สำเร็จ');
+    }
     if (res.statusCode != 200) {
-      final error = json['error'] as String?;
+      final error = json['error']?.toString();
       throw AuthException(
         error == 'invalid_grant'
             ? 'ชื่อบัญชีหรือรหัสผ่านไม่ถูกต้อง'
-            : (json['error_description'] as String? ?? 'เข้าสู่ระบบไม่สำเร็จ'),
+            : (json['error_description']?.toString() ?? 'เข้าสู่ระบบไม่สำเร็จ'),
       );
     }
     return _sessionFromJson(json);
@@ -95,19 +105,26 @@ class AuthService {
     String refreshToken, {
     String? fallbackIdToken,
   }) async {
-    final res = await http.post(
-      Uri.parse('${KeycloakConfig.issuer}/protocol/openid-connect/token'),
-      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: {
-        'grant_type': 'refresh_token',
-        'client_id': KeycloakConfig.clientId,
-        'refresh_token': refreshToken,
-      },
-    );
-    final json = jsonDecode(res.body) as Map<String, dynamic>;
+    final res = await http
+        .post(
+          Uri.parse('${KeycloakConfig.issuer}/protocol/openid-connect/token'),
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: {
+            'grant_type': 'refresh_token',
+            'client_id': KeycloakConfig.clientId,
+            'refresh_token': refreshToken,
+          },
+        )
+        .timeout(const Duration(seconds: 30));
+    final Map<String, dynamic> json;
+    try {
+      json = jsonDecode(res.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw AuthException('ติดต่อเซิร์ฟเวอร์ไม่สำเร็จ');
+    }
     if (res.statusCode != 200) {
       throw AuthException(
-        json['error_description'] as String? ?? 'เซสชันหมดอายุ',
+        json['error_description']?.toString() ?? 'เซสชันหมดอายุ',
       );
     }
     return _sessionFromJson(json, fallbackIdToken: fallbackIdToken);
@@ -118,15 +135,16 @@ class AuthService {
     if (idTokenHint == null) return;
     // Plain http call — AppAuth's native https check crashes the app
     // on http:// Keycloak during dev.
-    final uri = Uri.parse(
-      '${KeycloakConfig.issuer}/protocol/openid-connect/logout',
-    ).replace(
-      queryParameters: {
-        'id_token_hint': idTokenHint,
-        'post_logout_redirect_uri': KeycloakConfig.postLogoutRedirectUri,
-        'client_id': KeycloakConfig.clientId,
-      },
-    );
+    final uri =
+        Uri.parse(
+          '${KeycloakConfig.issuer}/protocol/openid-connect/logout',
+        ).replace(
+          queryParameters: {
+            'id_token_hint': idTokenHint,
+            'post_logout_redirect_uri': KeycloakConfig.postLogoutRedirectUri,
+            'client_id': KeycloakConfig.clientId,
+          },
+        );
     final client = http.Client();
     try {
       final req = http.Request('GET', uri)..followRedirects = false;
@@ -155,15 +173,15 @@ class AuthService {
     Map<String, dynamic> json, {
     String? fallbackIdToken,
   }) {
-    final token = json['access_token'] as String?;
+    final token = json['access_token']?.toString();
     if (token == null) {
       throw StateError('Keycloak returned no access token');
     }
-    final idToken = json['id_token'] as String? ?? fallbackIdToken;
-    final expiresIn = json['expires_in'] as int?;
+    final idToken = json['id_token']?.toString() ?? fallbackIdToken;
+    final expiresIn = toIntOrNull(json['expires_in']);
     return AuthSession(
       accessToken: token,
-      refreshToken: json['refresh_token'] as String?,
+      refreshToken: json['refresh_token']?.toString(),
       idToken: idToken,
       accessTokenExpiry: expiresIn != null
           ? DateTime.now().add(Duration(seconds: expiresIn))

@@ -67,11 +67,8 @@ class SkelLine extends StatelessWidget {
   final double height;
 
   @override
-  Widget build(BuildContext context) => SkelBox(
-    width: width,
-    height: height,
-    radius: height / 2,
-  );
+  Widget build(BuildContext context) =>
+      SkelBox(width: width, height: height, radius: height / 2);
 }
 
 /// วงกลมเทา — ใช้แทนไอคอน/ปุ่มกลม

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
+import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/digit_formatter.dart';
 import 'package:brr/core/widgets/thai_date_picker.dart';
@@ -16,21 +17,6 @@ const _statusColors = {
   'F': Color(0xFF2E7D32),
   'S': Color(0xFF1565C0),
 };
-
-const _months = [
-  'ม.ค.',
-  'ก.พ.',
-  'มี.ค.',
-  'เม.ย.',
-  'พ.ค.',
-  'มิ.ย.',
-  'ก.ค.',
-  'ส.ค.',
-  'ก.ย.',
-  'ต.ค.',
-  'พ.ย.',
-  'ธ.ค.',
-];
 
 /// Sheet "อัปเดตสถานะแปลงตัด" — เปิดจากการ์ดฟ้าใน info sheet:
 /// เลือกสถานะ + วันที่เริ่ม/เสร็จ + ตัน — เก็บลงเครื่องรอ endpoint
@@ -135,7 +121,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
     super.dispose();
   }
 
-  String _fmt(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year + 543}';
+  String _fmt(DateTime d) => formatThaiDate(d);
 
   String? _iso(DateTime? d) => d == null
       ? null
@@ -159,14 +145,31 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
   Future<void> _save() async {
     if (_saving) return;
     if (_status == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('กรุณาเลือกสถานะแปลง')));
-      return;
+      // มีตัวเลือกจากระบบ → บังคับเลือกสถานะ; ไม่มีตัวเลือก →
+      // อนุญาตบันทึกถ้ากรอกข้อมูลอื่นไว้แล้ว (วันที่/ตัน)
+      final hasData =
+          _startDate != null ||
+          _endDate != null ||
+          _estimateCtrl.text.trim().isNotEmpty ||
+          (_cutCaneCtrl.text.trim().isNotEmpty &&
+              _cutCaneCtrl.text.trim() != '0');
+      if (_items.isNotEmpty || !hasData) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _items.isNotEmpty
+                  ? 'กรุณาเลือกสถานะแปลง'
+                  : 'กรุณากรอกข้อมูลอย่างน้อย 1 อย่าง',
+            ),
+          ),
+        );
+        return;
+      }
     }
     setState(() => _saving = true);
     try {
       await widget.vm.saveCutStatus(
-        status: _status!,
+        status: _status ?? '',
         statusCode: _statusCode,
         startDate: _iso(_startDate),
         endDate: _iso(_endDate),
@@ -211,36 +214,8 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
               width: selected ? 1.5 : 1,
             ),
           ),
-          child: Row(
-            children: [
-              Icon(
-                selected ? Icons.radio_button_checked : Icons.radio_button_off,
-                size: 24,
-                color: selected ? AppColors.green : Colors.grey.shade400,
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(7),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  item.code,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(item.name, style: const TextStyle(fontSize: 16.5)),
-              ),
-            ],
+          child: Center(
+            child: Text(item.name, style: const TextStyle(fontSize: 16.5)),
           ),
         ),
       ),
@@ -394,6 +369,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                   children: [
                     _label('ประมาณตัน'),
                     TextField(
+                      textAlign: TextAlign.center,
                       controller: _estimateCtrl,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
@@ -404,6 +380,10 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                         isDense: true,
                         filled: true,
                         fillColor: Colors.grey.shade100,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 13,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                           borderSide: BorderSide(color: Colors.grey.shade300),
@@ -444,6 +424,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                       // รอข้อมูลหีบจาก backend — โชว์ค่าเริ่มต้น
                       child: const Text(
                         '0.00 (0.0%)',
+                        textAlign: TextAlign.center,
                         style: TextStyle(fontSize: 16.5, color: Colors.black54),
                       ),
                     ),
@@ -455,6 +436,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
           const SizedBox(height: 16),
           _label('ตัดพันธุ์อ้อย (ตัน)'),
           TextField(
+            textAlign: TextAlign.center,
             controller: _cutCaneCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: const [DigitFormatter(decimal: true)],
@@ -512,7 +494,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  onPressed: _saving || _items.isEmpty ? null : _save,
+                  onPressed: _saving ? null : _save,
                   icon: const Icon(Iconsax.save_2, size: 22),
                   label: Text(
                     _saving ? 'กำลังบันทึก…' : 'บันทึก',

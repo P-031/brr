@@ -3,10 +3,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
+import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/widgets/skeleton.dart';
 import 'package:brr/features/map/models/measurement_result.dart';
 import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/viewmodels/drafts_viewmodel.dart';
 import 'package:brr/features/map/views/measurement_save_view.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
@@ -126,8 +129,11 @@ class DraftsView extends StatelessWidget {
   }
 
   void _openInfo(BuildContext context, Parcel p) {
-    Navigator.of(context)
-        .push(MaterialPageRoute(builder: (_) => _DraftDetailView(p)));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _DraftDetailView(p, loader: vm.satThumb),
+      ),
+    );
   }
 
   /// ปุ่มดาวโหลดขวาบน — confirm ก่อนแล้วยิง GET /risk-points
@@ -250,13 +256,12 @@ class DraftsView extends StatelessWidget {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFF4F4F4),
-        appBar: AppBar(
-          backgroundColor: AppColors.green,
-          title: const Text('ข้อมูลฉบับร่าง'),
+        appBar: brrAppBar(
+          'ข้อมูลฉบับร่าง',
           actions: [
             IconButton(
               tooltip: 'ตัวกรองสถานะ',
-              icon: const Icon(Icons.filter_list, size: 26),
+              icon: const Icon(Iconsax.setting_4, size: 26),
               onPressed: () => _openFilter(context),
             ),
             IconButton(
@@ -392,6 +397,7 @@ class DraftsView extends StatelessWidget {
                 final p = shown[i];
                 return _DraftCard(
                   p,
+                  loader: vm.satThumb,
                   busy: vm.busyId == p.id,
                   onTap: () => _openInfo(context, p),
                   onEdit: () => _edit(context, p),
@@ -407,21 +413,6 @@ class DraftsView extends StatelessWidget {
   }
 }
 
-const _thaiMonths = [
-  'ม.ค.',
-  'ก.พ.',
-  'มี.ค.',
-  'เม.ย.',
-  'พ.ค.',
-  'มิ.ย.',
-  'ก.ค.',
-  'ส.ค.',
-  'ก.ย.',
-  'ต.ค.',
-  'พ.ย.',
-  'ธ.ค.',
-];
-
 /// เวลาบันทึก — savedAt ปกติ; ร่างเก่า (ก่อนมีฟิลด์) ถอด ms จาก
 /// id `local-<millis>`
 String _savedText(Parcel p) {
@@ -432,9 +423,7 @@ String _savedText(Parcel p) {
     if (ms != null) t = DateTime.fromMillisecondsSinceEpoch(ms);
   }
   if (t == null) return '—';
-  final hm =
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-  return '${t.day} ${_thaiMonths[t.month - 1]} ${t.year + 543} $hm น.';
+  return formatThaiDateTime(t);
 }
 
 String _landNo(Parcel p) {
@@ -448,6 +437,7 @@ String _landNo(Parcel p) {
 class _DraftCard extends StatelessWidget {
   const _DraftCard(
     this.p, {
+    required this.loader,
     this.busy = false,
     this.onTap,
     this.onEdit,
@@ -456,6 +446,7 @@ class _DraftCard extends StatelessWidget {
   });
 
   final Parcel p;
+  final SatThumbLoader loader;
   final bool busy;
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
@@ -481,6 +472,7 @@ class _DraftCard extends StatelessWidget {
                   SatelliteThumb(
                     points: p.points,
                     cacheKey: p.id,
+                    loader: loader,
                     fallback: ParcelOutline(points: p.points),
                   ),
                   const SizedBox(width: 12),
@@ -662,21 +654,21 @@ class _DraftCard extends StatelessWidget {
 /// หน้ารายละเอียดร่าง — แตะการ์ดแล้วมาหน้านี้ 3 การ์ด:
 /// ข้อมูลแปลง / รูปแปลงดาวเทียม / รูปที่ถ่ายตอนบันทึก
 class _DraftDetailView extends StatelessWidget {
-  const _DraftDetailView(this.p);
+  const _DraftDetailView(this.p, {required this.loader});
 
   final Parcel p;
+  final SatThumbLoader loader;
 
   @override
   Widget build(BuildContext context) {
+    final metaPhotos = p.meta?['photos'];
     final photos = [
-      for (final x in p.meta?['photos'] as List? ?? const []) '$x',
+      if (metaPhotos is List)
+        for (final x in metaPhotos) '$x',
     ];
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
-      appBar: AppBar(
-        backgroundColor: AppColors.green,
-        title: const Text('รายละเอียดฉบับร่าง'),
-      ),
+      appBar: brrAppBar('รายละเอียดฉบับร่าง'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
@@ -700,6 +692,7 @@ class _DraftDetailView extends StatelessWidget {
                 child: SatelliteThumb(
                   points: p.points,
                   cacheKey: p.id,
+                  loader: loader,
                   width: cons.maxWidth,
                   height: 220,
                   radius: 12,

@@ -5,10 +5,7 @@ import 'package:brr/features/map/models/parcel.dart';
 
 /// ผลลัพธ์ที่หน้าดาวน์โหลด pop กลับให้หน้าแผนที่ — payload แปลง
 /// ที่โหลดมา + ชุดปีที่ผู้ใช้ติ๊กไว้ (ใช้กรองต่อบนแผนที่)
-typedef PlotDownloadResult = ({
-  ParcelPage page,
-  Set<String?> selected,
-});
+typedef PlotDownloadResult = ({ParcelPage page, Set<String?> selected});
 
 /// ViewModel for the plot-download selection screen — owns the year
 /// index, the checked set, download progress and the offline cache

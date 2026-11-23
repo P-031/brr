@@ -17,6 +17,15 @@ class SavedAccount {
   /// live only here), never reused for API calls after expiry.
   final String? accessToken;
 
+  /// parse ทนค่าผิดชนิด — คืน null แทนที่จะ throw ทำ entry อื่นหาย
+  static SavedAccount? tryFromJson(Map<String, dynamic> j) {
+    try {
+      return SavedAccount.fromJson(j);
+    } catch (_) {
+      return null;
+    }
+  }
+
   factory SavedAccount.fromJson(Map<String, dynamic> j) => SavedAccount(
     username: j['username'] as String,
     displayName: j['displayName'] as String,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 
+import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
 
 /// เลือกวันที่แบบปฏิทิน แสดงปีเป็น พ.ศ. — เด้งกลางจอ
@@ -22,36 +23,6 @@ Future<DateTime?> showThaiDatePicker(
     last: lastDate ?? DateTime.now().add(const Duration(days: 365)),
   ),
 );
-
-const _thaiMonths = [
-  'มกราคม',
-  'กุมภาพันธ์',
-  'มีนาคม',
-  'เมษายน',
-  'พฤษภาคม',
-  'มิถุนายน',
-  'กรกฎาคม',
-  'สิงหาคม',
-  'กันยายน',
-  'ตุลาคม',
-  'พฤศจิกายน',
-  'ธันวาคม',
-];
-
-const _thaiMonthsShort = [
-  'ม.ค.',
-  'ก.พ.',
-  'มี.ค.',
-  'เม.ย.',
-  'พ.ค.',
-  'มิ.ย.',
-  'ก.ค.',
-  'ส.ค.',
-  'ก.ย.',
-  'ต.ค.',
-  'พ.ย.',
-  'ธ.ค.',
-];
 
 /// วันในสัปดาห์ — index 0 = อาทิตย์ (weekday 7 → 0)
 const _thaiDayNames = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'];
@@ -157,7 +128,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                             ListTile(
                               dense: true,
                               title: Text(
-                                _thaiMonths[m - 1],
+                                thaiMonths[m - 1],
                                 style: TextStyle(
                                   fontSize: 17,
                                   color:
@@ -221,7 +192,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                           child: Text(
                             '${_thaiDayNames[_selected.weekday % 7]} '
                             '${_selected.day} '
-                            '${_thaiMonthsShort[_selected.month - 1]} '
+                            '${thaiMonthsShort[_selected.month - 1]} '
                             '${_selected.year + 543}',
                             style: const TextStyle(
                               fontSize: 26,
@@ -281,7 +252,7 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
                         color: Colors.black87,
                       ),
                       label: Text(
-                        '${_thaiMonths[_visible.month - 1]} '
+                        '${thaiMonths[_visible.month - 1]} '
                         '${_visible.year + 543}',
                         style: const TextStyle(
                           fontSize: 19,
@@ -422,12 +393,30 @@ class _ThaiDatePickerDialogState extends State<_ThaiDatePickerDialog> {
 /// พิมพ์ตัวเลขติดกัน → ใส่ / ให้อัตโนมัติเป็น วว/ดด/ปปปป
 /// (เก็บเฉพาะตัวเลข สูงสุด 8 หลัก) — ใช้ร่วมกันทุกช่องวันที่
 class ThaiDateSlashFormatter extends TextInputFormatter {
+  // เลขไทย → อารบิก — แป้นไทยพิมพ์ได้เหมือนช่องตัวเลขอื่น
+  // (DigitFormatter) \D ของ regex ตัดเลขไทยทิ้งอยู่แล้ว
+  static const _thai = '๐๑๒๓๔๕๖๗๘๙';
+
+  static String _digitsOnly(String s) {
+    final buf = StringBuffer();
+    for (final r in s.runes) {
+      final ch = String.fromCharCode(r);
+      final ti = _thai.indexOf(ch);
+      if (ti >= 0) {
+        buf.write(ti);
+      } else if (r >= 0x30 && r <= 0x39) {
+        buf.write(ch);
+      }
+    }
+    return buf.toString();
+  }
+
   @override
   TextEditingValue formatEditUpdate(
     TextEditingValue oldValue,
     TextEditingValue newValue,
   ) {
-    final digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    final digits = _digitsOnly(newValue.text);
     final d = digits.length > 8 ? digits.substring(0, 8) : digits;
     final buf = StringBuffer();
     for (var i = 0; i < d.length; i++) {
@@ -437,11 +426,12 @@ class ThaiDateSlashFormatter extends TextInputFormatter {
     final text = buf.toString();
     // cursor อยู่กลางข้อความ (แก้/ลบเลขข้างใน) — วาง cursor หลัง
     // ตำแหน่งเลขตัวเดิมก่อน cursor ไม่ใช่ดีดไปท้ายทุกครั้ง
-    final digitsBefore = newValue.text
-        .substring(0, newValue.selection.end.clamp(0, newValue.text.length))
-        .replaceAll(RegExp(r'\D'), '')
-        .length
-        .clamp(0, 8);
+    final digitsBefore = _digitsOnly(
+      newValue.text.substring(
+        0,
+        newValue.selection.end.clamp(0, newValue.text.length),
+      ),
+    ).length.clamp(0, 8);
     var cursor = digitsBefore;
     if (digitsBefore > 2) cursor++; // เลย / ตัวแรก
     if (digitsBefore > 4) cursor++; // เลย / ตัวสอง

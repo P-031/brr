@@ -8,8 +8,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:brr/features/map/models/measurement_result.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/utils/fuzzy_search.dart';
 import 'package:brr/core/widgets/digit_formatter.dart';
+import 'package:brr/core/widgets/discard_guard.dart';
 import 'package:brr/core/widgets/image_source_sheet.dart';
 
 /// One row in the searchable picker — backend will supply real
@@ -127,11 +129,48 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     final loss = s('hasLoss');
     if (loss.isNotEmpty) _losses.addAll(loss.split(', '));
     // รูปที่ถ่ายไว้ตอนบันทึกร่าง — prefill กลับกันรูปหายตอนแก้ไข
-    for (final path in p.meta?['photos'] as List? ?? const []) {
+    // (meta['photos'] อาจไม่ใช่ List เสมอ — เช็กชนิดก่อนเสมอ)
+    final metaPhotos = p.meta?['photos'];
+    for (final path in metaPhotos is List ? metaPhotos : const []) {
       if (_photos.length >= 3) break;
       _photos.add(XFile('$path'));
     }
+    // baseline หลัง prefill — เทียบตอนกดย้อน ต่าง = แก้ไขค้าง
+    _baseline = _formSig();
   }
+
+  /// signature ข้อมูลในฟอร์มทั้งหมด — เช็กสดตอน pop (พิมพ์ใน
+  /// TextField ไม่ rebuild ค่า canPop ที่ snapshot ตอน build จะ stale)
+  String _formSig() => [
+    for (final c in [
+      _nameCtrl,
+      _yearCtrl,
+      _rootCtrl,
+      _seqCtrl,
+      _lossCtrl,
+      _targetCtrl,
+      _noteCtrl,
+    ])
+      c.text,
+    '$_project',
+    '$_zone',
+    '$_province',
+    '$_district',
+    '$_subdistrict',
+    '$_village',
+    '$_prevPlot',
+    '$_officer',
+    '$_farmer',
+    '$_farmerId',
+    '$_caneGroup',
+    '$_caneType',
+    '$_caneVariety',
+    '$_ownership',
+    '$_terrain',
+    (_losses.toList()..sort()).join(','),
+    _photos.map((p) => p.path).join(','),
+  ].join('|');
+  late final String _baseline;
 
   @override
   void dispose() {
@@ -240,7 +279,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     // กัน unhandled error แล้วแจ้งผู้ใช้แทนที่จะเงียบ
     try {
       final x = await ImagePicker().pickImage(source: source, maxWidth: 1600);
-      if (x != null) setState(() => _photos.add(x));
+      if (x != null && mounted) setState(() => _photos.add(x));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -574,6 +613,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
           (_showErrors || _touched.contains(ctrl)),
       helper: helper,
       child: TextFormField(
+        textAlign: TextAlign.center,
         controller: ctrl,
         style: const TextStyle(fontSize: 19),
         keyboardType: keyboard,
@@ -594,422 +634,449 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('บันทึกข้อมูลการวัด')),
-      body: Form(
-        key: _formKey,
-        child: Builder(
-          builder: (_) {
-            final fields = <Widget>[
-              Card(
-                color: Colors.grey.shade200,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'พื้นที่ที่วัดได้',
-                        style: TextStyle(color: Colors.black54, fontSize: 15),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        Parcel.formatThaiArea(widget.areaSquareMeters),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.green,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        if (_formSig() != _baseline) {
+          if (await confirmDiscardChanges(context) && context.mounted) {
+            Navigator.of(context).pop();
+          }
+        } else if (context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
+        appBar: brrAppBar('บันทึกข้อมูลการวัด'),
+        body: Form(
+          key: _formKey,
+          child: Builder(
+            builder: (_) {
+              final fields = <Widget>[
+                Card(
+                  color: Colors.grey.shade200,
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'พื้นที่ที่วัดได้',
+                          style: TextStyle(color: Colors.black54, fontSize: 15),
                         ),
-                      ),
-                      Text(
-                        '${widget.areaSquareMeters.toStringAsFixed(0)} ตร.ม.',
-                        style: const TextStyle(
-                          color: Colors.black54,
-                          fontSize: 15,
+                        const SizedBox(height: 8),
+                        Text(
+                          Parcel.formatThaiArea(widget.areaSquareMeters),
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.green,
+                          ),
                         ),
-                      ),
-                    ],
+                        Text(
+                          '${widget.areaSquareMeters.toStringAsFixed(0)} ตร.ม.',
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              _tf(_nameCtrl, 'ชื่อแปลง', Iconsax.edit, required: true),
-              const SizedBox(height: 16),
-              _tf(
-                _yearCtrl,
-                'ปีการผลิต',
-                Icons.calendar_today,
-                required: true,
-                keyboard: TextInputType.number,
-                formatters: const [DigitFormatter()],
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'นักส่งเสริมผู้ดูแล',
-                Iconsax.profile_2user,
-                () => _items(widget.officers()),
-                _officer,
-                (v) => setState(() => _officer = v),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'โครงการส่งเสริม',
-                Iconsax.folder,
-                () => _items(_pick((o) => o.projects)),
-                _project,
-                (v) => setState(() => _project = v),
-              ),
-              if (widget.isOfficer) ...[
+                const SizedBox(height: 24),
+                _tf(_nameCtrl, 'ชื่อแปลง', Iconsax.edit, required: true),
                 const SizedBox(height: 16),
-                _farmerPicker(),
-              ],
-              const SizedBox(height: 16),
-              _picker(
-                'กลุ่มสร้างอ้อย (กลุ่มบำรุง)',
-                Iconsax.people,
-                () => _items(_pick((o) => o.caneGroups)),
-                _caneGroup,
-                (v) => setState(() => _caneGroup = v),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'สถานที่',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.green,
+                _tf(
+                  _yearCtrl,
+                  'ปีการผลิต',
+                  Icons.calendar_today,
+                  required: true,
+                  keyboard: TextInputType.number,
+                  formatters: const [DigitFormatter()],
                 ),
-              ),
-              const SizedBox(height: 12),
-              _picker(
-                'เขต',
-                Iconsax.location,
-                () => _items(_pick((o) => o.zones)),
-                _zone,
-                (v) => setState(() => _zone = v),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'จังหวัด',
-                Iconsax.location,
-                () => _items(_pick((o) => o.provinces)),
-                _province,
-                // เปลี่ยนจังหวัด → เคลียร์ อำเภอ/ตำบล/หมู่บ้าน ที่เลือกไว้
-                (v) => setState(() {
-                  _province = v;
-                  _district = _subdistrict = _village = null;
-                }),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'อำเภอ',
-                Iconsax.location,
-                () => _items(_pick((o) => o.districtsOf(_province))),
-                _district,
-                (v) => setState(() {
-                  _district = v;
-                  _subdistrict = _village = null;
-                }),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'ตำบล',
-                Iconsax.location,
-                () => _items(
-                  _pick((o) => o.subdistrictsOf(_province, _district)),
+                const SizedBox(height: 16),
+                _picker(
+                  'นักส่งเสริมผู้ดูแล',
+                  Iconsax.profile_2user,
+                  () => _items(widget.officers()),
+                  _officer,
+                  (v) => setState(() => _officer = v),
                 ),
-                _subdistrict,
-                (v) => setState(() {
-                  _subdistrict = v;
-                  _village = null;
-                }),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'หมู่บ้าน',
-                Iconsax.location,
-                () => _items(
-                  _pick(
-                    (o) => o.villagesOf(_province, _district, _subdistrict),
+                const SizedBox(height: 16),
+                _picker(
+                  'โครงการส่งเสริม',
+                  Iconsax.folder,
+                  () => _items(_pick((o) => o.projects)),
+                  _project,
+                  (v) => setState(() => _project = v),
+                ),
+                if (widget.isOfficer) ...[
+                  const SizedBox(height: 16),
+                  _farmerPicker(),
+                ],
+                const SizedBox(height: 16),
+                _picker(
+                  'กลุ่มสร้างอ้อย (กลุ่มบำรุง)',
+                  Iconsax.people,
+                  () => _items(_pick((o) => o.caneGroups)),
+                  _caneGroup,
+                  (v) => setState(() => _caneGroup = v),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'สถานที่',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.green,
                   ),
                 ),
-                _village,
-                (v) => setState(() => _village = v),
-              ),
-              const SizedBox(height: 16),
-              const SizedBox(height: 24),
-              const Text(
-                'เลขแปลงปีก่อน',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.green,
+                const SizedBox(height: 12),
+                _picker(
+                  'เขต',
+                  Iconsax.location,
+                  () => _items(_pick((o) => o.zones)),
+                  _zone,
+                  (v) => setState(() => _zone = v),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _picker(
-                'เลขแปลงปีก่อน',
-                Iconsax.clock,
-                _prevPlotItems,
-                _prevPlot,
-                (v) => setState(() => _prevPlot = v),
-                required: false,
-              ),
-              const SizedBox(height: 16),
-              _tf(
-                _rootCtrl,
-                'รูท',
-                Iconsax.hashtag,
-                keyboard: TextInputType.number,
-                formatters: const [DigitFormatter()],
-              ),
-              const SizedBox(height: 16),
-              _tf(
-                _seqCtrl,
-                'ลำดับ',
-                Iconsax.task_square,
-                keyboard: TextInputType.number,
-                formatters: const [DigitFormatter()],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'ข้อมูลพื้นฐานแปลง (1)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.green,
+                const SizedBox(height: 16),
+                _picker(
+                  'จังหวัด',
+                  Iconsax.location,
+                  () => _items(_pick((o) => o.provinces)),
+                  _province,
+                  // เปลี่ยนจังหวัด → เคลียร์ อำเภอ/ตำบล/หมู่บ้าน ที่เลือกไว้
+                  (v) => setState(() {
+                    _province = v;
+                    _district = _subdistrict = _village = null;
+                  }),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _picker(
-                'ประเภทอ้อย',
-                Iconsax.hierarchy,
-                () => _items(_pick((o) => o.caneTypes)),
-                _caneType,
-                (v) => setState(() => _caneType = v),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'เลือกพันธุ์อ้อย',
-                Iconsax.tree,
-                () => _items(_pick((o) => o.caneVarieties)),
-                _caneVariety,
-                (v) => setState(() => _caneVariety = v),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'การถือครอง',
-                Iconsax.map_1,
-                () => _items(_pick((o) => o.ownerships)),
-                _ownership,
-                (v) => setState(() => _ownership = v),
-              ),
-              const SizedBox(height: 16),
-              _picker(
-                'ระดับพื้นที่',
-                Iconsax.convert_3d_cube,
-                () => _items(_pick((o) => o.terrains)),
-                _terrain,
-                (v) => setState(() => _terrain = v),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'ข้อมูลพื้นฐานแปลง (2)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.green,
+                const SizedBox(height: 16),
+                _picker(
+                  'อำเภอ',
+                  Iconsax.location,
+                  () => _items(_pick((o) => o.districtsOf(_province))),
+                  _district,
+                  (v) => setState(() {
+                    _district = v;
+                    _subdistrict = _village = null;
+                  }),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _multiPicker(
-                'มีพื้นที่สูญเสีย',
-                Iconsax.danger,
-                () => _items(_pick((o) => o.lossOptions)),
-                _losses,
-                (v) => setState(() {
-                  _losses
-                    ..clear()
-                    ..addAll(v);
-                }),
-              ),
-              const SizedBox(height: 16),
-              _tf(
-                _lossCtrl,
-                'พื้นที่สูญเสีย (ไร่)',
-                Iconsax.ruler,
-                // เลือก "ไม่มี" ในช่องสาเหตุ → เว้นว่างได้
-                required: !_losses.contains(_noneName),
-                keyboard: const TextInputType.numberWithOptions(decimal: true),
-                formatters: const [DigitFormatter(decimal: true)],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'ข้อมูลพื้นฐานแปลง (3)',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.green,
+                const SizedBox(height: 16),
+                _picker(
+                  'ตำบล',
+                  Iconsax.location,
+                  () => _items(
+                    _pick((o) => o.subdistrictsOf(_province, _district)),
+                  ),
+                  _subdistrict,
+                  (v) => setState(() {
+                    _subdistrict = v;
+                    _village = null;
+                  }),
                 ),
-              ),
-              const SizedBox(height: 12),
-              _tf(
-                _targetCtrl,
-                'เป้าหมายผลผลิต (ตัน/ไร่)',
-                Iconsax.flag,
-                required: true,
-                keyboard: const TextInputType.numberWithOptions(decimal: true),
-                formatters: const [DigitFormatter(decimal: true)],
-                helper: 'ไม่ควรใส่เกิน 30 ตัน/ไร่',
-                validator: (v) {
-                  final t = double.tryParse(v?.trim() ?? '');
-                  if (t != null && t > 30) {
-                    return 'เป้าหมายผลผลิตไม่ควรเกิน 30 ตัน/ไร่';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              ValueListenableBuilder<TextEditingValue>(
-                valueListenable: _targetCtrl,
-                builder: (_, _, _) => _fieldCard(
-                  'เป้าหมายผลผลิต (ตันรวม)',
-                  Iconsax.calculator,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
+                const SizedBox(height: 16),
+                _picker(
+                  'หมู่บ้าน',
+                  Iconsax.location,
+                  () => _items(
+                    _pick(
+                      (o) => o.villagesOf(_province, _district, _subdistrict),
                     ),
-                    decoration: _innerBoxDeco,
-                    child: Text(
-                      _totalYield,
-                      style: const TextStyle(fontSize: 19),
+                  ),
+                  _village,
+                  (v) => setState(() => _village = v),
+                ),
+                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+                const Text(
+                  'เลขแปลงปีก่อน',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.green,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _picker(
+                  'เลขแปลงปีก่อน',
+                  Iconsax.clock,
+                  _prevPlotItems,
+                  _prevPlot,
+                  (v) => setState(() => _prevPlot = v),
+                  required: false,
+                ),
+                const SizedBox(height: 16),
+                _tf(
+                  _rootCtrl,
+                  'รูท',
+                  Iconsax.hashtag,
+                  keyboard: TextInputType.number,
+                  formatters: const [DigitFormatter()],
+                ),
+                const SizedBox(height: 16),
+                _tf(
+                  _seqCtrl,
+                  'ลำดับ',
+                  Iconsax.task_square,
+                  keyboard: TextInputType.number,
+                  formatters: const [DigitFormatter()],
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'ข้อมูลพื้นฐานแปลง (1)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.green,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _picker(
+                  'ประเภทอ้อย',
+                  Iconsax.hierarchy,
+                  () => _items(_pick((o) => o.caneTypes)),
+                  _caneType,
+                  (v) => setState(() => _caneType = v),
+                ),
+                const SizedBox(height: 16),
+                _picker(
+                  'เลือกพันธุ์อ้อย',
+                  Iconsax.tree,
+                  () => _items(_pick((o) => o.caneVarieties)),
+                  _caneVariety,
+                  (v) => setState(() => _caneVariety = v),
+                ),
+                const SizedBox(height: 16),
+                _picker(
+                  'การถือครอง',
+                  Iconsax.map_1,
+                  () => _items(_pick((o) => o.ownerships)),
+                  _ownership,
+                  (v) => setState(() => _ownership = v),
+                ),
+                const SizedBox(height: 16),
+                _picker(
+                  'ระดับพื้นที่',
+                  Iconsax.convert_3d_cube,
+                  () => _items(_pick((o) => o.terrains)),
+                  _terrain,
+                  (v) => setState(() => _terrain = v),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'ข้อมูลพื้นฐานแปลง (2)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.green,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _multiPicker(
+                  'มีพื้นที่สูญเสีย',
+                  Iconsax.danger,
+                  () => _items(_pick((o) => o.lossOptions)),
+                  _losses,
+                  (v) => setState(() {
+                    _losses
+                      ..clear()
+                      ..addAll(v);
+                  }),
+                ),
+                const SizedBox(height: 16),
+                _tf(
+                  _lossCtrl,
+                  'พื้นที่สูญเสีย (ไร่)',
+                  Iconsax.ruler,
+                  // เลือก "ไม่มี" ในช่องสาเหตุ → เว้นว่างได้
+                  required: !_losses.contains(_noneName),
+                  keyboard: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  formatters: const [DigitFormatter(decimal: true)],
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'ข้อมูลพื้นฐานแปลง (3)',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.green,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _tf(
+                  _targetCtrl,
+                  'เป้าหมายผลผลิต (ตัน/ไร่)',
+                  Iconsax.flag,
+                  required: true,
+                  keyboard: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  formatters: const [DigitFormatter(decimal: true)],
+                  helper: 'ไม่ควรใส่เกิน 30 ตัน/ไร่',
+                  validator: (v) {
+                    final t = double.tryParse(v?.trim() ?? '');
+                    if (t != null && t > 30) {
+                      return 'เป้าหมายผลผลิตไม่ควรเกิน 30 ตัน/ไร่';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _targetCtrl,
+                  builder: (_, _, _) => _fieldCard(
+                    'เป้าหมายผลผลิต (ตันรวม)',
+                    Iconsax.calculator,
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
+                      decoration: _innerBoxDeco,
+                      child: Text(
+                        _totalYield,
+                        style: const TextStyle(fontSize: 19),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              _tf(_noteCtrl, 'ข้อเสนอแนะ', null, maxLines: 3),
-              const SizedBox(height: 24),
-              Card(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: Colors.black12),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'ภาพถ่าย',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
+                const SizedBox(height: 16),
+                _tf(_noteCtrl, 'ข้อเสนอแนะ', null, maxLines: 3),
+                const SizedBox(height: 24),
+                Card(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    side: const BorderSide(color: Colors.black12),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Expanded(
+                              child: Text(
+                                'ภาพถ่าย',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
                               ),
                             ),
-                          ),
-                          Text(
-                            '${_photos.length}/3',
-                            style: const TextStyle(color: Colors.black54),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      if (_photos.isNotEmpty)
-                        SizedBox(
-                          height: 88,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _photos.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(width: 10),
-                            itemBuilder: (context, i) => Stack(
-                              children: [
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    File(_photos[i].path),
-                                    width: 88,
-                                    height: 88,
-                                    cacheWidth: 176,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                Positioned(
-                                  top: -4,
-                                  right: -4,
-                                  child: GestureDetector(
-                                    onTap: () =>
-                                        setState(() => _photos.removeAt(i)),
-                                    child: const CircleAvatar(
-                                      radius: 11,
-                                      backgroundColor: Colors.white,
-                                      child: Icon(
-                                        Iconsax.close_circle,
-                                        size: 16,
-                                        color: Colors.black87,
+                            Text(
+                              '${_photos.length}/3',
+                              style: const TextStyle(color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_photos.isNotEmpty)
+                          SizedBox(
+                            height: 88,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _photos.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(width: 10),
+                              itemBuilder: (context, i) => Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: Image.file(
+                                      File(_photos[i].path),
+                                      width: 88,
+                                      height: 88,
+                                      cacheWidth: 176,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Container(
+                                        color: Colors.black12,
+                                        child: const Icon(
+                                          Iconsax.gallery_slash,
+                                          color: Colors.black38,
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ],
+                                  Positioned(
+                                    top: -4,
+                                    right: -4,
+                                    child: GestureDetector(
+                                      onTap: () =>
+                                          setState(() => _photos.removeAt(i)),
+                                      child: const CircleAvatar(
+                                        radius: 11,
+                                        backgroundColor: Colors.white,
+                                        child: Icon(
+                                          Iconsax.close_circle,
+                                          size: 16,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        if (_photos.isNotEmpty) const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 46,
+                          child: OutlinedButton.icon(
+                            onPressed: _photos.length < 3 ? _pickPhoto : null,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF1B5E20),
+                              side: const BorderSide(color: Color(0xFF1B5E20)),
+                            ),
+                            icon: const Icon(Iconsax.camera, size: 24),
+                            label: const Text(
+                              'เพิ่มรูปภาพ',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
-                      if (_photos.isNotEmpty) const SizedBox(height: 12),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 46,
-                        child: OutlinedButton.icon(
-                          onPressed: _photos.length < 3 ? _pickPhoto : null,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF1B5E20),
-                            side: const BorderSide(color: Color(0xFF1B5E20)),
-                          ),
-                          icon: const Icon(Iconsax.camera, size: 24),
-                          label: const Text(
-                            'เพิ่มรูปภาพ',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 32),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () => _save(),
+                    icon: const Icon(Icons.cloud_upload_outlined),
+                    label: const Text(
+                      'ส่งข้อมูลขึ้นระบบ (ออนไลน์)',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                height: 52,
-                child: FilledButton.icon(
-                  onPressed: () => _save(),
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                  label: const Text(
-                    'ส่งข้อมูลขึ้นระบบ (ออนไลน์)',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _save(draft: true),
+                    icon: const Icon(Iconsax.save_2),
+                    label: const Text(
+                      'บันทึกข้อมูลลงเครื่อง (ฉบับร่าง)',
+                      style: TextStyle(fontSize: 16),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 52,
-                child: OutlinedButton.icon(
-                  onPressed: () => _save(draft: true),
-                  icon: const Icon(Iconsax.save_2),
-                  label: const Text(
-                    'บันทึกข้อมูลลงเครื่อง (ฉบับร่าง)',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                ),
-              ),
-            ];
-            return ListView.builder(
-              padding: const EdgeInsets.all(20),
-              itemCount: fields.length,
-              itemBuilder: (_, i) => fields[i],
-            );
-          },
+              ];
+              return ListView.builder(
+                padding: const EdgeInsets.all(20),
+                itemCount: fields.length,
+                itemBuilder: (_, i) => fields[i],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -1035,7 +1102,9 @@ class _PickerSheetState extends State<_PickerSheet> {
   String _q = '';
   late Future<List<PickerItem>> _future = widget.source();
 
-  void _retry() => setState(() => _future = widget.source());
+  void _retry() => setState(() {
+    _future = widget.source();
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1060,6 +1129,7 @@ class _PickerSheetState extends State<_PickerSheet> {
               ),
               const SizedBox(height: 12),
               TextField(
+                textAlign: TextAlign.center,
                 autofocus: true,
                 style: const TextStyle(fontSize: 18),
                 onChanged: (v) => setState(() => _q = v),
@@ -1173,7 +1243,9 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
   final Set<String> _extra = {};
   late Future<List<PickerItem>> _future = widget.source();
 
-  void _retry() => setState(() => _future = widget.source());
+  void _retry() => setState(() {
+    _future = widget.source();
+  });
 
   void _init(List<PickerItem> items) {
     if (_selected != null) return;
@@ -1231,6 +1303,7 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
               ),
               const SizedBox(height: 12),
               TextField(
+                textAlign: TextAlign.center,
                 autofocus: true,
                 style: const TextStyle(fontSize: 18),
                 onChanged: (v) => setState(() => _q = v),

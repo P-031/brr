@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
@@ -15,6 +16,7 @@ import 'package:brr/features/map/views/parcel_edit_views.dart';
 import 'package:brr/features/map/widgets/cut_status_sheet.dart';
 import 'package:brr/features/map/widgets/plot_project_sheet.dart';
 import 'package:brr/features/map/widgets/risk_point_sheet.dart';
+import 'package:brr/core/utils/json_safe.dart';
 
 /// Sheet ข้อมูลแปลง (ตาม ref แอปจริง) — header เลขแปลง + ตารางข้อมูล
 /// + เมนูทางลัด + กิจกรรม — ปุ่มทุกตัวยังเป็น stub (_todo) รอนิยาม
@@ -81,17 +83,18 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   /// สถานะ; refresh หลัง sheet ฟอร์มบันทึกกลับมา
   late Future<Map<String, dynamic>?> _riskPoint = widget.vm.riskPoint();
 
-  /// โครงการส่งเสริมที่บันทึกไว้ในเครื่อง — badge การ์ดม่วง
-  /// refresh หลัง sheet โครงการบันทึกกลับมา
-  late Future<Map<String, dynamic>?> _project = widget.vm.plotProject();
-
-  /// สถานะแปลงตัดที่บันทึกไว้ในเครื่อง — badge การ์ดฟ้า
-  /// refresh หลัง sheet สถานะบันทึกกลับมา
-  late Future<Map<String, dynamic>?> _cut = widget.vm.cutStatus();
-
   /// กิจกรรมที่บันทึกไว้ในเครื่อง — subtitle การ์ดนำส่งนับจำนวน
   /// จริง; refresh หลังกลับจากหน้ารายการ (อาจลบ/เพิ่มรายการ)
   late Future<List<Map<String, dynamic>>> _acts = widget.vm.activityDrafts();
+
+  /// จำนวนกิจกรรมใหม่ที่ยังไม่ได้เปิดดู — badge แดงบนปุ่ม
+  late Future<int> _unseen = widget.vm.unseenActivityCount();
+
+  /// โหลด list + badge ใหม่หลังกลับจากหน้ากิจกรรม
+  void _reloadActivities() => setState(() {
+    _acts = widget.vm.activityDrafts();
+    _unseen = widget.vm.unseenActivityCount();
+  });
 
   /// meta/farmer ล่าสุดที่ build เตรียมไว้ — ปุ่มเมนูอ่านตอนกด
   Map<String, dynamic> _meta = const {};
@@ -116,21 +119,6 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
     (Iconsax.more, 'กลุ่มบำรุง / ตัด', AppColors.green),
   ];
 
-  static const _thaiMonths = [
-    'ม.ค.',
-    'ก.พ.',
-    'มี.ค.',
-    'เม.ย.',
-    'พ.ค.',
-    'มิ.ย.',
-    'ก.ค.',
-    'ส.ค.',
-    'ก.ย.',
-    'ต.ค.',
-    'พ.ย.',
-    'ธ.ค.',
-  ];
-
   static String? _str(dynamic v) {
     final s = '$v';
     return (v == null || s.isEmpty) ? null : s;
@@ -146,8 +134,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
     return DateTime.tryParse('${detail?['createdAt']}');
   }
 
-  static String _fmtDate(DateTime d) =>
-      '${d.day} ${_thaiMonths[d.month - 1]} ${d.year + 543}';
+  static String _fmtDate(DateTime d) => formatThaiDate(d);
 
   /// stub ชั่วคราว — แตะแล้วบอกว่าปุ่มไหนถูกกด รอผู้ใช้นิยามการทำงานจริง
   void _todo(String label) {
@@ -320,9 +307,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
         future: widget.vm.detail,
         builder: (context, snap) {
           final detail = snap.data;
-          final meta =
-              (detail?['meta'] as Map<String, dynamic>?) ?? p.meta ?? const {};
-          final farmer = detail?['farmer'] as Map<String, dynamic>?;
+          final meta = asStringMap(detail?['meta']) ?? p.meta ?? const {};
+          final farmer = asStringMap(detail?['farmer']);
           _meta = meta;
           _farmer = farmer;
           final farmerName = _str(farmer?['displayName']) ?? p.owner;
@@ -337,11 +323,11 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
           // พื้นที่แบบละเอียด "x ไร่ y งาน z ตร.วา" — detail มี area
           // จาก backend (splitThaiArea); draft ไม่มี detail ใช้คำนวณ
           // ฝั่งเครื่องแทน
-          final areaMap = detail?['area'] as Map<String, dynamic>?;
+          final areaMap = asStringMap(detail?['area']);
           final areaText = areaMap == null
               ? p.areaThai
               : '${areaMap['rai'] ?? 0} ไร่ ${areaMap['ngan'] ?? 0} งาน '
-                    '${(areaMap['wa'] as num? ?? 0).toStringAsFixed(0)} ตร.วา';
+                    '${(toDoubleOrNull(areaMap['wa']) ?? 0).toStringAsFixed(0)} ตร.วา';
           final grade = _str(meta['grade']) ?? _str(meta['plotGrade']);
           final status = p.isDraft
               ? 'แปลงร่าง (ยังไม่บันทึก)'
@@ -595,16 +581,25 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                       _pushFullScreen(ActivityRecordView(vm: widget.vm)),
                 ),
                 const SizedBox(height: 10),
-                _actionCard(
-                  color: const Color(0xFFF2F2F2),
-                  leading: const Icon(
-                    Iconsax.menu_1,
-                    color: Colors.black87,
-                    size: 30,
+                FutureBuilder<int>(
+                  future: _unseen,
+                  builder: (context, snap) => _actionCard(
+                    color: const Color(0xFFF2F2F2),
+                    leading: const Icon(
+                      Iconsax.menu_1,
+                      color: Colors.black87,
+                      size: 30,
+                    ),
+                    title: 'ประวัติการบันทึกกิจกรรม',
+                    badgeCount: snap.data ?? 0,
+                    onTap: () => _pushFullScreen(
+                      ActivityHistoryView(vm: widget.vm),
+                      onReturn: () async {
+                        await widget.vm.markActivitiesSeen();
+                        _reloadActivities();
+                      },
+                    ),
                   ),
-                  title: 'ประวัติการบันทึกกิจกรรม',
-                  onTap: () =>
-                      _pushFullScreen(ActivityHistoryView(vm: widget.vm)),
                 ),
                 const SizedBox(height: 10),
                 FutureBuilder<List<Map<String, dynamic>>>(
@@ -626,27 +621,32 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                       sub = 'ส่งข้อมูลครบแล้ว (ไม่มีข้อมูลค้าง)';
                       subColor = AppColors.green;
                     }
-                    return _actionCard(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.grey.shade300),
-                      leading: const Icon(
-                        Iconsax.cloud_plus,
-                        color: AppColors.sky,
-                        size: 36,
-                      ),
-                      title: 'นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง',
-                      subtitle: sub,
-                      subtitleColor: subColor,
-                      trailing: const Icon(
-                        Iconsax.arrow_right_3,
-                        color: Colors.black38,
-                        size: 24,
-                      ),
-                      onTap: () => _pushFullScreen(
-                        ActivityDraftsView(vm: widget.vm),
-                        onReturn: () => setState(() {
-                          _acts = widget.vm.activityDrafts();
-                        }),
+                    return FutureBuilder<int>(
+                      future: _unseen,
+                      builder: (context, snap) => _actionCard(
+                        color: Colors.white,
+                        border: Border.all(color: Colors.grey.shade300),
+                        leading: const Icon(
+                          Iconsax.cloud_plus,
+                          color: AppColors.sky,
+                          size: 36,
+                        ),
+                        title: 'นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง',
+                        subtitle: sub,
+                        subtitleColor: subColor,
+                        badgeCount: snap.data ?? 0,
+                        trailing: const Icon(
+                          Iconsax.arrow_right_3,
+                          color: Colors.black38,
+                          size: 24,
+                        ),
+                        onTap: () => _pushFullScreen(
+                          ActivityDraftsView(vm: widget.vm),
+                          onReturn: () async {
+                            await widget.vm.markActivitiesSeen();
+                            _reloadActivities();
+                          },
+                        ),
                       ),
                     );
                   },
@@ -662,44 +662,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   title: 'อัปเดตสถานะแปลงตัด',
                   subtitle: 'เปิดแปลง->ตัดอ้อย->ปิดแปลง',
                   titleColor: Colors.white,
-                  subtitleColor: Colors.white70,
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.help_outline,
-                          size: 18,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 6),
-                        FutureBuilder<Map<String, dynamic>?>(
-                          future: _cut,
-                          builder: (context, s) {
-                            // บันทึกในเครื่องมีสิทธิ์ก่อน meta.cutStatus
-                            final saved = '${s.data?['status'] ?? ''}';
-                            return Text(
-                              saved.isNotEmpty
-                                  ? saved
-                                  : _str(meta['cutStatus']) ?? 'ยังไม่ระบุ',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.white,
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
+                  subtitleColor: Colors.white,
                   onTap: _openCutSheet,
                 ),
                 const SizedBox(height: 10),
@@ -717,48 +680,11 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   title: 'ข้อมูลโครงการส่งเสริมแปลง',
                   subtitle: 'อัปเดตโครงการที่เข้าร่วม (นสล.)',
                   titleColor: Colors.white,
-                  subtitleColor: Colors.white70,
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: FutureBuilder<Map<String, dynamic>?>(
-                          future: _project,
-                          builder: (context, s) {
-                            // บันทึกในเครื่องมีสิทธิ์ก่อน meta —
-                            // ครบเกณฑ์บังคับ = Brr Model
-                            final saved = s.data;
-                            final text = saved != null
-                                ? (saved['passed'] == true
-                                      ? 'Brr Model'
-                                      : 'เลือกแล้ว ${(saved['items'] as List? ?? const []).length}/6')
-                                : _str(meta['project']) ?? 'ยังไม่ระบุ';
-                            return Text(
-                              text,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF7B1FA2),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(
-                        Iconsax.arrow_right_3,
-                        color: Colors.white70,
-                        size: 24,
-                      ),
-                    ],
+                  subtitleColor: Colors.white,
+                  trailing: const Icon(
+                    Iconsax.arrow_right_3,
+                    color: Colors.white70,
+                    size: 24,
                   ),
                   onTap: _openProjectSheet,
                 ),
@@ -773,7 +699,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   title: 'ยืนยันแปลง',
                   subtitle: 'ยืนยันแปลงข้ามปี',
                   titleColor: Colors.white,
-                  subtitleColor: Colors.white70,
+                  subtitleColor: Colors.white,
                   onTap: () =>
                       _pushFullScreen(ParcelConfirmView(vm: widget.vm)),
                 ),
@@ -784,31 +710,45 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   future: _options,
                   builder: (context, snap) {
                     // แสดงชื่อชนิดภัยเหมือนใน sheet — น้ำท่วมก่อน 50-50 ท้าย
+                    // ว่าง (options โหลดไม่ได้/ออฟไลน์) ก็ยังโชว์การ์ด
+                    // ให้เข้า sheet ได้ — sheet โหลด options เองอีกชั้น
                     final levels = [
                       for (final l in snap.data?.riskLevels ?? const <String>[])
                         riskDisplayName(l),
                     ].reversed.toList();
-                    if (levels.isEmpty) return const SizedBox.shrink();
                     return FutureBuilder<Map<String, dynamic>?>(
                       future: _riskPoint,
                       builder: (context, r) {
                         final saved = r.data;
+                        final savedType = '${saved?['type'] ?? ''}';
+                        // สีตามประเภทที่บันทึก (น้ำท่วม=แดง/แล้ง=ส้ม/50-50=เหลือง)
+                        // ยังไม่บันทึก = ขาวเทาปกติ
+                        final (icon, bg, fg) = savedType.isEmpty
+                            ? (Iconsax.warning_2, Colors.white, Colors.black38)
+                            : riskChipStyle(savedType);
                         return InkWell(
                           borderRadius: BorderRadius.circular(14),
                           onTap: _openRiskSheet,
                           child: Container(
                             padding: const EdgeInsets.all(18),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Colors.grey.shade300),
+                              color: savedType.isEmpty
+                                  ? Colors.white
+                                  : bg.withValues(alpha: 0.3),
+                              border: Border.all(
+                                color: savedType.isEmpty
+                                    ? Colors.grey.shade300
+                                    : fg,
+                                width: savedType.isEmpty ? 1 : 1.8,
+                              ),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Row(
+                                Row(
                                   children: [
-                                    Expanded(
+                                    const Expanded(
                                       child: Text(
                                         'กำหนดเป็นจุดเสี่ยงภัยพิบัติ',
                                         style: TextStyle(
@@ -817,34 +757,44 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                                         ),
                                       ),
                                     ),
-                                    Icon(
+                                    if (savedType.isNotEmpty)
+                                      Icon(icon, size: 22, color: fg),
+                                    const SizedBox(width: 4),
+                                    const Icon(
                                       Iconsax.arrow_right_3,
                                       size: 20,
                                       color: Colors.black38,
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 14),
-                                Row(
-                                  children: [
-                                    for (var i = 0; i < levels.length; i++) ...[
-                                      _riskPreviewChip(
-                                        levels[i],
-                                        '${saved?['type']}' == levels[i],
-                                      ),
-                                      if (i < levels.length - 1)
-                                        const SizedBox(width: 10),
+                                if (levels.isNotEmpty) ...[
+                                  const SizedBox(height: 14),
+                                  Row(
+                                    children: [
+                                      for (
+                                        var i = 0;
+                                        i < levels.length;
+                                        i++
+                                      ) ...[
+                                        _riskPreviewChip(
+                                          levels[i],
+                                          '${saved?['type']}' == levels[i],
+                                        ),
+                                        if (i < levels.length - 1)
+                                          const SizedBox(width: 10),
+                                      ],
                                     ],
-                                  ],
-                                ),
+                                  ),
+                                ],
                                 if (saved != null) ...[
                                   const SizedBox(height: 10),
                                   Text(
-                                    'ระดับ ${saved['severity'] ?? '—'}'
+                                    '$savedType • ระดับ ${saved['severity'] ?? '—'}'
                                     '${'${saved['note'] ?? ''}'.isEmpty ? '' : ' • ${saved['note']}'}',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 14.5,
-                                      color: Colors.black54,
+                                      fontWeight: FontWeight.bold,
+                                      color: fg,
                                     ),
                                   ),
                                 ],
@@ -948,8 +898,10 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
     Color titleColor = Colors.black87,
     Color subtitleColor = Colors.black45,
     Widget? trailing,
+    Widget? titleTrailing,
     BoxBorder? border,
     VoidCallback? onTap,
+    int? badgeCount,
   }) {
     return Material(
       color: color,
@@ -965,19 +917,37 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
           ),
           child: Row(
             children: [
-              leading,
+              if (badgeCount != null && badgeCount > 0)
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    leading,
+                    Positioned(top: -6, right: -6, child: _badge(badgeCount)),
+                  ],
+                )
+              else
+                leading,
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: titleColor,
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: titleColor,
+                            ),
+                          ),
+                        ),
+                        // widget ท้ายแถว title (เช่น badge สถานะ —
+                        // อยู่บรรทัดเดียวกับ title subtitle ยืดเต็ม)
+                        ?titleTrailing,
+                      ],
                     ),
                     if (subtitle != null)
                       Text(
@@ -987,6 +957,8 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   ],
                 ),
               ),
+              // trailing เอาเท่าขนาดจริง — title ได้พื้นที่เหลือ
+              // ทั้งหมด (widget trailing ที่ยาวต้อง cap ขนาดเอง)
               ?trailing,
             ],
           ),
@@ -996,6 +968,23 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   }
 
   /// กล่อง icon มุมมนพื้นสี — leading ของการ์ดขาว
+  /// วงกลมแดงบอกจำนวนรายการ (ติดมุมขวาบนของไอคอน)
+  Widget _badge(int count) => Container(
+    constraints: const BoxConstraints(minWidth: 20),
+    padding: const EdgeInsets.all(4),
+    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+    child: Text(
+      '$count',
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        height: 1,
+      ),
+    ),
+  );
+
   Widget _iconBox(Color bg, IconData icon) {
     return Container(
       width: 54,
@@ -1017,7 +1006,9 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
       initialType: type,
     );
     if (!mounted) return;
-    setState(() => _riskPoint = widget.vm.riskPoint());
+    setState(() {
+      _riskPoint = widget.vm.riskPoint();
+    });
     if (saved != null) {
       ScaffoldMessenger.of(
         context,
@@ -1025,11 +1016,10 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
     }
   }
 
-  /// เปิด sheet อัปเดตสถานะแปลงตัด — บันทึกสำเร็จ refresh badge + snackbar
+  /// เปิด sheet อัปเดตสถานะแปลงตัด — บันทึกสำเร็จขึ้น snackbar
   Future<void> _openCutSheet() async {
     final saved = await showCutStatusSheet(context, vm: widget.vm);
     if (!mounted) return;
-    setState(() => _cut = widget.vm.cutStatus());
     if (saved == true) {
       ScaffoldMessenger.of(
         context,
@@ -1037,11 +1027,10 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
     }
   }
 
-  /// เปิด sheet โครงการส่งเสริม — บันทึกสำเร็จ refresh badge + snackbar
+  /// เปิด sheet โครงการส่งเสริม — บันทึกสำเร็จขึ้น snackbar
   Future<void> _openProjectSheet() async {
     final saved = await showPlotProjectSheet(context, vm: widget.vm);
     if (!mounted) return;
-    setState(() => _project = widget.vm.plotProject());
     if (saved == true) {
       ScaffoldMessenger.of(
         context,
@@ -1053,13 +1042,16 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
   /// พร้อมประเภทนั้น; ตัวที่บันทึกไว้ = พื้นเข้ม + ขอบสีชัด
   Widget _riskPreviewChip(String label, bool selected) {
     final (icon, bg, fg) = riskChipStyle(label);
+    // ตัวที่ไม่ได้เลือก = เทาหมด ไอคอนยังตามประเภทเดิม
+    final effBg = selected ? bg : Colors.grey.shade100;
+    final effFg = selected ? fg : Colors.black38;
     return Expanded(
       child: GestureDetector(
         onTap: () => _openRiskSheet(type: label),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 13),
           decoration: BoxDecoration(
-            color: selected ? bg : bg.withValues(alpha: 0.35),
+            color: effBg,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: selected ? fg : Colors.grey.shade300,
@@ -1069,7 +1061,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 21, color: fg),
+              Icon(icon, size: 21, color: effFg),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -1077,7 +1069,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: fg,
+                    color: effFg,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),

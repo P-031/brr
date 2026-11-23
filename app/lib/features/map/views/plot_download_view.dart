@@ -3,6 +3,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/features/map/models/parcel.dart' show ParcelPage;
 import 'package:brr/features/map/viewmodels/plot_download_viewmodel.dart';
 import 'package:brr/features/map/widgets/map_skeleton.dart';
@@ -53,7 +54,7 @@ class _DownloadBody extends StatelessWidget {
     final vm = context.watch<PlotDownloadViewModel>();
     final years = vm.serverYears;
     return Scaffold(
-      appBar: AppBar(title: const Text('ดาวน์โหลดข้อมูลแปลง')),
+      appBar: brrAppBar('ดาวน์โหลดข้อมูลแปลง'),
       body: vm.downloading || vm.downloadError != null
           ? vm.downloadError != null
                 ? _errorView(

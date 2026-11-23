@@ -20,9 +20,7 @@ class MapButton extends StatelessWidget {
         color: Colors.white,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.black12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 6),
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
       ),
       child: loading
           ? const Padding(
@@ -54,9 +52,7 @@ class CompassButton extends StatelessWidget {
         color: Colors.white,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.black12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 6),
-        ],
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
       ),
       child: Transform.rotate(
         // หมุนเข็มตรงข้ามกล้อง — ปลายแดงชี้เหนือจริงเสมอ

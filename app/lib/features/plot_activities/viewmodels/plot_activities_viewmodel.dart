@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/location_service.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/data/satellite_thumb_service.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/plot_activities/models/plot_list_item.dart';
 
 /// หน้ากิจกรรมแปลง — รายการแปลงแบบเพจ (30/ครั้ง) + ตัวกรองจาก backend
@@ -28,6 +30,10 @@ class PlotActivitiesViewModel extends ChangeNotifier {
 
   final ParcelService _service;
   final LocationService _location = LocationService();
+
+  /// loader รูปดาวเทียมให้ widget SatelliteThumb — view ไม่เห็น
+  /// ชั้น data ตรงๆ
+  SatThumbLoader get satThumb => SatelliteThumbService.load;
 
   /// ตำแหน่งผู้ใช้ปัจจุบัน (ปุ่มโฟกัส GPS บนแผนที่ย่อ)
   Future<LatLng?> currentPosition() => _location.currentPosition();
@@ -94,7 +100,7 @@ class PlotActivitiesViewModel extends ChangeNotifier {
 
   void select(String id) {
     _selectedId = _selectedId == id ? null : id;
-    notifyListeners();
+    _safeNotify();
   }
 
   PlotListItem? get selected {
@@ -117,7 +123,7 @@ class PlotActivitiesViewModel extends ChangeNotifier {
       _zoneOptions = options.zones;
       _caneTypeOptions = options.caneTypes;
     } catch (_) {}
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> refresh() async {
@@ -126,7 +132,7 @@ class PlotActivitiesViewModel extends ChangeNotifier {
     _error = null;
     _items = const [];
     _nextCursor = null;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _fetch(cursor: null);
       if (epoch != _fetchEpoch) return;
@@ -138,16 +144,17 @@ class PlotActivitiesViewModel extends ChangeNotifier {
         _error = '$e'.replaceFirst('Exception: ', '');
       }
     }
+    // epoch stale → refresh ใหม่กำลังทำงาน เป็นคนเคลียร์ _loading เอง
     if (epoch != _fetchEpoch) return;
     _loading = false;
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> loadMore() async {
     if (_nextCursor == null || _loadingMore || _loading) return;
     final epoch = _fetchEpoch;
     _loadingMore = true;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _fetch(cursor: _nextCursor);
       // refresh มาแทรกระหว่างรอ → ผลของเพจเก่าไม่เอามาต่อ list ใหม่
@@ -159,9 +166,12 @@ class PlotActivitiesViewModel extends ChangeNotifier {
       if (epoch == _fetchEpoch) {
         _error = '$e'.replaceFirst('Exception: ', '');
       }
+    } finally {
+      // finally ไม่ใช่ tail ปกติ — return ตอน epoch stale ข้างบน
+      // ก็ต้องเคลียร์ flag ไม่งั้น _loadingMore ค้างตลอด (ปุ่มตาย)
+      _loadingMore = false;
+      _safeNotify();
     }
-    _loadingMore = false;
-    notifyListeners();
   }
 
   Future<PlotPage> _fetch({required String? cursor}) => _service.fetchPlots(
@@ -221,12 +231,21 @@ class PlotActivitiesViewModel extends ChangeNotifier {
 
   void _apply(void Function() change) {
     change();
-    notifyListeners();
+    _safeNotify();
     unawaited(refresh());
+  }
+
+  bool _disposed = false;
+
+  /// fetch/timer ที่กลับมาหลังหน้าปิด — notify บน VM ที่ disposed
+  /// แล้ว crash "used after disposed" ข้ามเงียบๆ แทน
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _searchDebounce?.cancel();
     super.dispose();
   }

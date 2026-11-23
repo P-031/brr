@@ -1,6 +1,8 @@
 import 'package:latlong2/latlong.dart';
 
+import 'package:brr/features/map/models/geo_outline.dart';
 import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/core/utils/json_safe.dart';
 
 /// แถวข้อมูลแปลงจาก `GET /plots` (list endpoint) — เบากว่า Parcel
 /// เพราะไม่มี outline; meta ถูกแบนออกมาเป็นฟิลด์ที่ใช้โชว์การ์ด
@@ -51,9 +53,17 @@ class PlotListItem {
   final List<LatLng> points;
 
   factory PlotListItem.fromJson(Map<String, dynamic> j) {
-    final meta = j['meta'] as Map<String, dynamic>? ?? const {};
-    final farmer = j['farmer'] as Map<String, dynamic>?;
-    final center = j['center'] as Map<String, dynamic>?;
+    // cast ดิบหลุดทั้งไอเท็มถ้า backend ส่งผิดชนิด (meta เป็น
+    // List ฯลฯ) — เช็ก is ก่อนเหมือน Parcel.fromJson
+    final meta = j['meta'] is Map
+        ? j['meta'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    final farmer = j['farmer'] is Map
+        ? j['farmer'] as Map<String, dynamic>
+        : null;
+    final center = j['center'] is Map
+        ? j['center'] as Map<String, dynamic>
+        : null;
     String? s(String k) {
       final v = meta[k];
       return v == null || '$v'.isEmpty ? null : '$v';
@@ -63,8 +73,8 @@ class PlotListItem {
       id: '${j['id']}',
       // ตัด " #ตัวเลข" ท้ายชื่อออก — โชว์แค่ชื่อแปลงที่บันทึกไว้
       name: '${j['name']}'.replaceAll(RegExp(r'\s*#\d+\s*$'), ''),
-      farmerName: farmer?['displayName'] as String?,
-      farmerCode: farmer?['username'] as String?,
+      farmerName: farmer?['displayName']?.toString(),
+      farmerCode: farmer?['username']?.toString(),
       rootNo: s('rootNo'),
       sequenceNo: s('sequenceNo'),
       productionYear: s('productionYear'),
@@ -76,17 +86,12 @@ class PlotListItem {
       subdistrict: s('subdistrict'),
       district: s('district'),
       province: s('province'),
-      areaSqm: (j['areaSqm'] as num?)?.toDouble(),
-      centerLat: (center?['latitude'] as num?)?.toDouble(),
-      centerLng: (center?['longitude'] as num?)?.toDouble(),
-      points: [
-        for (final c in j['outline'] as List? ?? const [])
-          if (c is Map && c['latitude'] is num && c['longitude'] is num)
-            LatLng(
-              (c['latitude'] as num).toDouble(),
-              (c['longitude'] as num).toDouble(),
-            ),
-      ],
+      areaSqm: toDoubleOrNull(j['areaSqm']),
+      centerLat: toDoubleOrNull(center?['latitude']),
+      centerLng: toDoubleOrNull(center?['longitude']),
+      // outline จาก /plots เป็น GeoJSON — parser กลางรับทั้ง
+      // geometry object และ list {latitude,longitude}
+      points: outlineLatLngs(j['outline']),
     );
   }
 
