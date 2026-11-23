@@ -15,7 +15,7 @@ function issuerAliases(value: string): string[] {
   const match = value.match(/^(https?:\/\/)[^/:]+(:\d+)?(\/.*)$/);
   if (!match) return [value];
   const [, scheme, port = "", path] = match;
-  return [...new Set(["127.0.0.1", "localhost", "10.0.2.2", "192.168.0.199"].map((host) => `${scheme}${host}${port}${path}`))];
+  return [...new Set(["127.0.0.1", "localhost", "10.0.2.2"].map((host) => `${scheme}${host}${port}${path}`))];
 }
 
 export const env = {
@@ -26,11 +26,6 @@ export const env = {
   keycloakIssuer: issuer,
   keycloakIssuers: issuerAliases(issuer),
   keycloakClientId: required("KEYCLOAK_CLIENT_ID"),
-  keycloakAdminUsername: required("KEYCLOAK_ADMIN_USERNAME"),
-  keycloakAdminPassword: required("KEYCLOAK_ADMIN_PASSWORD"),
-  // Optional — when unset the API runs without Redis-backed
-  // caching, rate limiting, and job queues.
-  redisUrl: process.env.REDIS_URL?.trim() || undefined,
 };
 
 if (!Number.isInteger(env.port) || env.port < 1 || env.port > 65535) {

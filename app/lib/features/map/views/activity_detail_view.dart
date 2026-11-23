@@ -285,6 +285,14 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
 
   /// แถว label (ชิดขวา) + ช่องเทาแบบ dropdown ในการ์ด —
   /// [icon] ใช้วงกลมลูกศรลงสำหรับเลือก / ปฏิทินสำหรับวันที่
+  /// label อยู่บน ช่องอยู่ล่างเต็มความกว้าง (สไตล์เดียวกับ
+  /// _fieldCard ในหน้าวัดแปลง)
+  static const _fieldLabelStyle = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: Colors.black87,
+  );
+
   Widget _optRow(
     String label,
     String? value,
@@ -292,50 +300,41 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     VoidCallback onTap, {
     IconData icon = Iconsax.arrow_circle_down,
   }) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 5,
-          child: Text(
-            '$label :',
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 6,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: value == null ? Colors.grey.shade300 : AppColors.green,
-                  width: value == null ? 1 : 1.5,
-                ),
+        Text(label, style: _fieldLabelStyle),
+        const SizedBox(height: 6),
+        InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: value == null ? Colors.grey.shade300 : AppColors.green,
+                width: value == null ? 1 : 1.5,
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      value ?? hint,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: value == null ? Colors.black38 : Colors.black87,
-                      ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    value ?? hint,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: value == null ? Colors.black38 : Colors.black87,
                     ),
                   ),
-                  Icon(icon, size: 26, color: Colors.black87),
-                ],
-              ),
+                ),
+                Icon(icon, size: 26, color: Colors.black87),
+              ],
             ),
           ),
         ),
@@ -355,22 +354,22 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     cutLossTons: _cutLossTonCtrl.text,
   );
 
-  /// แถว label + ค่าคำนวณ (ตัวหนาน้ำเงินชิดขวา) — readonly
+  /// แถว label-บน + ค่าคำนวณในกรอบ (ตัวหนาน้ำเงินชิดขวา) — readonly
   Widget _calcRow(String label, double value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 5,
-          child: Text(
-            '$label :',
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
+        Text(label, style: _fieldLabelStyle),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade300),
           ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 6,
           child: Text(
             value.toStringAsFixed(3),
             textAlign: TextAlign.end,
@@ -385,39 +384,55 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
     ),
   );
 
-  /// แถว label + ช่องตัวเลขเส้นใต้ (อัตรา กก./ไร่)
-  Widget _rateRow(String label, TextEditingController c) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
+  /// decoration กรอบเทาเดียวกันของช่องพิมพ์ในฟอร์มนี้
+  static InputDecoration _boxDeco(String hint) => InputDecoration(
+    hintText: hint,
+    isDense: true,
+    filled: true,
+    fillColor: Colors.grey.shade100,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: Colors.grey.shade300),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: const BorderSide(color: AppColors.gold, width: 2),
+    ),
+  );
+
+  /// แถว label-บน + ช่องพิมพ์ในกรอบเต็มความกว้าง
+  /// ([numeric]=ช่องตัวเลขทศนิยม ค่าชิดขวา)
+  Widget _inputRow(
+    String label,
+    TextEditingController c, {
+    bool numeric = true,
+    int maxLines = 1,
+    String? hint,
+  }) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          flex: 5,
-          child: Text(
-            '$label :',
-            textAlign: TextAlign.end,
-            style: const TextStyle(fontSize: 16, color: Colors.black87),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          flex: 6,
-          child: TextField(
-            controller: c,
-            textAlign: TextAlign.end,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            inputFormatters: const [DigitFormatter(decimal: true)],
-            style: const TextStyle(fontSize: 20),
-            decoration: const InputDecoration(
-              hintText: '0.0',
-              hintStyle: TextStyle(fontSize: 18),
-              isDense: true,
-              border: UnderlineInputBorder(),
-              focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: AppColors.gold, width: 2),
-              ),
-            ),
-            onChanged: (_) => setState(() {}),
-          ),
+        Text(label, style: _fieldLabelStyle),
+        const SizedBox(height: 6),
+        TextField(
+          controller: c,
+          textAlign: numeric ? TextAlign.end : TextAlign.start,
+          keyboardType: numeric
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+          inputFormatters: numeric
+              ? const [DigitFormatter(decimal: true)]
+              : null,
+          maxLines: maxLines,
+          style: const TextStyle(fontSize: 18),
+          decoration: _boxDeco(hint ?? (numeric ? '0.0' : 'กรอกข้อมูล')),
+          onChanged: (_) => setState(() {}),
         ),
       ],
     ),
@@ -1076,46 +1091,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Text(
-                          'อัตราการใส่ปุ๋ย(กก./ไร่) :',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _rateCtrl,
-                            textAlign: TextAlign.end,
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
-                            inputFormatters: const [
-                              DigitFormatter(decimal: true),
-                            ],
-                            style: const TextStyle(fontSize: 17),
-                            decoration: const InputDecoration(
-                              hintText: '0.0',
-                              isDense: true,
-                              border: UnderlineInputBorder(),
-                              focusedBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: AppColors.gold,
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                            onChanged: (_) => setState(() {}),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
+                    _inputRow('อัตราการใส่ปุ๋ย(กก./ไร่)', _rateCtrl),
+                    const SizedBox(height: 4),
                     const Text(
                       'กรุณากรอกสูตรปุ๋ย NPK',
                       style: TextStyle(fontSize: 14, color: Colors.black45),
@@ -1308,7 +1285,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         );
                       }
                     }),
-                    _rateRow('อัตรา(กก./ไร่)', _organicRateCtrl),
+                    _inputRow('อัตรา(กก./ไร่)', _organicRateCtrl),
                     _optRow(
                       'วันที่ใส่',
                       _organicDate == null ? null : _fmtThai(_organicDate!),
@@ -1339,7 +1316,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    _rateRow('อัตรา(กก./ไร่)', _dolomiteRateCtrl),
+                    _inputRow('อัตรา(กก./ไร่)', _dolomiteRateCtrl),
                     _optRow(
                       'วันที่ใส่',
                       _dolomiteDate == null ? null : _fmtThai(_dolomiteDate!),
@@ -1420,7 +1397,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       _subsoiled,
                       (v) => setState(() => _subsoiled = v),
                     ),
-                    _rateRow('ความลึก(ซม.)', _subsoilDepthCtrl),
+                    _inputRow('ความลึก(ซม.)', _subsoilDepthCtrl),
                   ],
                 ),
               ),
@@ -1487,7 +1464,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         setState(() => _diseaseType = opts.diseaseTypes[idx]);
                       }
                     }),
-                    _rateRow('ระบาด (%)', _diseaseSpreadCtrl),
+                    _inputRow('ระบาด (%)', _diseaseSpreadCtrl),
                     _toggleRow(
                       'การจัดการโรค',
                       'จัดการแล้ว',
@@ -1566,8 +1543,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         }
                       },
                     ),
-                    _rateRow('ระบาด (%)', _pestSpreadCtrl),
-                    _rateRow('เบียน (%)', _pestDamageCtrl),
+                    _inputRow('ระบาด (%)', _pestSpreadCtrl),
+                    _inputRow('เบียน (%)', _pestDamageCtrl),
                     _toggleRow(
                       'การจัดการแมลง',
                       'จัดการแล้ว',
@@ -1820,8 +1797,8 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                         }
                       },
                     ),
-                    _rateRow('สูญเสียรวม(ไร่)', _lossAreaCtrl),
-                    _rateRow('ประเมิน(ตัน/ไร่)', _yieldEstimateCtrl),
+                    _inputRow('สูญเสียรวม(ไร่)', _lossAreaCtrl),
+                    _inputRow('ประเมิน(ตัน/ไร่)', _yieldEstimateCtrl),
                     _calcRow('ปริมาณตันรวม(ตัน)', _totalTons()),
                   ],
                 ),
@@ -1847,9 +1824,12 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _rateRow('หักตัดพันธุ์รวม\n(ตัน)', _cutVarietyCtrl),
-                    _rateRow('หักสูญเสีย จากการตัด\n(กก./ไร่)', _cutLossKgCtrl),
-                    _rateRow('หักสูญเสีย จากการตัด\n(ตัน)', _cutLossTonCtrl),
+                    _inputRow('หักตัดพันธุ์รวม\n(ตัน)', _cutVarietyCtrl),
+                    _inputRow(
+                      'หักสูญเสีย จากการตัด\n(กก./ไร่)',
+                      _cutLossKgCtrl,
+                    ),
+                    _inputRow('หักสูญเสีย จากการตัด\n(ตัน)', _cutLossTonCtrl),
                     _optRow(
                       'เลือกสาเหตุ หักสูญเสีย',
                       _cutLossReason,
@@ -1960,40 +1940,11 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 5),
-                      child: Row(
-                        children: [
-                          const Expanded(
-                            flex: 5,
-                            child: Text(
-                              'รายละเอียดอ้อยพันธุ์ :',
-                              textAlign: TextAlign.end,
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 6,
-                            child: TextField(
-                              controller: _seedNoteCtrl,
-                              style: const TextStyle(fontSize: 16),
-                              decoration: const InputDecoration(
-                                isDense: true,
-                                focusedBorder: UnderlineInputBorder(
-                                  borderSide: BorderSide(
-                                    color: AppColors.gold,
-                                    width: 2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                    _inputRow(
+                      'รายละเอียดอ้อยพันธุ์',
+                      _seedNoteCtrl,
+                      numeric: false,
+                      hint: 'ระบุรายละเอียด',
                     ),
                   ],
                 ),
@@ -2022,16 +1973,7 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
                       controller: _suggestionCtrl,
                       maxLines: 3,
                       style: const TextStyle(fontSize: 16),
-                      decoration: const InputDecoration(
-                        labelText: 'ข้อเสนอแนะ',
-                        isDense: true,
-                        focusedBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(
-                            color: AppColors.gold,
-                            width: 2,
-                          ),
-                        ),
-                      ),
+                      decoration: _boxDeco('พิมพ์ข้อเสนอแนะ'),
                     ),
                   ],
                 ),
@@ -2330,10 +2272,11 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
     ),
   );
 
-  Widget _label(String t) => Text(
-    t,
-    style: const TextStyle(fontSize: 17, color: Colors.black87),
-    textAlign: TextAlign.end,
+  /// label อยู่บนช่อง (สไตล์เดียวกับฟอร์มหลัก)
+  static const _dlgLabel = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: Colors.black87,
   );
 
   @override
@@ -2354,60 +2297,54 @@ class _FertRoundDialogState extends State<_FertRoundDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  _label('วันที่ใส่ :'),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _pickerField(
-                      'เลือกวันที่',
-                      _date == null ? null : _fmtThai(_date!),
-                      _pickDate,
-                    ),
-                  ),
-                ],
+              const Text('วันที่ใส่', style: _dlgLabel),
+              const SizedBox(height: 6),
+              _pickerField(
+                'เลือกวันที่',
+                _date == null ? null : _fmtThai(_date!),
+                _pickDate,
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  _label('อัตรา(กก./ไร่) :'),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextField(
-                      controller: _rateCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      inputFormatters: const [DigitFormatter(decimal: true)],
-                      style: const TextStyle(fontSize: 18),
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        border: UnderlineInputBorder(),
-                        focusedBorder: UnderlineInputBorder(
-                          borderSide: BorderSide(
-                            color: AppColors.gold,
-                            width: 2,
-                          ),
-                        ),
-                      ),
+              const Text('อัตรา(กก./ไร่)', style: _dlgLabel),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _rateCtrl,
+                textAlign: TextAlign.end,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: const [DigitFormatter(decimal: true)],
+                style: const TextStyle(fontSize: 18),
+                decoration: InputDecoration(
+                  hintText: '0.0',
+                  isDense: true,
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                      color: AppColors.gold,
+                      width: 2,
                     ),
                   ),
-                ],
+                ),
               ),
               const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: _label('สูตรปุ๋ย :'),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _pickerField('เลือก', _formula, _pickFormula),
-                  ),
-                ],
-              ),
+              const Text('สูตรปุ๋ย', style: _dlgLabel),
+              const SizedBox(height: 6),
+              _pickerField('เลือก', _formula, _pickFormula),
               const SizedBox(height: 14),
               const Text(
                 'สูตรปุ๋ย NPK',

@@ -11,8 +11,6 @@ const taskName = {
   FERTILIZE: "ใส่ปุ๋ย",
   SPRAY: "พ่นยา",
   HARVEST: "ตัดอ้อย",
-  PREPARE: "เตรียมแปลง",
-  CARE: "ดูแล",
 } as const;
 
 export type TaskName = (typeof taskName)[keyof typeof taskName];
@@ -22,8 +20,6 @@ export const taskKindByName = {
   ใส่ปุ๋ย: "FERTILIZE",
   พ่นยา: "SPRAY",
   ตัดอ้อย: "HARVEST",
-  เตรียมแปลง: "PREPARE",
-  ดูแล: "CARE",
 } as const;
 
 export function formatDate(date: Date): string {

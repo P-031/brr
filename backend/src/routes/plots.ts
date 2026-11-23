@@ -10,6 +10,7 @@ import { blockingOverlaps, overlapError } from "../overlap";
 import { farmerIdsForList, ownedPlot, requireFarmer, summarySelect, toDetail, visiblePlot } from "../plotAccess";
 import { prisma } from "../prisma";
 import { areaFields, plotSummary, surveyJson, taskJson, taskKindByName, yieldJson } from "../serialize";
+import { randomUUID } from "node:crypto";
 import { normalizeRing, polygonAreaSqm, ringCenter, type LatLng } from "../area";
 import { readBoundaries } from "../boundary";
 import { firstCrossingEdge, measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
@@ -68,7 +69,7 @@ const formFields = {
 
 const createPlotBody = z
 .object({
-  id: clientId,
+  id: clientId.optional(),
   name: z.string().trim().min(1).max(120),
   variety: z.string().trim().max(120).default(""),
   season: seasonText.optional(),
@@ -118,7 +119,7 @@ const updateYieldBody = z
     message: "ไม่มีข้อมูลให้แก้",
   });
 
-const taskNames = ["ปลูก", "ใส่ปุ๋ย", "พ่นยา", "ตัดอ้อย", "เตรียมแปลง", "ดูแล"] as const;
+const taskNames = ["ปลูก", "ใส่ปุ๋ย", "พ่นยา", "ตัดอ้อย"] as const;
 
 const taskBody = z.object({
   id: clientId,
@@ -307,12 +308,7 @@ fieldRouter.get(
     if (caneTypes.length > 0) and.push({ caneType: { in: caneTypes } });
     if (planted === "1") and.push({ caneType: { not: ""} });
     if (planted === "0") and.push({ OR: [{ caneType: null },  { caneType: "" }] });
-    if (groupKind === "harvest" || groupKind === "maintain") {
-      const word = groupKind === "harvest" ? "ตัด" : "บำรุง";
-      and.push({
-        OR: [{ groupKind }, { caneGroup: { contains: word } }],
-      });
-    }
+    if (groupKind === "harvest" || groupKind === "maintain") and.push({ groupKind });
     if (search) {
       and.push({
         OR: [
@@ -443,14 +439,16 @@ fieldRouter.post(
       throw new HttpError(403, "บันทึกแปลงได้เฉพาะตัวคุณเอง");
     }
 
-    const plotId = body.id;
-    const existing = await prisma.plot.findUnique({ where: { id: plotId }, select: { farmerId: true } });
-    if (existing) {
-      if (existing.farmerId !== farmerId) throw new HttpError(409, "รหัสแปลงนี้ถูกใช้แล้ว");
-      res.json(await toDetail(await visiblePlot(user, plotId)));
-      return;
+    const plotId = body.id ?? randomUUID();
+    if (body.id) {
+      const existing = await prisma.plot.findUnique({ where: { id: plotId }, select: { farmerId: true } });
+      if (existing) {
+        if (existing.farmerId !== farmerId) throw new HttpError(409, "รหัสแปลงนี้ถูกใช้แล้ว");
+        res.json(await toDetail(await visiblePlot(user, plotId)));
+        return;
+      }
+      await refuseDeleted("PLOT", plotId);
     }
-    await refuseDeleted("PLOT", plotId);
 
     const measured = body.survey ? measureSurvey(body.survey, new Date()) : measurePoints(body.points!);
     const surveyedAt = body.survey?.finishedAt ?? new Date();
@@ -540,13 +538,14 @@ fieldRouter.patch(
     const body = updatePlotBody.parse(req.body);
     const survey = body.survey;
     const measured = survey ? measureSurvey(survey, new Date()) : undefined;
-    
+    const season = body.season ?? body.productionYear;
 
     const saved = await prisma.$transaction(async (tx) => {
       if (measured) await lockBoundaries(tx);
       const data = {
         name: body.name,
         variety: body.caneVariety || body.variety,
+        season,
         officerName: body.officerName,
         project: body.project,
         caneGroup: body.caneGroup,
@@ -576,7 +575,7 @@ fieldRouter.patch(
      const updated = await tx.plot.updateMany({ where: { id: plotId, version: body.version }, data });
      if (updated.count === 0) return false;
       if (survey && measured) {
-        await assertFits(tx, measured, plot.farmerId, plot.season, plotId);
+        await assertFits(tx, measured, plot.farmerId, season ?? plot.season, plotId);
         await writeBoundary(tx, plotId, measured.ring);
         await tx.plotSurvey.create({ data: surveyRecord(plotId, survey, measured) });
       }
