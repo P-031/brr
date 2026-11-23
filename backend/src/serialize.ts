@@ -82,6 +82,8 @@ export function plotSummary(plot: {
   groupKind?: string | null;
   status?: string | null;
   cutStatus?: string | null;
+  maintainGroup?: string | null;
+  harvestGroup?: string | null;
   farmer: { id: string; username: string; displayName: string };
 }) {
   return {
@@ -130,6 +132,8 @@ export function plotMeta(plot: Parameters<typeof plotSummary>[0]) {
     note: plot.note ?? null,
     groupKind: plot.groupKind ?? null,
     cutStatus: plot.cutStatus ?? null,
+    maintainGroup: plot.maintainGroup ?? null,
+    harvestGroup: plot.harvestGroup ?? null,
   }
 }
 
