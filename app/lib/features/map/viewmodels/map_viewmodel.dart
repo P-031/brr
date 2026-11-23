@@ -97,6 +97,7 @@ class MapViewModel extends ChangeNotifier {
   final List<LatLng> _draft = [];
   final List<WalkCorner> _corners = [];
   DateTime? _walkStartedAt;
+  String? _plotClientId;
 
   // walk-measure state
   StreamSubscription<Position>? _posSub;
@@ -379,6 +380,8 @@ class MapViewModel extends ChangeNotifier {
     if (!canDrawManually) return;
     _drawing = true;
     _draft.clear();
+    _plotClientId = null;
+    _dropWalkSurvey();
     _safeNotify();
     // subscribe position stream ด้วย — แผง GPS ในแถบล่างต้องมี
     // พิกัด/คลาดเคลื่อนจริงแม้โหมดแตะวาด (ไม่ได้เดินวัด)
@@ -439,6 +442,7 @@ class MapViewModel extends ChangeNotifier {
     _badFixStreak = 0;
     _draft.clear();
     _corners.clear();
+    _plotClientId = null;
     _walkStartedAt = DateTime.now();
     _safeNotify();
     // sub เก่าอาจค้างจาก startDrawing — ต้องปิดก่อนไม่งั้น
@@ -522,6 +526,10 @@ class MapViewModel extends ChangeNotifier {
   void addDraftPoint(LatLng p) {
     if (!_drawing) return;
     _draft.add(p);
+    // จุดที่แตะบนแผนที่ไม่ได้มาจาก GPS — เลิกใช้ชุดเดินวัด
+    // ไม่งั้นจำนวนมุมไม่ตรง แล้วกฎความแม่นยำทั้งแปลงหาย
+    // หรือส่งรูปเดินรอบก่อนแทนจุดที่เห็น
+    _dropWalkSurvey();
     _safeNotify();
   }
 
@@ -590,27 +598,27 @@ class MapViewModel extends ChangeNotifier {
     _safeNotify();
   }
 
-  /// ลากย้ายหมุด — update the point at [index] after a pin drag.
+  /// ลากย้ายหมุด — จุดที่ย้ายไม่ใช่ค่า GPS เดิม จึงไม่ส่งความแม่นยำเดิม
   void moveDraftPoint(int index, LatLng p) {
     if (index < 0 || index >= _draft.length) return;
     _draft[index] = p;
-    if (index < _corners.length) {
-      final corner = _corners[index];
-      _corners[index] = WalkCorner(
-        point: p,
-        accuracyM: corner.accuracyM,
-        capturedAt: corner.capturedAt,
-      );
-    }
+    _dropWalkSurvey();
     _safeNotify();
   }
 
   /// เริ่มใหม่ — clear every drafted point, stay in drawing mode.
   void clearDraft() {
-    if (_draft.isEmpty) return;
+    if (_draft.isEmpty && _corners.isEmpty && _walkStartedAt == null) return;
     _draft.clear();
-    _corners.clear();
+    _plotClientId = null;
+    _dropWalkSurvey();
     _safeNotify();
+  }
+
+  /// รูปที่เห็นไม่ตรงกับการเดินวัดแล้ว — ห้ามส่งความแม่นยำของรอบเดินเดิม
+  void _dropWalkSurvey() {
+    _corners.clear();
+    _walkStartedAt = null;
   }
 
   void cancelDrawing() {
@@ -622,6 +630,7 @@ class MapViewModel extends ChangeNotifier {
     _draft.clear();
     _corners.clear();
     _walkStartedAt = null;
+    _plotClientId = null;
     _safeNotify();
   }
 
@@ -660,7 +669,9 @@ class MapViewModel extends ChangeNotifier {
     _saving = true;
     _safeNotify();
     try {
+      _plotClientId ??= newPlotId();
       final p = await _service.createParcel(
+        id: _plotClientId!,
         name: name,
         productionYear: productionYear,
         officerName: officerName,

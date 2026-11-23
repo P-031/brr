@@ -233,6 +233,42 @@ class ParcelLocalStore {
     );
   });
 
+  /// รหัสที่ใช้ยิง POST จริงของร่างนี้ — จำไว้ในเครื่อง เพื่อกดยืนยันซ้ำแล้วไม่สร้างแปลงใบที่สอง
+  /// [newId] = รหัสที่ caller gen มาให้ (store gen เองไม่ได้เพราะ
+  /// newPlotId อยู่ชั้น service) — ถ้า meta มี clientId อยู่แล้ว
+  /// คืนของเดิม ไม่เขียนทับ
+  Future<String> ensureClientId(Parcel draft, String newId) =>
+      _serialized(() async {
+        final raw = draft.meta?['clientId'];
+        if (raw is String && raw.isNotEmpty) return raw;
+        final prefs = await SharedPreferences.getInstance();
+        final drafts = await loadDrafts();
+        final i = drafts.indexWhere((d) => d.id == draft.id);
+        if (i < 0) return newId;
+        final d = drafts[i];
+        // ระหว่างรอ queue อาจมีใคร stamp ไปแล้ว — เช็คซ้ำก่อนเขียน
+        final existing = d.meta?['clientId'];
+        if (existing is String && existing.isNotEmpty) return existing;
+        drafts[i] = Parcel(
+          id: d.id,
+          name: d.name,
+          variety: d.variety,
+          owner: d.owner,
+          productionYear: d.productionYear,
+          meta: {...?d.meta, 'clientId': newId},
+          status: d.status,
+          points: d.points,
+          isDraft: d.isDraft,
+          savedAt: d.savedAt,
+          centerOverride: d.centerOverride,
+        );
+        await prefs.setString(
+          _draftsKey,
+          jsonEncode([for (final item in drafts) item.toJson()]),
+        );
+        return newId;
+      });
+
   /// ร่างที่ยืนยันแล้วเก็บไว้เป็นหลักฐานแค่ช่วงหนึ่ง — ข้อมูลจริง
   /// อยู่บน server แล้ว ปล่อยสะสมถาวรจะทำ prefs/หน้ารายการโต
   /// เกินจำเป็น (ปีการผลิตนึงอาจหลายร้อยแปลง)

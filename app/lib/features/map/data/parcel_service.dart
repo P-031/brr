@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -13,6 +14,16 @@ import 'package:brr/features/parcel_status/models/plot_request.dart';
 import 'package:brr/features/plot_activities/models/plot_list_item.dart';
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/utils/json_safe.dart';
+
+/// รหัสแปลงที่แอปเป็นคนตั้ง — ส่งซ้ำรหัสเดิมจะไม่สร้างแปลงใบที่สอง
+String newPlotId() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+}
 
 /// ข้อความ error จาก body ของ backend — ตอบเป็น
 /// `{error: "...", details: [{path, message}]}` (zod) หรือ
@@ -89,6 +100,12 @@ class ParcelService {
   }
 
   Future<List<Parcel>> fetchDrafts() => _drafts();
+
+  /// รหัสที่ใช้ยิง POST จริงของร่างนี้ — จำไว้ในเครื่อง เพื่อกดยืนยันซ้ำแล้วไม่สร้างแปลงใบที่สอง
+  /// (gen รหัสที่นี่ แต่เขียนลง prefs ผ่าน write queue ของ local
+  /// store เดียวกันกับ saveDraft — ไม่เขียน prefs ตรงๆ เอง)
+  Future<String> ensureClientId(Parcel draft) =>
+      _local.ensureClientId(draft, newPlotId());
 
   /// ยืนยันร่างสำเร็จ — ไม่ลบ แต่ stamp `status = 'confirmed'` ไว้
   /// ให้หน้าฉบับร่างกรอง "ยืนยันแล้ว/ยังไม่ยืนยัน" ได้
@@ -566,6 +583,7 @@ class ParcelService {
     List<String> photos = const [],
     bool draft = false,
     required List<LatLng> points,
+    required String id,
     Map<String, Object?>? survey,
   }) async {
     // Draft = save on device only, never posts to the backend.
@@ -575,6 +593,7 @@ class ParcelService {
       late http.Response res;
       try {
         res = await _api.postJson(ApiEndpoints.plots, {
+          'id': id,
           'name': name,
           'variety': variety,
           // Officer saves the plot for the picked farmer; farmers
@@ -638,6 +657,7 @@ class ParcelService {
       // เก็บ payload ฟอร์มครบไว้ใน meta — หน้าฉบับร่างใช้แสดง +
       // replay เป็น POST จริงตอน "ยืนยัน" / prefill ตอน "แก้ไข"
       meta: {
+        'clientId': id,
         'productionYear': ?productionYear,
         'officerName': ?officerName,
         'project': ?project,
