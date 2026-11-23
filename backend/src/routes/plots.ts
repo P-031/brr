@@ -312,7 +312,12 @@ fieldRouter.get(
     if (groupKind === "harvest" || groupKind === "maintain") {
       const word = groupKind === "harvest" ? "ตัด" : "บำรุง";
       and.push({
-        OR: [{ groupKind }, { caneGroup: { contains: word } }],
+        OR: [
+          { groupKind },
+          { caneGroup: { contains: word } },
+          { maintainGroup: { contains: word } },
+          { harvestGroup: { contains: word } },
+        ],
       });
     }
     if (search) {
@@ -540,6 +545,18 @@ fieldRouter.get(
         });
         if (!allowed) throw new HttpError(400, "สถานะไม่อยู่ในตัวเลือก");
       }
+      if (body.kind === "group") {
+        if (!body.maintainGroup && !body.harvestGroup) {
+          throw new HttpError(400, "ยังไม่ได้เลือกกลุ่ม");
+        }
+        for (const label of [body.maintainGroup, body.harvestGroup]) {
+          if (!label) continue;
+          const allowed = await prisma.fromOption.findUnique({
+            where: { group_label: { group: "caneGroups", label } },
+          });
+          if (!allowed) throw new HttpError(400, "กลุ่มไม่อยู่ในตัวเลือก");
+        }
+      }
       const payload = Object.fromEntries(
         Object.entries({
           value: body.value,
@@ -637,7 +654,7 @@ fieldRouter.patch(
       include: { plot: {select: { name: true, season: true } } },
     });
     if (!existing) throw new HttpError(404, "ไม่พบคำขอ");
-    if (existing.status === "รออนมัติ") throw new HttpError(409, "คำขอนี้ตัดสินไปแล้ว");
+    if (existing.status !== "รออนุมัติ") throw new HttpError(409, "คำขอนี้ตัดสินไปแล้ว");
     await visiblePlot(user, existing.plotId);
 
     const saved = await prisma.$transaction(async (tx) => {
@@ -676,7 +693,21 @@ fieldRouter.patch(
           },
         });
       }
-     } 
+     }
+     if (body.status === "อนุมัติ" && existing.kind === "group") {
+      const maintainGroup = payloadText(existing.payload, "maintainGroup");
+      const harvestGroup = payloadText(existing.payload, "harvestGroup");
+      if (maintainGroup || harvestGroup) {
+        await tx.plot.update({
+          where: { id: existing.plotId },
+          data: {
+            maintainGroup,
+            harvestGroup,
+            version: {increment: 1 },
+          },
+        });
+      }
+     }
       return updated;
     });
 
