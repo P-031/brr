@@ -519,7 +519,7 @@ fieldRouter.get(
       reason: z.string().trim().max(200).optional(),
       canePlantMode: z.string().trim().max(80).optional(),
       caneTypeNew: z.string().trim().max(80).optional(),
-      newPlotCode: z.string().trim().max(80).optional(),
+      newPlotCode: z.string().trim().regex(/^\d{1,10}$/, "รหัสแปลงต้องเป็นตัวเลข").optional(),
       newFarmer: z.string().trim().max(120).optional(),
       newFarmerId: z.string().trim().min(1).max(64).optional(),
       maintainGroup: z.string().trim().max(120).optional(),
@@ -637,6 +637,7 @@ fieldRouter.patch(
       include: { plot: {select: { name: true, season: true } } },
     });
     if (!existing) throw new HttpError(404, "ไม่พบคำขอ");
+    if (existing.status === "รออนมัติ") throw new HttpError(409, "คำขอนี้ตัดสินไปแล้ว");
     await visiblePlot(user, existing.plotId);
 
     const saved = await prisma.$transaction(async (tx) => {
