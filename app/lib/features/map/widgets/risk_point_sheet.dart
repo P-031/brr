@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/sheet_close_button.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/core/utils/json_safe.dart';
@@ -247,20 +248,24 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
     );
   }
 
-  InputDecoration _fieldDeco(String hint) => InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(fontSize: 16.5, color: Colors.black38),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: Colors.grey.shade300),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: BorderSide(color: _selColors.$2, width: 1.5),
-    ),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-  );
+  InputDecoration _fieldDeco(String hint, {bool hideHint = false}) =>
+      InputDecoration(
+        hintText: hideHint ? null : hint,
+        hintStyle: const TextStyle(fontSize: 16.5, color: Colors.black38),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: _selColors.$2, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 13,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -306,11 +311,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Iconsax.close_circle, size: 28),
-                color: Colors.black45,
-              ),
+              const SheetCloseButton(),
             ],
           ),
           const Divider(height: 26),
@@ -328,6 +329,18 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
                 for (final l in snap.data?.riskLevels ?? const <String>[])
                   riskDisplayName(l),
               ].reversed.toList();
+              if (snap.connectionState != ConnectionState.done) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Center(
+                    child: SizedBox(
+                      width: 26,
+                      height: 26,
+                      child: CircularProgressIndicator(strokeWidth: 2.5),
+                    ),
+                  ),
+                );
+              }
               if (levels.isEmpty) {
                 return const Text(
                   'โหลดตัวเลือกไม่สำเร็จ',
@@ -390,13 +403,34 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
             style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 10),
-          TextField(
-            textAlign: TextAlign.start,
-            controller: _noteCtrl,
-            maxLines: 3,
-            style: const TextStyle(fontSize: 17),
-            decoration: _fieldDeco(
-              'เช่น น้ำหลากจากคลองธรรมชาติช่วงฝนตกหนัก...',
+          // hint วาดเองกลางกล่องแนวตั้ง (hintText ของ multiline ติด
+          // บนเสมอ) — ชิดซ้ายเหมือนเดิม ไม่จัดกลางแนวนอน
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _noteCtrl,
+            builder: (_, v, _) => Stack(
+              alignment: Alignment.centerLeft,
+              children: [
+                TextField(
+                  textAlign: TextAlign.start,
+                  controller: _noteCtrl,
+                  maxLines: 3,
+                  style: const TextStyle(fontSize: 17),
+                  decoration: _fieldDeco(
+                    'เช่น น้ำหลากจากคลองธรรมชาติช่วงฝนตกหนัก...',
+                    hideHint: true,
+                  ),
+                ),
+                if (v.text.isEmpty)
+                  const IgnorePointer(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14),
+                      child: Text(
+                        'เช่น น้ำหลากจากคลองธรรมชาติช่วงฝนตกหนัก...',
+                        style: TextStyle(fontSize: 16.5, color: Colors.black38),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 22),

@@ -1,27 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/brr_app_bar.dart';
-import 'package:brr/features/notifications/data/notification_store.dart';
+import 'package:brr/features/notifications/viewmodels/notifications_viewmodel.dart';
 
 /// การแจ้งเตือน — list page; currently no data source.
 class NotificationsView extends StatelessWidget {
   const NotificationsView({super.key});
 
-  // Placeholder — backend will supply real notification items.
-  static const _items = <({String title, String body, String time})>[];
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => NotificationsViewModel(),
+      child: const _Body(),
+    );
+  }
+}
+
+class _Body extends StatelessWidget {
+  const _Body();
 
   @override
   Widget build(BuildContext context) {
-    // อัปเดท badge หลังเฟรม — setValue ระหว่าง build กระทบ listener
-    // ที่กำลัง build อยู่ (setState during build)
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unreadNotifications.value = _items.length;
-    });
+    final items = context.watch<NotificationsViewModel>().items;
     return Scaffold(
       appBar: brrAppBar('การแจ้งเตือน'),
-      body: _items.isEmpty
+      body: items.isEmpty
           ? const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -36,10 +42,10 @@ class NotificationsView extends StatelessWidget {
               ),
             )
           : ListView.separated(
-              itemCount: _items.length,
+              itemCount: items.length,
               separatorBuilder: (_, _) => const Divider(height: 1),
               itemBuilder: (context, i) {
-                final n = _items[i];
+                final n = items[i];
                 return ListTile(
                   leading: const CircleAvatar(
                     backgroundColor: AppColors.goldLight,

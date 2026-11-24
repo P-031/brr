@@ -9,6 +9,8 @@ class AppColors {
   static const Color goldLight = Color(0xFFF5E6B8);
   static const Color sky = Color(0xFF2D7FBF); // field sky — highlight ค่า
   static const Color skyLight = Color(0xFF9FC8EC);
+  static const Color pink = Color(0xFFFF69B4); // polygon ที่กำลังวัด/ปักหมุด
+  static const Color purple = Color(0xFF9C27B0); // polygon แปลงที่บันทึกแล้ว
   static const Color white = Colors.white;
 }
 
@@ -48,6 +50,23 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
         ),
+      ),
+      // dialog กลางจอ (แจ้งเตือน/ยืนยัน/แสดงข้อมูล) — default ของ
+      // Material เล็กเกินสำหรับงานกลางแจ้ง บังคับขนาดให้อ่านง่าย
+      // ตรง convention ของ dialog ที่เขียนเอง (title ~20 bold / body ~17)
+      dialogTheme: DialogThemeData(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        // default เว้นขอบ 40px ต่อข้าง → dialog แคบเมื่อเทียบจอ
+        insetPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 24,
+        ),
+        titleTextStyle: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+        contentTextStyle: const TextStyle(fontSize: 17, color: Colors.black87),
       ),
       cardTheme: CardThemeData(
         color: Colors.white,

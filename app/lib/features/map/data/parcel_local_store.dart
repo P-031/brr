@@ -48,6 +48,10 @@ class ParcelLocalStore {
   /// ไฟล์ cache payload ดาวน์โหลดล่าสุด — fallback ตอนเน็ตล่ม.
   static const _cacheName = 'parcels_cache.json';
 
+  /// ไฟล์ cache /meta/options ล่าสุด — master options เปลี่ยนน้อย
+  /// แต่ endpoint หนัก (แนบ prevPlots) เก็บไว้เด้งทันทีรอบถัดไป
+  static const _metaCacheName = 'meta_options.json';
+
   /// คิวเขียน prefs ทีละงานตามลำดับ — กัน load→แก้→save 2 งาน
   /// แข่งกันแล้วตัวหลังทับตัวแรกหาย (เช่น flushPendingEdits อัตโนมัติ
   /// ชนกับ queuePendingEdit ที่เขียนจาก PATCH ล้มพร้อมกัน)
@@ -83,6 +87,29 @@ class ParcelLocalStore {
       final f = await _cacheFile();
       // เขียน tmp แล้ว rename — writeAsString ตรงๆ เสี่ยงไฟล์ค้าง
       // ครึ่งเดียวตอนแอปดับ/เขียนซ้อน → cache ออฟไลน์พังทั้งไฟล์
+      final tmp = File('${f.path}.tmp');
+      await tmp.writeAsString(body, flush: true);
+      await tmp.rename(f.path);
+    } catch (_) {}
+  }
+
+  Future<File> _metaCacheFile() async =>
+      File('${(await getApplicationDocumentsDirectory()).path}/$_metaCacheName');
+
+  /// body ดิบของ /meta/options ครั้งล่าสุด — null ถ้าไม่เคยโหลดสำเร็จ
+  Future<String?> readMetaOptions() async {
+    try {
+      final f = await _metaCacheFile();
+      if (!await f.exists()) return null;
+      return await f.readAsString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> writeMetaOptions(String body) async {
+    try {
+      final f = await _metaCacheFile();
       final tmp = File('${f.path}.tmp');
       await tmp.writeAsString(body, flush: true);
       await tmp.rename(f.path);

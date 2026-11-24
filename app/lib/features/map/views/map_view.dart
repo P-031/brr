@@ -188,15 +188,17 @@ class _MapBodyState extends State<_MapBody> {
   Map<String, String>? _riskSrc;
   Set<Polygon> _polyCache = const {};
 
-  /// สีพื้น/เส้นของแปลง — ร่าง=เขียว / ไม่มีสถานะจุดเสี่ยง=ฟ้า /
-  /// กำหนดจุดเสี่ยงแล้ว=สีตามชนิดภัย (ชุดเดียวกับ chip ใน info sheet)
+  /// สีพื้น/เส้นของแปลง — กำหนดจุดเสี่ยงแล้ว=สีตามชนิดภัย
+  /// (ชุดเดียวกับ chip ใน info sheet) / ที่เหลือ (บันทึกแล้ว
+  /// รวมร่างในเครื่อง)=ม่วง; ที่กำลังวัดอยู่วาดชมพูแยกใน _polygons
   (Color, Color) _parcelColors(Parcel p, Map<String, String> risks) {
-    if (p.isDraft) {
-      return (AppColors.green.withValues(alpha: 0.3), AppColors.green);
-    }
+    // จุดเสี่ยงทาตามสีชนิดภัยเสมอ; ที่เหลือ (บันทึกแล้ว/ratingร่าง) = ม่วง
     final type = risks[p.id] ?? '';
     if (type.isEmpty) {
-      return (AppColors.sky.withValues(alpha: 0.3), AppColors.sky);
+      return (
+        AppColors.purple.withValues(alpha: 0.3),
+        AppColors.purple,
+      );
     }
     final (_, bg, fg) = riskChipStyle(type);
     return (bg.withValues(alpha: 0.6), fg);
@@ -207,6 +209,7 @@ class _MapBodyState extends State<_MapBody> {
   static Future<BitmapDescriptor> _numberedPin(
     int n, {
     ui.Color ring = Colors.white,
+    ui.Color color = AppColors.pink,
   }) {
     // Drawn at 3x then scaled down — crisp edges on hi-dpi screens.
     const ratio = 3.0;
@@ -215,7 +218,7 @@ class _MapBodyState extends State<_MapBody> {
     final canvas = ui.Canvas(recorder);
     const c = ui.Offset(size / 2, size / 2);
     canvas
-      ..drawCircle(c, size / 2 - 2 * ratio, ui.Paint()..color = AppColors.green)
+      ..drawCircle(c, size / 2 - 2 * ratio, ui.Paint()..color = color)
       ..drawCircle(
         c,
         size / 2 - 2 * ratio,
@@ -493,13 +496,13 @@ class _MapBodyState extends State<_MapBody> {
     }
     return {
       ..._polyCache,
-      // ขอบที่กำลังวาด — สร้างใหม่ทุกครั้ง (ตัวเดียว ถูกมาก)
+      // ขอบที่กำลังวาด — ชมพูทั้งหมดตอนเดินวัด/ปักหมุด (ตัวเดียว ถูกมาก)
       if (vm.draft.length >= 3)
         Polygon(
           polygonId: const PolygonId('draft'),
           points: [for (final x in vm.draft) _ll(x)],
-          fillColor: AppColors.green.withValues(alpha: 0.3),
-          strokeColor: AppColors.green,
+          fillColor: AppColors.pink.withValues(alpha: 0.2),
+          strokeColor: AppColors.pink,
           strokeWidth: 3,
         ),
     };
@@ -693,7 +696,7 @@ class _MapBodyState extends State<_MapBody> {
                                     ? _pinSelIcons[i + 1] ?? _pinIcons[i + 1]
                                     : _pinIcons[i + 1]) ??
                                 BitmapDescriptor.defaultMarkerWithHue(
-                                  BitmapDescriptor.hueGreen,
+                                  BitmapDescriptor.hueRose,
                                 ),
                           ),
                       },

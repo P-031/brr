@@ -84,11 +84,11 @@ class DraftsView extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ยกเลิก'),
+            child: const Text('ยกเลิก', style: TextStyle(fontSize: 17)),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ยืนยัน'),
+            child: const Text('ยืนยัน', style: TextStyle(fontSize: 17)),
           ),
         ],
       ),
@@ -113,14 +113,14 @@ class DraftsView extends StatelessWidget {
           TextButton(
             style: TextButton.styleFrom(foregroundColor: Colors.black87),
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ยกเลิก'),
+            child: const Text('ยกเลิก', style: TextStyle(fontSize: 17)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
               backgroundColor: const Color(0xFFDC4444),
             ),
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ลบ'),
+            child: const Text('ลบ', style: TextStyle(fontSize: 17)),
           ),
         ],
       ),
@@ -155,11 +155,11 @@ class DraftsView extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('ยกเลิก'),
+            child: const Text('ยกเลิก', style: TextStyle(fontSize: 17)),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('ยืนยัน'),
+            child: const Text('ยืนยัน', style: TextStyle(fontSize: 17)),
           ),
         ],
       ),

@@ -368,8 +368,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
   ];
 
   Future<List<PickerItem>> _farmerItems() async => [
-    for (final f in await widget.farmers())
-      PickerItem(code: f.id, name: f.name),
+    for (final f in await _farmers()) PickerItem(code: f.id, name: f.name),
   ];
 
   /// Multi-select version of [_picker] — for fields like
@@ -485,13 +484,41 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     );
   }
 
+  Future<FormOptions>? _optionsCache;
+  Future<List<FarmerRef>>? _farmersCache;
+
+  /// master data — fetch ครั้งเดียวต่อหน้า แชร์ให้ทุก dropdown
+  /// (เดิมทุกครั้งที่แตะ picker ยิง /meta/options ใหม่ทั้ง request);
+  /// ล้มเหลวเคลียร์ cache ให้แตะ retry ได้ ไม่ค้างเป็น error ตลอดหน้า
+  Future<FormOptions> _options() {
+    final c = _optionsCache;
+    if (c != null) return c;
+    final f = widget.options();
+    f.catchError((_) {
+      _optionsCache = null;
+      return const FormOptions();
+    });
+    return _optionsCache = f;
+  }
+
+  Future<List<FarmerRef>> _farmers() {
+    final c = _farmersCache;
+    if (c != null) return c;
+    final f = widget.farmers();
+    f.catchError((_) {
+      _farmersCache = null;
+      return const <FarmerRef>[];
+    });
+    return _farmersCache = f;
+  }
+
   /// Pulls one option list out of the backend-supplied [FormOptions].
   Future<List<String>> _pick(List<String> Function(FormOptions) f) =>
-      widget.options().then(f);
+      _options().then(f);
 
   /// เลขแปลงปีก่อน — existing plots from the backend (code = plot id).
   Future<List<PickerItem>> _prevPlotItems() async => [
-    for (final p in (await widget.options()).prevPlots)
+    for (final p in (await _options()).prevPlots)
       PickerItem(code: p.code, name: p.name),
   ];
 
@@ -553,7 +580,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
             padding: const EdgeInsets.only(top: 4),
             child: Text(
               helper,
-              style: const TextStyle(fontSize: 13, color: Colors.black54),
+              style: const TextStyle(fontSize: 16, color: Colors.black54),
             ),
           ),
       ],
@@ -571,26 +598,30 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
   /// decoration ของช่องพิมพ์ในการ์ด — กรอบเดียวกับ _innerBox
   // hint บอกชื่อช่องเสมอ — เดิมทุกช่อง "กรอกข้อมูล" เหมือนกัน
   // หมด มองไม่ออกว่าช่องไหนคืออะไร
-  static InputDecoration _innerDeco(String label) => InputDecoration(
-    isDense: true,
-    filled: true,
-    fillColor: const Color(0xFFFAFAFA), // grey.shade50 (const)
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    hintText: 'กรอก$label',
-    hintStyle: const TextStyle(fontSize: 17, color: Colors.black38),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(10)),
-      borderSide: BorderSide(color: Colors.black12),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(10)),
-      borderSide: BorderSide(color: Colors.black12),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(10)),
-      borderSide: BorderSide(color: AppColors.green, width: 2),
-    ),
-  );
+  static InputDecoration _innerDeco(String label, {bool hideHint = false}) =>
+      InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: const Color(0xFFFAFAFA), // grey.shade50 (const)
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+        hintText: hideHint ? null : 'กรอก$label',
+        hintStyle: const TextStyle(fontSize: 17, color: Colors.black38),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderSide: BorderSide(color: Colors.black12),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderSide: BorderSide(color: Colors.black12),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(10)),
+          borderSide: BorderSide(color: AppColors.green, width: 2),
+        ),
+      );
 
   /// Text field — มีข้อมูล = กรอบเขียว, [required] = ห้ามว่าง
   /// (validate สดตอนพิมพ์ กรอบแดงหายทันทีที่กรอก)
@@ -601,6 +632,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     TextInputType? keyboard,
     int maxLines = 1,
     bool required = false,
+    bool center = false,
     String? helper,
     String? Function(String?)? validator,
     List<TextInputFormatter>? formatters,
@@ -618,22 +650,39 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
           value.text.trim().isEmpty &&
           (_showErrors || _touched.contains(ctrl)),
       helper: helper,
-      child: TextFormField(
-        textAlign: TextAlign.start,
-        controller: ctrl,
-        style: const TextStyle(fontSize: 19),
-        keyboardType: keyboard,
-        maxLines: maxLines,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        validator: (v) {
-          if (required && (v == null || v.trim().isEmpty)) {
-            return 'กรุณากรอกข้อมูล';
-          }
-          return validator?.call(v);
-        },
-        inputFormatters: formatters,
-        onChanged: (_) => _touched.add(ctrl),
-        decoration: _innerDeco(label),
+      // center → hint ตัวเองวาดตรงกลางเป็น overlay (hintText ของ
+      // multiline ติดบนเสมอ textAlignVertical ขยับไม่ได้) แสดงเฉพาะ
+      // ตอนช่องว่าง — ตัวพิมพ์จริงชิดซ้ายเหมือนช่องอื่น
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          TextFormField(
+            textAlign: TextAlign.start,
+            controller: ctrl,
+            style: const TextStyle(fontSize: 19),
+            keyboardType: keyboard,
+            maxLines: maxLines,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            validator: (v) {
+              if (required && (v == null || v.trim().isEmpty)) {
+                return 'กรุณากรอกข้อมูล';
+              }
+              return validator?.call(v);
+            },
+            inputFormatters: formatters,
+            onChanged: (_) => _touched.add(ctrl),
+            decoration: _innerDeco(label, hideHint: center),
+          ),
+          // ต้องวางหลัง TextField — พื้นเทาของช่องทึบ ถ้าอยู่ล่าง
+          // จะโดนทับจนมองไม่เห็น
+          if (center && value.text.isEmpty)
+            const IgnorePointer(
+              child: Text(
+                'กรุณากรอกข้อเสนอแนะ',
+                style: TextStyle(fontSize: 17, color: Colors.black38),
+              ),
+            ),
+        ],
       ),
     ),
   );
@@ -946,7 +995,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                _tf(_noteCtrl, 'ข้อเสนอแนะ', null, maxLines: 3),
+                _tf(_noteCtrl, 'ข้อเสนอแนะ', null, maxLines: 3, center: true),
                 const SizedBox(height: 24),
                 Card(
                   shape: RoundedRectangleBorder(

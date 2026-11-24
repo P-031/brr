@@ -3,6 +3,7 @@ import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/option_popup.dart';
+import 'package:brr/core/widgets/sheet_close_button.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 
@@ -174,7 +175,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 15.5,
+                  fontSize: 17.5,
                   color: current == null ? Colors.black45 : Colors.black87,
                 ),
               ),
@@ -241,7 +242,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                   Expanded(
                     child: Text(
                       '${i + 1}. $name',
-                      style: const TextStyle(fontSize: 16.5),
+                      style: const TextStyle(fontSize: 18.5),
                     ),
                   ),
                   if (required)
@@ -258,7 +259,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                       child: Text(
                         'จำเป็น',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 15,
                           fontWeight: FontWeight.bold,
                           color: Colors.red.shade700,
                         ),
@@ -308,7 +309,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                     const Text(
                       'ข้อมูลโครงการส่งเสริมแปลง',
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: AppColors.navy,
                       ),
@@ -319,18 +320,14 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                       '${p.plotCode != null ? ' #${p.plotCode}' : ''}'
                       ' (${p.areaThai})',
                       style: const TextStyle(
-                        fontSize: 15.5,
+                        fontSize: 17.5,
                         color: Colors.black54,
                       ),
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Iconsax.close_circle, size: 28),
-                color: Colors.black45,
-              ),
+              const SheetCloseButton(),
             ],
           ),
           const SizedBox(height: 14),
@@ -360,7 +357,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                               'ต้องมีโครงการ: ${_requiredNames.join(', ')} '
                               'จึงจะมีสิทธิ์เข้าโครงการ Brr Model',
                     style: const TextStyle(
-                      fontSize: 15,
+                      fontSize: 17,
                       fontWeight: FontWeight.w600,
                       color: AppColors.green,
                       height: 1.45,
@@ -378,7 +375,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                 child: Text(
                   'เลือกโครงการ (${_selected.length}/${_items.length})',
                   style: const TextStyle(
-                    fontSize: 16.5,
+                    fontSize: 18.5,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -402,7 +399,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                   child: Text(
                     'เลือกเกณฑ์บังคับ (${_requiredNames.length} โครงการ)',
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
                       decoration: TextDecoration.underline,
                     ),
@@ -422,7 +419,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                 child: const Text(
                   'เลือกทั้งหมด',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                     decoration: TextDecoration.underline,
                   ),
@@ -439,7 +436,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                 child: const Text(
                   'ล้าง',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 16,
                     decoration: TextDecoration.underline,
                   ),
                 ),
@@ -463,7 +460,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
               child: const Text(
                 'ไม่มีข้อมูลเกณฑ์โครงการจากระบบ',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 15, color: Colors.black45),
+                style: TextStyle(fontSize: 17, color: Colors.black45),
               ),
             )
           else
@@ -493,7 +490,7 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
                       'ยังไม่ผ่านเกณฑ์โครงการ Brr Model\n'
                       'ยังขาดโครงการ: ${missing.join(', ')}',
                       style: const TextStyle(
-                        fontSize: 15,
+                        fontSize: 17,
                         fontWeight: FontWeight.w600,
                         color: Color(0xFFE65100),
                         height: 1.45,

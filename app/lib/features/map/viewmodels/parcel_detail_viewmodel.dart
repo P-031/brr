@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:brr/features/map/data/parcel_service.dart';
@@ -10,7 +12,15 @@ import 'package:brr/features/map/models/parcel.dart';
 ///
 /// View ไม่เห็น ParcelService เลย — ทุก network call ผ่าน VM นี้
 class ParcelDetailViewModel extends ChangeNotifier {
-  ParcelDetailViewModel({required this.parcel, required this._service});
+  ParcelDetailViewModel({required this.parcel, required this._service}) {
+    // warm options cache ทิ้งไว้เบื้องหลัง — sheet ย่อย (จุดเสี่ยง/
+    // โครงการ/คำขอ) ที่เปิดจาก flow นี้จะมี options พร้อมทันที
+    // (service cache แชร์กัน ยิงซ้ำไม่เสียหาย); พลาดเงียบเดี๋ยว
+    // sheet ลองเองอีกทีตอนเปิด
+    unawaited(
+      _service.fetchOptions().catchError((_) => const FormOptions()),
+    );
+  }
 
   final Parcel parcel;
   final ParcelService _service;

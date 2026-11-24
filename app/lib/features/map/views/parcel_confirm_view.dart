@@ -386,41 +386,61 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
                           const SizedBox(height: 6),
                           SizedBox(
                             height: 96,
-                            child: TextField(
-                              textAlign: TextAlign.start,
-                              textAlignVertical: TextAlignVertical.center,
-                              controller: _noteCtrl,
-                              expands: true,
-                              maxLines: null,
-                              style: const TextStyle(fontSize: 16),
-                              decoration: InputDecoration(
-                                hintText: 'พิมพ์ข้อเสนอแนะ',
-                                isDense: true,
-                                filled: true,
-                                fillColor: Colors.grey.shade100,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 12,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey.shade300,
+                            // hint วาดเองตรงกลาง — hintText ของ
+                            // multiline ติดบนเสมอ
+                            child: ValueListenableBuilder<TextEditingValue>(
+                              valueListenable: _noteCtrl,
+                              builder: (_, v, _) => Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  TextField(
+                                    textAlign: TextAlign.start,
+                                    textAlignVertical: TextAlignVertical.top,
+                                    controller: _noteCtrl,
+                                    expands: true,
+                                    maxLines: null,
+                                    style: const TextStyle(fontSize: 16),
+                                    decoration: InputDecoration(
+                                      isDense: true,
+                                      filled: true,
+                                      fillColor: Colors.grey.shade100,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            horizontal: 14,
+                                            vertical: 12,
+                                          ),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade300,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: const BorderSide(
+                                          color: AppColors.gold,
+                                          width: 2,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: Colors.grey.shade300,
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(
-                                    color: AppColors.gold,
-                                    width: 2,
-                                  ),
-                                ),
+                                  if (v.text.isEmpty)
+                                    const IgnorePointer(
+                                      child: Text(
+                                        'กรุณากรอกข้อเสนอแนะ',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          color: Colors.black38,
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           ),

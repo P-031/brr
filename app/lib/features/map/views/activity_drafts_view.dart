@@ -48,21 +48,21 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'ลบกิจกรรมนี้?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'รูปและรายละเอียดที่บันทึกไว้จะถูกลบออกจากเครื่อง',
-          style: TextStyle(fontSize: 15),
+          style: TextStyle(fontSize: 17),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('ยกเลิก', style: TextStyle(fontSize: 16)),
+            child: const Text('ยกเลิก', style: TextStyle(fontSize: 17)),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('ลบ', style: TextStyle(fontSize: 16)),
+            child: const Text('ลบ', style: TextStyle(fontSize: 17)),
           ),
         ],
       ),

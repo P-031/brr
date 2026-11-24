@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/sheet_close_button.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/activity_drafts_view.dart';
@@ -220,11 +221,12 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                 children: [
                   for (final (label, value) in rows)
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(vertical: 5),
                       child: Text.rich(
                         TextSpan(
                           text: '$label : ',
                           style: const TextStyle(
+                            fontSize: 18,
                             fontWeight: FontWeight.w600,
                             color: Colors.black87,
                           ),
@@ -241,10 +243,14 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                     ),
                 ],
               ),
+        // ปุ่มเต็มกว้างให้กดง่าย สไตล์เดียวกับ dialog แจ้งเตือนตัวอื่น
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('ปิด'),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('ปิด', style: TextStyle(fontSize: 17)),
+            ),
           ),
         ],
       ),
@@ -418,11 +424,7 @@ class _ParcelInfoSheetState extends State<_ParcelInfoSheet> {
                       ),
                       const SizedBox(width: 6),
                     ],
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close, color: Colors.black54),
-                    ),
+                    const SheetCloseButton(),
                   ],
                 ),
                 const SizedBox(height: 4),

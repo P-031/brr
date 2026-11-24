@@ -71,22 +71,22 @@ class _Body extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'ลบรายการนี้?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'ค่าที่แก้ไว้จะถูกลบออกจากเครื่องถาวร ไม่สามารถกู้คืนได้',
-          style: TextStyle(fontSize: 15),
+          style: TextStyle(fontSize: 17),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('ยกเลิก', style: TextStyle(fontSize: 16)),
+            child: const Text('ยกเลิก', style: TextStyle(fontSize: 17)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text(
               'ลบ',
-              style: TextStyle(fontSize: 16, color: Colors.red),
+              style: TextStyle(fontSize: 17, color: Colors.red),
             ),
           ),
         ],
@@ -103,22 +103,22 @@ class _Body extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text(
           'ล้างรายการทั้งหมด?',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           'ค่าที่แก้ไว้ทุกรายการจะถูกลบออกจากเครื่องถาวร',
-          style: TextStyle(fontSize: 15),
+          style: TextStyle(fontSize: 17),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('ยกเลิก', style: TextStyle(fontSize: 16)),
+            child: const Text('ยกเลิก', style: TextStyle(fontSize: 17)),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text(
               'ล้างทั้งหมด',
-              style: TextStyle(fontSize: 16, color: Colors.red),
+              style: TextStyle(fontSize: 17, color: Colors.red),
             ),
           ),
         ],

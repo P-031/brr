@@ -924,17 +924,30 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
           height: 96,
           child: ValueListenableBuilder<TextEditingValue>(
             valueListenable: _suggestionCtrl,
-            builder: (_, v, _) => TextField(
-              textAlign: TextAlign.start,
-              textAlignVertical: TextAlignVertical.center,
-              controller: _suggestionCtrl,
-              expands: true,
-              maxLines: null,
-              style: const TextStyle(fontSize: 16),
-              decoration: _ActivityDetailViewState._boxDeco(
-                'พิมพ์ข้อเสนอแนะ',
-                filled: v.text.trim().isNotEmpty,
-              ),
+            // hint วาดเองตรงกลาง — hintText ของ multiline ติดบนเสมอ
+            builder: (_, v, _) => Stack(
+              alignment: Alignment.center,
+              children: [
+                TextField(
+                  textAlign: TextAlign.start,
+                  textAlignVertical: TextAlignVertical.top,
+                  controller: _suggestionCtrl,
+                  expands: true,
+                  maxLines: null,
+                  style: const TextStyle(fontSize: 16),
+                  decoration: _ActivityDetailViewState._boxDeco(
+                    '',
+                    filled: v.text.trim().isNotEmpty,
+                  ),
+                ),
+                if (v.text.isEmpty)
+                  const IgnorePointer(
+                    child: Text(
+                      'กรุณากรอกข้อเสนอแนะ',
+                      style: TextStyle(fontSize: 16, color: Colors.black38),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

@@ -3,20 +3,11 @@ import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/sheet_close_button.dart';
 import 'package:brr/core/widgets/digit_formatter.dart';
 import 'package:brr/core/widgets/thai_date_picker.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
-
-/// สี badge ต่อรหัสสถานะ — เรื่องการแสดงผลอยู่ฝั่งแอป;
-/// code/ชื่อสถานะมาจาก backend (/meta/options → cutStatuses)
-/// code ที่ไม่รู้จักใช้สีเทา
-const _statusColors = {
-  'N': Color(0xFF757575),
-  'Y': Color(0xFFF57C00),
-  'F': Color(0xFF2E7D32),
-  'S': Color(0xFF1565C0),
-};
 
 /// Sheet "อัปเดตสถานะแปลงตัด" — เปิดจากการ์ดฟ้าใน info sheet:
 /// เลือกสถานะ + วันที่เริ่ม/เสร็จ + ตัน — เก็บลงเครื่องรอ endpoint
@@ -192,10 +183,10 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
     }
   }
 
-  /// แถวตัวเลือกสถานะ — วงกลม radio + badge รหัสสี + ชื่อ
+  /// แถวตัวเลือกสถานะ — ที่เลือกพื้นเขียวกรอบทองเหมือนปุ่มหน้า Home/
+  /// ปุ่ม MPI หน้ารายละเอียดกิจกรรม
   Widget _statusRow(int i) {
     final item = _items[i];
-    final color = _statusColors[item.code] ?? Colors.grey.shade600;
     final selected = _status == item.name;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5),
@@ -208,15 +199,22 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
           decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.08) : Colors.white,
+            color: selected ? AppColors.green : Colors.white,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? color : Colors.grey.shade300,
-              width: selected ? 1.5 : 1,
+              color: selected ? AppColors.gold : Colors.grey.shade300,
+              width: selected ? 2.5 : 1,
             ),
           ),
           child: Center(
-            child: Text(item.name, style: const TextStyle(fontSize: 16.5)),
+            child: Text(
+              item.name,
+              style: TextStyle(
+                fontSize: 16.5,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                color: selected ? Colors.white : Colors.black87,
+              ),
+            ),
           ),
         ),
       ),
@@ -317,11 +315,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Iconsax.close_circle, size: 28),
-                color: Colors.black45,
-              ),
+              const SheetCloseButton(),
             ],
           ),
           const SizedBox(height: 18),

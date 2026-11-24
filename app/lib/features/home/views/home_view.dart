@@ -10,7 +10,7 @@ import 'package:brr/features/map/viewmodels/drafts_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
 import 'package:brr/features/map/views/drafts_view.dart';
 import 'package:brr/features/map/views/map_view.dart';
-import 'package:brr/features/notifications/data/notification_store.dart';
+import 'package:brr/features/notifications/viewmodels/notifications_viewmodel.dart';
 import 'package:brr/features/notifications/views/notifications_view.dart';
 import 'package:brr/features/plot_activities/views/plot_activities_view.dart';
 
@@ -55,7 +55,8 @@ class HomeView extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(4),
                       child: ValueListenableBuilder<int>(
-                        valueListenable: unreadNotifications,
+                        valueListenable:
+                            NotificationsViewModel.unreadListenable,
                         builder: (_, count, _) => Badge(
                           isLabelVisible: count > 0,
                           backgroundColor: Colors.red,

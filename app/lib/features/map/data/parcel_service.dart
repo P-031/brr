@@ -834,16 +834,28 @@ class ParcelService {
     // network นอก _serialized write lock เดี๋ยว save อื่น (ร่าง/
     // รูป/จุดเสี่ยง) ค้างตามคิว; กัน flush ซ้อนด้วย flag — snapshot
     // เดียวกันส่งซ้ำ = PATCH เดิม idempotent แต่เสียเวลาเปล่า
-    if (_flushing || !ApiConfig.enabled || _api == null) return;
+    if (!ApiConfig.enabled || _api == null) return;
+    // เรียกซ้อนตอนกำลัง flush (เช่น retryFailedEdit/auto-flush
+    // จาก PATCH ที่ล้มพร้อมกัน) — entry ใหม่เข้าคิวหลัง snapshot
+    // ไปแล้ว ถ้า return เงียบจะไม่ได้ส่งจนกว่าจะมี trigger รอบ
+    // หน้า (อาจไม่มีเลย) → ทำเครื่องหมายวนรอบใหม่แทน
+    if (_flushing) {
+      _flushAgain = true;
+      return;
+    }
     _flushing = true;
     try {
-      await _flushPending();
+      do {
+        _flushAgain = false;
+        await _flushPending();
+      } while (_flushAgain);
     } finally {
       _flushing = false;
     }
   }
 
   bool _flushing = false;
+  bool _flushAgain = false;
 
   Future<void> _flushPending() async {
     final api = _api;
@@ -1095,11 +1107,52 @@ class ParcelService {
 
   /// All picker option lists for the save form — master data served
   /// by the backend (`GET /meta/options`).
-  Future<FormOptions> fetchOptions() async {
+  /// master options เปลี่ยนน้อยมาก — cache future เดียวกันทั้งเซสชัน
+  /// (endpoint ดึง prevPlots หลักหมื่นแถว ยิงซ้ำทุก sheet ช้า ~4 วิ);
+  /// ล้มเหลวล้าง cache ให้ retry รอบหน้าได้
+  Future<FormOptions>? _optionsCache;
+
+  Future<FormOptions> fetchOptions() {
+    return _optionsCache ??= _loadOptions().catchError((e) {
+      _optionsCache = null;
+      throw e;
+    });
+  }
+
+  /// stale-while-revalidate — มี cache ในเครื่อง → คืนของเก่าทันที
+  /// แล้วยิง remote อัปเดต memory+disk เบื้องหลัง (options ของจริง
+  /// แทบไม่เปลี่ยน ผู้ใช้ไม่ต้องรอ endpoint หนักทุก sheet)
+  Future<FormOptions> _loadOptions() async {
+    if (!ApiConfig.enabled || _api == null) return const FormOptions();
+    final disk = await _local.readMetaOptions();
+    if (disk != null) {
+      try {
+        final cached = FormOptions.fromJson(
+          jsonDecode(disk) as Map<String, dynamic>,
+        );
+        unawaited(_refreshOptions());
+        return cached;
+      } catch (_) {
+        // json cache เสีย — ทิ้งแล้วรอ remote ตามปกติ
+      }
+    }
+    return _fetchOptionsRemote();
+  }
+
+  /// ยิง remote แล้วแทนที่ memory cache — เรียกเบื้องหลังตอน stale
+  /// hit; พลาดเงียบได้ (ของเก่ายังใช้ต่อได้)
+  Future<void> _refreshOptions() async {
+    try {
+      _optionsCache = Future.value(await _fetchOptionsRemote());
+    } catch (_) {}
+  }
+
+  Future<FormOptions> _fetchOptionsRemote() async {
     if (ApiConfig.enabled && _api != null) {
       try {
         final res = await _api.get(ApiEndpoints.metaOptions);
         if (res.statusCode == 200) {
+          unawaited(_local.writeMetaOptions(res.body));
           return FormOptions.fromJson(
             jsonDecode(res.body) as Map<String, dynamic>,
           );
