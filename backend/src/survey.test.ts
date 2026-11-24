@@ -24,13 +24,25 @@ function walk(points: LatLng[], minutesApart = 1): Survey {
   };
 }
 
-/** 100 m north by 50 m east. */
+/** สี่เหลี่ยม 100x50 เมตร  จุดห่างกัน 20 ม. ตามเกณฑ์เดินวัด */
 const field = [
   origin,
+  destination(origin, 0, 20),
+  destination(origin, 0, 40),
   destination(origin, 0, 50),
+  destination(origin, 20, 50),
+  destination(origin, 40, 50),
+  destination(origin, 60, 50),
+  destination(origin, 80, 50),
   destination(origin, 100, 50),
+  destination(origin, 100, 30),
+  destination(origin, 100, 10),
   destination(origin, 100, 0),
-];
+  destination(origin, 80, 0),
+  destination(origin, 60, 0),
+  destination(origin, 40, 0),
+  destination(origin, 20, 0),
+]
 
 function rejectsCorner(survey: Survey, corner?: number) {
   assert.throws(
@@ -46,13 +58,13 @@ function rejectsCorner(survey: Survey, corner?: number) {
 describe("walked survey", () => {
   it("measures a walked rectangle", () => {
     const measured = measureSurvey(walk(field), now);
-    assert.equal(measured.ring.length, 4);
+    assert.equal(measured.ring.length, 16);
     assert.ok(Math.abs(measured.areaSqm - 5000) / 5000 < 0.01, `area was ${measured.areaSqm}`);
   });
 
   it("drops a last corner that returns to the first", () => {
     const measured = measureSurvey(walk([...field, destination(origin, 0.5, 0.5)]), now);
-    assert.equal(measured.ring.length, 4);
+    assert.equal(measured.ring.length, 16);
   });
 
   it("rejects a corner with poor GPS", () => {
@@ -61,8 +73,11 @@ describe("walked survey", () => {
     rejectsCorner(survey, 3);
   });
 
-  it("rejects a corner reached faster than walking", () => {
-    rejectsCorner(walk(field, 0.1), 2);
+  it("rejects a corner farther than 25 m", () => {
+    rejectsCorner(
+      walk([origin, destination(origin, 0, 30), destination(origin, 0,50)]),
+      2,
+    );
   });
 
   it("rejects corners out of time order", () => {
@@ -85,7 +100,12 @@ describe("walked survey", () => {
   });
 
   it("rejects an outline that crosses itself", () => {
-    const bowtie = [field[0], field[2], field[1], field[3]];
+    const bowtie = [
+      origin,
+      destination(origin, 0, 10),
+      destination(origin, 10, 0),
+      destination(origin, 10, 10),
+    ];
     assert.notEqual(firstCrossingEdge(bowtie), -1);
     rejectsCorner(walk(bowtie));
   });
