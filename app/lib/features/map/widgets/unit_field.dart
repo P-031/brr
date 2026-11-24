@@ -106,8 +106,8 @@ class _UnitFieldState extends State<UnitField> {
                 child: TextField(
                   controller: widget.controller,
                   focusNode: _focus,
-                  // ช่องว่าง = hint อยู่กลาง; พิมพ์แล้วชิดขวาชิดหน่วย
-                  textAlign: hasText ? TextAlign.end : TextAlign.center,
+                  // ชิดซ้ายทั้งแอป — หน่วยตามหลังตัวเลขอยู่แล้ว
+                  textAlign: TextAlign.start,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),

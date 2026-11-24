@@ -369,7 +369,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
                   children: [
                     _label('ประมาณตัน'),
                     TextField(
-                      textAlign: TextAlign.center,
+                      textAlign: TextAlign.start,
                       controller: _estimateCtrl,
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
@@ -436,7 +436,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
           const SizedBox(height: 16),
           _label('ตัดพันธุ์อ้อย (ตัน)'),
           TextField(
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.start,
             controller: _cutCaneCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: const [DigitFormatter(decimal: true)],

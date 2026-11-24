@@ -1038,28 +1038,40 @@ class ParcelService {
 
   /// คำขอแปลงทั้งหมดที่ผู้ใช้มองเห็น — `GET /plot-requests`
   /// (หน้าสถานะแปลง); ออฟไลน์คืน list ว่าง ไม่โยน
+  /// ตาม nextCursor จนหมด (backend ตัดหน้าละ ≤500)
   Future<List<PlotRequestEntry>> fetchPlotRequests() async {
     if (!ApiConfig.enabled || _api == null) return const [];
-    final res = await _api.get(ApiEndpoints.plotRequests);
-    if (res.statusCode != 200) {
-      throw Exception('โหลดรายการคำขอไม่สำเร็จ: ${_errorDetail(res)}');
-    }
-    final body = jsonDecode(res.body);
-    final items = body is List
-        ? body
-        : body is Map
-        ? body['items'] is List
-              ? body['items'] as List
-              : const []
-        : const [];
-    // item เสียตัวเดียวข้ามไป — ไม่ล้มทั้งหน้าคำขอ
     final out = <PlotRequestEntry>[];
-    for (final j in items) {
-      if (j is Map) {
-        try {
-          out.add(PlotRequestEntry.fromJson(Map<String, dynamic>.from(j)));
-        } catch (_) {}
+    String? cursor;
+    // เพดานรอบกันหน้าเพี้ยนวนไม่จบ — คำขอจริงไม่น่าเกินหลักพัน
+    for (var round = 0; round < 20; round++) {
+      final res = await _api.get(
+        cursor == null
+            ? ApiEndpoints.plotRequests
+            : '${ApiEndpoints.plotRequests}?cursor=${Uri.encodeQueryComponent(cursor)}',
+      );
+      if (res.statusCode != 200) {
+        throw Exception('โหลดรายการคำขอไม่สำเร็จ: ${_errorDetail(res)}');
       }
+      final body = jsonDecode(res.body);
+      final items = body is List
+          ? body
+          : body is Map
+          ? body['items'] is List
+                ? body['items'] as List
+                : const []
+          : const [];
+      // item เสียตัวเดียวข้ามไป — ไม่ล้มทั้งหน้าคำขอ
+      for (final j in items) {
+        if (j is Map) {
+          try {
+            out.add(PlotRequestEntry.fromJson(Map<String, dynamic>.from(j)));
+          } catch (_) {}
+        }
+      }
+      final next = body is Map ? body['nextCursor']?.toString() : null;
+      if (next == null || next.isEmpty) break;
+      cursor = next;
     }
     return out;
   }

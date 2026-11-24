@@ -241,7 +241,7 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
         const SizedBox(height: 6),
         TextField(
           controller: ctrl,
-          textAlign: TextAlign.center,
+          textAlign: TextAlign.start,
           style: const TextStyle(
             fontSize: 16.5,
             fontWeight: FontWeight.bold,
@@ -537,6 +537,10 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
   final _plotCodeCtrl = TextEditingController();
   FarmerRef? _newFarmer;
   List<FarmerRef>? _farmers;
+  // การ์ด "แก้ปีการผลิต" / "แก้เขต"
+  String? _newYear;
+  String? _newZone;
+  late final Future<List<String>> _years = widget.vm.loadYears();
 
   @override
   void dispose() {
@@ -561,6 +565,8 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
         'newFarmerId': _newFarmer?.id,
       };
     }
+    if (_selected == 'แก้ปีการผลิต') return {'newProductionYear': _newYear};
+    if (_selected == 'แก้เขต') return {'newZone': _newZone};
     return null;
   }
 
@@ -579,6 +585,12 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
       }
       if (_newFarmer == null) return 'กรุณาเลือกชาวไร่คนใหม่';
     }
+    if (_selected == 'แก้ปีการผลิต' && _newYear == null) {
+      return 'กรุณาเลือกปีการผลิตใหม่';
+    }
+    if (_selected == 'แก้เขต' && _newZone == null) {
+      return 'กรุณาเลือกเขตใหม่';
+    }
     return null;
   }
 
@@ -587,6 +599,8 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
     _caneMode = null;
     _caneTypeNew = null;
     _newFarmer = null;
+    _newYear = null;
+    _newZone = null;
     _plotCodeCtrl.clear();
   }
 
@@ -827,7 +841,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                 _subCard('แก้ไขข้อมูลชาวไร่และแปลง', [
                   _subLabel('รหัสแปลงใหม่'),
                   TextField(
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.start,
                     controller: _plotCodeCtrl,
                     decoration: InputDecoration(
                       hintText: 'กรอกรหัสแปลงใหม่',
@@ -844,6 +858,35 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                   const SizedBox(height: 12),
                   _subLabel('ชาวไร่คนใหม่'),
                   _farmerField(),
+                ]),
+              ],
+              if (_selected == 'แก้ปีการผลิต') ...[
+                const SizedBox(height: 14),
+                _subCard('กรอกข้อมูลปีการผลิตใหม่', [
+                  _subLabel('ปีการผลิตใหม่'),
+                  FutureBuilder<List<String>>(
+                    future: _years,
+                    builder: (context, snap) => dropdown(
+                      snap.data ?? const [],
+                      value: _newYear,
+                      bindSelected: false,
+                      hint: 'เลือกปีการผลิตใหม่',
+                      onChanged: (v) => setState(() => _newYear = v),
+                    ),
+                  ),
+                ]),
+              ],
+              if (_selected == 'แก้เขต') ...[
+                const SizedBox(height: 14),
+                _subCard('กรอกข้อมูลเขตใหม่', [
+                  _subLabel('เขตใหม่'),
+                  dropdown(
+                    snap.data?.zones ?? const [],
+                    value: _newZone,
+                    bindSelected: false,
+                    hint: 'เลือกเขตใหม่',
+                    onChanged: (v) => setState(() => _newZone = v),
+                  ),
                 ]),
               ],
             ],

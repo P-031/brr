@@ -47,6 +47,8 @@ class PlotRequestEntry {
         if (payload['caneTypeNew'] case final s?) 'อ้อยปลูกใหม่: $s',
         if (payload['newPlotCode'] case final s?) 'รหัสแปลงใหม่: $s',
         if (payload['newFarmer'] case final s?) 'ชาวไร่ใหม่: $s',
+        if (payload['newProductionYear'] case final s?) 'ปีการผลิตใหม่: $s',
+        if (payload['newZone'] case final s?) 'เขตใหม่: $s',
       ];
       return extras.isEmpty ? v : '$v — ${extras.join(' • ')}';
     }

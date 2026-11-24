@@ -22,8 +22,7 @@ class ApiEndpoints {
   static const String plotRequests = '/plot-requests';
 
   /// นำส่งกิจกรรมของแปลง — POST ร่างที่บันทึกในเครื่องขึ้นระบบ
-  /// TODO(backend): endpoint ยังไม่มี — call แล้วจะเจอ 404
-  /// เมื่อ backend เขียนเสร็จใช้ได้ทันที
+  /// backend เก็บ body ทั้งชุดลง payload (ตาม docs/API_CONTRACT.md)
   static String plotActivities(String id) => '/plots/$id/activities';
 
   /// Master option lists for pickers/dropdowns — extend this payload
@@ -36,8 +35,6 @@ class ApiEndpoints {
   /// Farmers under this officer's care.
   static const String farmers = '/farmers';
 
-  /// จุดเสี่ยงภัยพิบัติล่าสุด — หน้าฉบับร่างดาวน์โหลดมาเก็บในเครื่อง
-  /// TODO(backend): endpoint ยังไม่มี — call แล้วจะเจอ 404
-  /// เมื่อ backend เขียนเสร็จใช้ได้ทันที
+  /// จุดเสี่ยงภัยพิบัติล่าสุด — หน้าฉบับร่างดาวน์โหลดมา merge เก็บในเครื่อง
   static const String riskPoints = '/risk-points';
 }

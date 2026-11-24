@@ -512,11 +512,21 @@ class MapViewModel extends ChangeNotifier {
         _safeNotify();
         return;
       }
-      // GPS spike — กระโดด >25ม. ในไม่กี่วิ เดินไปไม่ถึง
-      // เป็น error ไม่ใช่จุดจริง ปฏิเสธไม่ลงขอบ
-      if (d > 25) {
-        _safeNotify();
-        return;
+      // เกณฑ์เดียวกับ backend: (ระยะห่าง - ความคลาดเคลื่อน)/เวลา > 3 ม./วิ
+      // = เดินไม่ถึง → fix นี้เป็น spike ไม่ใช่จุดจริง ปฏิเสธไม่ลงขอบ
+      // (ระยะไกลที่เกิดตอนสัญญาณขาดนานๆ ยังผ่าน — เวลาห่างพอ)
+      if (_corners.isNotEmpty) {
+        final last = _corners.last;
+        final seconds =
+            DateTime.now().difference(last.capturedAt).inMilliseconds / 1000;
+        final walked = (d - last.accuracyM - p.accuracy).clamp(
+          0.0,
+          double.infinity,
+        );
+        if (seconds > 0 && walked / seconds > 3) {
+          _safeNotify();
+          return;
+        }
       }
     }
     _addWalkPoint(_lastFix!, p.accuracy);
@@ -548,7 +558,17 @@ class MapViewModel extends ChangeNotifier {
       const dist = Distance();
       final d = dist.as(LengthUnit.Meter, _draft.last, fix);
       if (d < 2.5) return 'อยู่ใกล้จุดล่าสุดเกินไป — เดินออกไปอีก';
-      if (d > 25) return 'พิกัดกระโดดผิดปกติ — ไม่สามารถบันทึกค่าได้';
+      // เกณฑ์เดียวกับ backend — จุดนี้ไกลเกินกว่าจะเดินถึงจากจุดก่อน
+      // (3 ม./วิ) แปลว่าพิกัดกระโดด ไม่ใช่ตำแหน่งจริง
+      if (_corners.isNotEmpty) {
+        final last = _corners.last;
+        final seconds =
+            DateTime.now().difference(last.capturedAt).inMilliseconds / 1000;
+        final walked = (d - last.accuracyM - acc).clamp(0.0, double.infinity);
+        if (seconds > 0 && walked / seconds > 3) {
+          return 'พิกัดกระโดดผิดปกติ — ไม่สามารถบันทึกค่าได้';
+        }
+      }
     }
     _addWalkPoint(fix, acc);
     _safeNotify();
@@ -663,6 +683,18 @@ class MapViewModel extends ChangeNotifier {
     bool draft = false,
   }) async {
     if (_draft.length < 3) return 'ต้องปักอย่างน้อย 3 จุด';
+    // เกณฑ์เดียวกับ backend (surveyRules) — เตือนก่อนส่ง ไม่ให้
+    // ผู้ใช้กรอกฟอร์มเสร็จแล้วค่อยเจอ reject ตอนบันทึก
+    if (!draft && draftAreaSqm < 100) {
+      return 'แปลงต้องใหญ่อย่างน้อย 100 ตารางเมตร';
+    }
+    // เดินวัดยาวเกิน 12 ชม. backend ปฏิเสธทั้งแปลง — บอกตั้งแต่ตรงนี้
+    final walkStart = _walkStartedAt;
+    if (!draft &&
+        walkStart != null &&
+        DateTime.now().difference(walkStart) > const Duration(hours: 12)) {
+      return 'เดินวัดนานเกิน 12 ชั่วโมง — เริ่มวัดใหม่';
+    }
     // กดซ้ำระหว่างบันทึก — คืนข้อความจริงแทน null (caller ตี null
     // เป็นสำเร็จแล้วขึ้น snackbar "บันทึกสำเร็จ" มั่ว)
     if (_saving) return 'กำลังบันทึกอยู่ กรุณารอสักครู่';
