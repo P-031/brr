@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { currentUser } from "../auth";
 import { route } from "../http";
+import { farmerIdsForList } from "../plotAccess";
 import { prisma } from "../prisma";
 import { taskKindByName  }  from "../serialize";
 import { cutStatuses } from "../serialize";
@@ -11,7 +12,7 @@ export const metaRouter = Router();
 metaRouter.get(
     "/meta/options",
     route(async (req, res) => {
-        currentUser(req);
+        const user = currentUser(req);
         const [options, places] = await Promise.all([
             prisma.fromOption.findMany({ orderBy: [{ group: "asc"}, { sort: "asc"}, { label: "asc" }] }),
             prisma.place.findMany(),
@@ -24,6 +25,14 @@ metaRouter.get(
         const subdistricts = (districts[place.district] ??= {});
         (subdistricts[place.subdistrict] ??= []).push(place.village);
     }
+    const farmerIds = await farmerIdsForList(user, undefined);
+    const prevPlots = farmerIds.length === 0
+      ? []
+      : await prisma.plot.findMany({
+          where: { farmerId: { in: farmerIds } },
+          select: { id: true, name: true },
+          orderBy: { name: "asc" },
+        });
 
     res.json({
         projects: labels("projects"),
@@ -42,7 +51,7 @@ metaRouter.get(
         cutStatuses: [...cutStatuses],
         provinces: Object.keys(locations),
         locations,
-        prevPlots: [],
+        prevPlots: prevPlots.map((plot) => ({ code: plot.id, name: plot.name })),
     });
   }),
 );

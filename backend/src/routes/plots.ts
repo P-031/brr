@@ -15,6 +15,7 @@ import { readBoundaries } from "../boundary";
 import { firstCrossingEdge, measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
 import { plotMeta } from "../serialize"
 import { cutStatuses  } from "../serialize";
+import { randomUUID } from "node:crypto"
 
 const isoTime = z
   .string()
@@ -658,9 +659,13 @@ fieldRouter.patch(
     await visiblePlot(user, existing.plotId);
 
     const saved = await prisma.$transaction(async (tx) => {
-      const updated = await tx.plotRequest.update({
-        where: { id: requestId },
+      const locked = await tx.plotRequest.updateMany({
+        where: { id: requestId, status: "รออนุมัติ" },
         data: { status: body.status },
+      });
+      if (locked.count === 0) throw new HttpError(409, "คำขอนี้ตัดสินไปแล้ว");
+      const updated = await tx.plotRequest.findUniqueOrThrow({
+        where: { id: requestId },
         include: { plot: { select: { name: true, season: true } } },
       });
       if (body.status === "อนุมัติ" && existing.kind === "status" && existing.value) {
@@ -737,7 +742,7 @@ fieldRouter.patch(
   route(async (req, res) => {
     const user = currentUser(req);
     const plotId = pathId(req.params.plotId);
-    const plot = await visiblePlot(user, plotId);
+    const plot = await ownedPlot(user, plotId);
     const body = updatePlotBody.parse(req.body);
     const survey = body.survey;
     const measured = survey ? measureSurvey(survey, new Date()) : undefined;
@@ -826,24 +831,26 @@ fieldRouter.delete(
   }),
 );
 
-const activityBody = z.object({
-  id: clientId,
+const activityBody = z
+ .object({
+  id: z.string().trim().min(1).max(80).optional(),
   plantedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   detailPending: z.boolean().default(false),
-  photoCount: z.number().int().min(1).max(3),
-});
+  photoCount: z.number().int().min(0).max(3).default(0),
+ })
+ .passthrough();
 
 const updateActivityBody = z
 .object({
   version: baseVersion,
   plantedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   detailPending: z.boolean().optional(),
-  photoCount: z.number().int().min(1).max(3).optional(),
+  photoCount: z.number().int().min(0).max(3).optional(),
 })
-.refine(
-  (value) => value.plantedAt !== undefined || value.detailPending !== undefined || value.photoCount !== undefined,
-  { message: "ไม่มีข้อมูลที่ให้แก้ไข" },
-);
+.passthrough()
+.refine((value) => Object.keys(value).some((key) => key !== "version"), {
+  message: "ไม่มีข้อมูลที่ให้แก้ไข",
+});
 
 fieldRouter.get(
   "/activities",
@@ -896,26 +903,34 @@ fieldRouter.get(
 fieldRouter.post(
   "/plots/:plotId/activities",
   route(async (req, res) => {
-    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const plot = await ownedPlot(currentUser(req), pathId(req.params.plotId));
     const body = activityBody.parse(req.body);
-    const plantedAt = body.plantedAt ? parseDate(body.plantedAt) : null;
+    const { id, plantedAt: plantedAtText, detailPending, photoCount, ...rest } = body;
+    const activityId = id ?? randomUUID();
+    const plantedAt = plantedAtText ? parseDate(plantedAtText) : null;
+    const detail = Object.fromEntries(
+      Object.entries(rest).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+    );
 
-    const existing = await prisma.plotActivity.findUnique({ where: { id: body.id } });
-    if (existing) {
-      if (existing.plotId !== plot.id) throw new HttpError(409, "รหัสกิจกรรมนี้ถูกใช้แล้ว");
-      res.json(activityJson(existing));
-      return;
+    if (id) {
+      const existing = await prisma.plotActivity.findUnique({ where: { id } });
+      if (existing) {
+        if (existing.plotId !== plot.id) throw new HttpError(409, "รหัสกิจกรรมนี้ถูกใช้แล้ว");
+        res.json(activityJson(existing));
+        return;
+      }
+      await refuseDeleted("ACTIVITY", id);
     }
-    await refuseDeleted("ACTIVITY", body.id);
 
     const saved = await prisma.$transaction(async (tx) => {
       const created = await tx.plotActivity.create({
         data: {
-          id: body.id,
+          id: activityId,
           plotId: plot.id,
           plantedAt,
-          detailPending: body.detailPending,
-          photoCount: body.photoCount,
+          detailPending,
+          photoCount,
+          detail: detail as Prisma.InputJsonValue,
         },
       });
       if (plantedAt) {
@@ -939,17 +954,27 @@ fieldRouter.patch(
       await refuseDeleted("ACTIVITY", activityId);
       throw new HttpError(404, "ไม่พบกิจกรรม");
     }
-    const plot = await visiblePlot(currentUser(req), existing.plotId);
+    const plot = await ownedPlot(currentUser(req), existing.plotId);
     const body = updateActivityBody.parse(req.body);
-    const plantedAt = body.plantedAt ? parseDate(body.plantedAt) : undefined;
+    const { version, plantedAt: plantedAtText, detailPending, photoCount, ...rest } = body;
+    const plantedAt = plantedAtText ? parseDate(plantedAtText) : undefined;
+    const incoming = Object.fromEntries(
+      Object.entries(rest).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+    );
+    const previous =
+      existing.detail && typeof existing.detail === "object" && !Array.isArray(existing.detail)
+        ? (existing.detail as Record<string, unknown>)
+        : {};
+    const detail = Object.keys(incoming).length > 0 ? { ...previous, ...incoming } : undefined;
 
     const saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.plotActivity.updateMany({
-        where: { id: activityId, version: body.version},
+        where: { id: activityId, version },
         data: {
           plantedAt,
-          detailPending: body.detailPending,
-          photoCount: body.photoCount,
+          detailPending,
+          photoCount,
+          detail: detail as Prisma.InputJsonValue | undefined,
           version: { increment: 1 }
         },
       });
@@ -984,7 +1009,7 @@ fieldRouter.delete(
       }
       throw new HttpError(404, "ไม่พบกิจกรรม");
     }
-    const plot = await visiblePlot(user, existing.plotId);
+    const plot = await ownedPlot(user, existing.plotId);
 
     const removed = await prisma.$transaction(async (tx) => {
       const result = await tx.plotActivity.deleteMany({
@@ -1132,7 +1157,7 @@ fieldRouter.post(
   "/plots/:plotId/tasks",
   route(async (req, res) => {
     const user = currentUser(req);
-    const plot = await visiblePlot(user, pathId(req.params.plotId));
+    const plot = await ownedPlot(user, pathId(req.params.plotId));
     const body = taskBody.parse(req.body);
 
     const existing = await prisma.fieldTask.findUnique({ where: { id: body.id } });
@@ -1258,7 +1283,7 @@ fieldRouter.get(
 fieldRouter.put(
   "/plots/:plotId/risk-point",
   route(async (req, res) => {
-    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const plot = await ownedPlot(currentUser(req), pathId(req.params.plotId));
     const body = riskBody.parse(req.body);
     const existing = await prisma.fromOption.findUnique({
       where: { group_label: { group: "riskLevels", label: body.type } },

@@ -169,6 +169,7 @@ model PlotActivity {
   plantedAt DateTime? @db.Date
   detailPending Boolean @default(false)
   photoCount  Int     @default(0)
+  detail      Json?
   version     Int     @default(1)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
