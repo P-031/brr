@@ -638,7 +638,7 @@ class _BodyState extends State<_Body> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
                       child: TextField(
-                        textAlign: TextAlign.center,
+                        textAlign: TextAlign.start,
                         autofocus: true,
                         style: const TextStyle(fontSize: 18),
                         onChanged: (q) => setSheet(() => query = q),
@@ -823,7 +823,7 @@ class _BodyState extends State<_Body> {
                 children: [
                   Expanded(
                     child: TextField(
-                      textAlign: TextAlign.center,
+                      textAlign: TextAlign.start,
                       onChanged: vm.setSearch,
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(

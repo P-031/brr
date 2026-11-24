@@ -136,7 +136,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           ),
           const SizedBox(height: 28),
           TextFormField(
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.start,
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
@@ -147,7 +147,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           ),
           const SizedBox(height: 16),
           TextFormField(
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.start,
             controller: _phoneCtrl,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(

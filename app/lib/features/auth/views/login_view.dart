@@ -178,7 +178,7 @@ class _LoginViewState extends State<LoginView> {
                 _animatedField(
                   focused: _userFocus.hasFocus,
                   child: TextFormField(
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.start,
                     controller: _userCtrl,
                     focusNode: _userFocus,
                     enabled: !vm.isBusy,
@@ -198,7 +198,7 @@ class _LoginViewState extends State<LoginView> {
                 _animatedField(
                   focused: _passFocus.hasFocus,
                   child: TextFormField(
-                    textAlign: TextAlign.center,
+                    textAlign: TextAlign.start,
                     controller: _passCtrl,
                     focusNode: _passFocus,
                     enabled: !vm.isBusy,

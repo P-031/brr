@@ -387,7 +387,7 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
                           SizedBox(
                             height: 96,
                             child: TextField(
-                              textAlign: TextAlign.center,
+                              textAlign: TextAlign.start,
                               textAlignVertical: TextAlignVertical.center,
                               controller: _noteCtrl,
                               expands: true,

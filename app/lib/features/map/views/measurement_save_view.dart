@@ -97,45 +97,47 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     _recoverLostPhoto();
     // prefill จากร่างที่บันทึกไว้ — meta เก็บ payload ฟอร์มครบ
     final p = widget.initial;
-    if (p == null) return;
-    String s(String k) => '${p.meta?[k] ?? ''}';
-    String? e(String k) {
-      final v = s(k);
-      return v.isEmpty ? null : v;
-    }
+    if (p != null) {
+      String s(String k) => '${p.meta?[k] ?? ''}';
+      String? e(String k) {
+        final v = s(k);
+        return v.isEmpty ? null : v;
+      }
 
-    _nameCtrl.text = p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
-    _yearCtrl.text = p.productionYear ?? s('productionYear');
-    _rootCtrl.text = s('rootNo');
-    _seqCtrl.text = s('sequenceNo');
-    _lossCtrl.text = s('lossRai');
-    _targetCtrl.text = s('targetYield');
-    _noteCtrl.text = s('note');
-    _project = e('project');
-    _zone = e('zone');
-    _province = e('province');
-    _district = e('district');
-    _subdistrict = e('subdistrict');
-    _village = e('village');
-    _prevPlot = e('prevPlotNo');
-    _officer = e('officerName');
-    _farmer = e('farmerName');
-    _farmerId = e('farmerId');
-    _caneGroup = e('caneGroup');
-    _caneType = e('caneType');
-    _caneVariety = e('caneVariety');
-    _ownership = e('ownership');
-    _terrain = e('terrain');
-    final loss = s('hasLoss');
-    if (loss.isNotEmpty) _losses.addAll(loss.split(', '));
-    // รูปที่ถ่ายไว้ตอนบันทึกร่าง — prefill กลับกันรูปหายตอนแก้ไข
-    // (meta['photos'] อาจไม่ใช่ List เสมอ — เช็กชนิดก่อนเสมอ)
-    final metaPhotos = p.meta?['photos'];
-    for (final path in metaPhotos is List ? metaPhotos : const []) {
-      if (_photos.length >= 3) break;
-      _photos.add(XFile('$path'));
+      _nameCtrl.text = p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+      _yearCtrl.text = p.productionYear ?? s('productionYear');
+      _rootCtrl.text = s('rootNo');
+      _seqCtrl.text = s('sequenceNo');
+      _lossCtrl.text = s('lossRai');
+      _targetCtrl.text = s('targetYield');
+      _noteCtrl.text = s('note');
+      _project = e('project');
+      _zone = e('zone');
+      _province = e('province');
+      _district = e('district');
+      _subdistrict = e('subdistrict');
+      _village = e('village');
+      _prevPlot = e('prevPlotNo');
+      _officer = e('officerName');
+      _farmer = e('farmerName');
+      _farmerId = e('farmerId');
+      _caneGroup = e('caneGroup');
+      _caneType = e('caneType');
+      _caneVariety = e('caneVariety');
+      _ownership = e('ownership');
+      _terrain = e('terrain');
+      final loss = s('hasLoss');
+      if (loss.isNotEmpty) _losses.addAll(loss.split(', '));
+      // รูปที่ถ่ายไว้ตอนบันทึกร่าง — prefill กลับกันรูปหายตอนแก้ไข
+      // (meta['photos'] อาจไม่ใช่ List เสมอ — เช็กชนิดก่อนเสมอ)
+      final metaPhotos = p.meta?['photos'];
+      for (final path in metaPhotos is List ? metaPhotos : const []) {
+        if (_photos.length >= 3) break;
+        _photos.add(XFile('$path'));
+      }
     }
-    // baseline หลัง prefill — เทียบตอนกดย้อน ต่าง = แก้ไขค้าง
+    // baseline หลัง prefill (หรือฟอร์มว่าง) — ต้องตั้งเสมอ
+    // ไม่งั้น late throw เงียบตอน onPopInvoked → กดย้อนไม่ได้
     _baseline = _formSig();
   }
 
@@ -170,7 +172,9 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
     (_losses.toList()..sort()).join(','),
     _photos.map((p) => p.path).join(','),
   ].join('|');
-  late final String _baseline;
+  // ไม่ใช้ late — hot reload ไม่รัน initState ใหม่ทำ field ว่างแล้ว
+  // pop ไม่ได้ (crash ใน onPopInvoked) — fallback '' ให้ถามยืนยันแทน
+  String _baseline = '';
 
   @override
   void dispose() {
@@ -565,13 +569,15 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
   );
 
   /// decoration ของช่องพิมพ์ในการ์ด — กรอบเดียวกับ _innerBox
-  static const _innerDeco = InputDecoration(
+  // hint บอกชื่อช่องเสมอ — เดิมทุกช่อง "กรอกข้อมูล" เหมือนกัน
+  // หมด มองไม่ออกว่าช่องไหนคืออะไร
+  static InputDecoration _innerDeco(String label) => InputDecoration(
     isDense: true,
     filled: true,
-    fillColor: Color(0xFFFAFAFA), // grey.shade50 (const)
-    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-    hintText: 'กรอกข้อมูล',
-    hintStyle: TextStyle(fontSize: 17, color: Colors.black38),
+    fillColor: const Color(0xFFFAFAFA), // grey.shade50 (const)
+    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    hintText: 'กรอก$label',
+    hintStyle: const TextStyle(fontSize: 17, color: Colors.black38),
     border: OutlineInputBorder(
       borderRadius: BorderRadius.all(Radius.circular(10)),
       borderSide: BorderSide(color: Colors.black12),
@@ -613,7 +619,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
           (_showErrors || _touched.contains(ctrl)),
       helper: helper,
       child: TextFormField(
-        textAlign: TextAlign.center,
+        textAlign: TextAlign.start,
         controller: ctrl,
         style: const TextStyle(fontSize: 19),
         keyboardType: keyboard,
@@ -627,7 +633,7 @@ class _MeasurementSaveState extends State<MeasurementSaveView> {
         },
         inputFormatters: formatters,
         onChanged: (_) => _touched.add(ctrl),
-        decoration: _innerDeco,
+        decoration: _innerDeco(label),
       ),
     ),
   );
@@ -1129,7 +1135,7 @@ class _PickerSheetState extends State<_PickerSheet> {
               ),
               const SizedBox(height: 12),
               TextField(
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.start,
                 autofocus: true,
                 style: const TextStyle(fontSize: 18),
                 onChanged: (v) => setState(() => _q = v),
@@ -1303,7 +1309,7 @@ class _MultiPickerSheetState extends State<_MultiPickerSheet> {
               ),
               const SizedBox(height: 12),
               TextField(
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.start,
                 autofocus: true,
                 style: const TextStyle(fontSize: 18),
                 onChanged: (v) => setState(() => _q = v),

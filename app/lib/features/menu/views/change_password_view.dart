@@ -69,7 +69,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
           padding: const EdgeInsets.all(20),
           children: [
             TextFormField(
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.start,
               controller: _oldCtrl,
               obscureText: !_showOld,
               style: const TextStyle(fontSize: 19),
@@ -83,7 +83,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
             ),
             const SizedBox(height: 16),
             TextFormField(
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.start,
               controller: _newCtrl,
               obscureText: !_showNew,
               style: const TextStyle(fontSize: 19),
@@ -98,7 +98,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
             ),
             const SizedBox(height: 16),
             TextFormField(
-              textAlign: TextAlign.center,
+              textAlign: TextAlign.start,
               controller: _confirmCtrl,
               obscureText: !_showConfirm,
               style: const TextStyle(fontSize: 19),
