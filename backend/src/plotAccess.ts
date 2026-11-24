@@ -39,6 +39,10 @@ export const summarySelect = {
   note: true,
   groupKind: true,
   status: true,
+  cutStatus: true,
+  plantedAt: true,
+  maintainGroup: true,
+  harvestGroup: true,
   farmer: { select: { id: true, username: true, displayName: true } },
 } satisfies Prisma.PlotSelect;
 

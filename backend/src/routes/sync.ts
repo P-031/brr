@@ -6,7 +6,7 @@ import { route } from "../http";
 import { syncOverlapMs } from "../offline";
 import { farmerIdsForList, summarySelect } from "../plotAccess";
 import { prisma } from "../prisma";
-import { plotDetail, taskJson, yieldJson } from "../serialize";
+import { activityJson, plotDetail, taskJson, yieldJson } from "../serialize";
 
 export const syncRouter = Router();
 
@@ -42,7 +42,7 @@ syncRouter.get(
     const farmerIds = await farmerIdsForList(user, query.farmerId);
     const changed = since ? { gt: since } : undefined;
 
-    const [plots, yields, tasks, deleted] = await Promise.all([
+    const [plots, yields, tasks, activities, deleted] = await Promise.all([
       prisma.plot.findMany({
         where: { farmerId: { in: farmerIds }, season: query.season, updatedAt: changed },
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
@@ -55,6 +55,10 @@ syncRouter.get(
       }),
       prisma.fieldTask.findMany({
         where: { plot: { farmerId: { in: farmerIds }, season: query.season }, updatedAt: changed },
+        orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
+      }),
+      prisma.plotActivity.findMany({
+        where: { plot: { farmerId: { in: farmerIds }, season: query.season }, updatedAt: changed},
         orderBy: [{ updatedAt: "asc" }, { id: "asc" }],
       }),
       since
@@ -71,6 +75,7 @@ syncRouter.get(
       plots: plots.map((plot) => plotDetail({ ...plot, points: outlines.get(plot.id) ?? [] })),
       yields: yields.map(({ plot, ...record }) => yieldJson({ ...record, areaSqm: plot.areaSqm })),
       tasks: tasks.map(taskJson),
+      activities: activities.map(activityJson),
       deleted: deleted.map((record) => ({
         kind: record.kind.toLowerCase(),
         id: record.recordId,
