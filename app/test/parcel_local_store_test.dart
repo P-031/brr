@@ -161,4 +161,73 @@ void main() {
       expect(d.meta?['confirmedAt'], isNotNull);
     });
   });
+
+  group('queuedActivities', () {
+    test('เฉพาะสถานะ queued เท่านั้นที่เข้าคิวส่งอัตโนมัติ', () async {
+      await store.saveActivityDraft(plotId: 'p1', photoPaths: const []);
+      await store.saveActivityDraft(plotId: 'p1', photoPaths: const []);
+      expect(await store.queuedActivities(), isEmpty);
+
+      final acts = await store.activitiesFor('p1');
+      await store.setActivitySubmitStatus('${acts[0]['id']}', 'queued');
+      await store.setActivitySubmitStatus('${acts[1]['id']}', 'failed');
+
+      final queued = await store.queuedActivities();
+      expect(queued.length, 1);
+      expect(queued.first['id'], acts[0]['id']);
+    });
+
+    test('queued → sent ออกจากคิว', () async {
+      await store.saveActivityDraft(plotId: 'p1', photoPaths: const []);
+      final id = '${(await store.activitiesFor('p1')).first['id']}';
+      await store.setActivitySubmitStatus(id, 'queued');
+      expect(await store.queuedActivities(), hasLength(1));
+      await store.setActivitySubmitStatus(id, 'sent');
+      expect(await store.queuedActivities(), isEmpty);
+    });
+  });
+
+  group('pendingEdits', () {
+    test('updatePendingEdits เขียน→อ่านกลับได้ + serialize ซ้อนกัน', () async {
+      await store.updatePendingEdits<void>((items) async {
+        items.add({'plotId': 'p1', 'queuedAt': 't1', 'body': {}});
+      });
+      // transform ที่สองต้องเห็น entry ของตัวแรก (ไม่เขียนทับ)
+      await store.updatePendingEdits<void>((items) async {
+        expect(items.length, 1);
+        items.add({'plotId': 'p2', 'queuedAt': 't2', 'body': {}});
+      });
+      final q = await store.loadPendingEdits();
+      expect(q.length, 2);
+      expect({for (final e in q) e['plotId']}, containsAll(['p1', 'p2']));
+    });
+
+    test('loadPendingEdits prefs เสีย → คืน list ว่าง', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pending_plot_edits_v1', '{broken');
+      expect(await store.loadPendingEdits(), isEmpty);
+    });
+  });
+
+  group('failedEdits', () {
+    test('record → load → update ลบออก + จำกัด 50 รายการ', () async {
+      await store.recordFailedEdit({'plotId': 'p1', 'reason': '409'});
+      var items = await store.loadFailedEdits();
+      expect(items.length, 1);
+      expect(items.first['failedAt'], isNotNull);
+
+      await store.updateFailedEdits<void>((items) async {
+        items.removeWhere((e) => e['plotId'] == 'p1');
+      });
+      expect(await store.loadFailedEdits(), isEmpty);
+
+      for (var i = 0; i < 55; i++) {
+        await store.recordFailedEdit({'plotId': 'p$i'});
+      }
+      items = await store.loadFailedEdits();
+      expect(items.length, 50);
+      // ตัดตัวเก่าสุดทิ้ง — ตัวล่าสุดต้องยังอยู่
+      expect(items.last['plotId'], 'p54');
+    });
+  });
 }

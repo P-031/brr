@@ -242,6 +242,17 @@ class DraftsViewModel extends ChangeNotifier {
     notifyListeners();
     try {
       final created = await create(source.points);
+      if (confirm && created.isDraft) {
+        // POST หลุดกลางทาง → createParcel fallback สร้างร่างสำเนา
+        // server ไม่เคยได้รับ — ห้าม stamp "ยืนยันแล้ว" เดี๋ยว user
+        // เข้าใจว่าขึ้นระบบแล้ว: เก็บร่างใหม่ (ข้อมูลล่าสุด + clientId
+        // เดิม) แทนต้นทาง แล้วบอกตรงๆ ว่าให้ยืนยันใหม่ตอนเน็ตกลับ
+        if (created.id != source.id) await _service.removeDraft(source.id);
+        _changed = true;
+        await refresh();
+        return 'ส่งขึ้นเซิร์ฟเวอร์ไม่ได้ — บันทึกเป็นฉบับร่างไว้แล้ว '
+            'ยืนยันใหม่ได้ภายหลัง';
+      }
       if (confirm) {
         // รูปประกอบการวัดไม่มี endpoint อัปโหลด — เก็บเป็น activity
         // draft ผูกกับแปลงจริงที่สร้าง กันรูปหายเงียบๆ ตอนยืนยัน

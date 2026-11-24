@@ -84,11 +84,18 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
     final id = '${a['id']}';
     setState(() => _sendingId = id);
     try {
-      await widget.vm.submitActivity(a);
+      final queued = await widget.vm.submitActivity(a);
       if (!mounted) return;
       _reload();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('นำส่งกิจกรรมสำเร็จ')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            queued
+                ? 'ออฟไลน์อยู่ — บันทึกไว้ส่งอัตโนมัติเมื่อออนไลน์'
+                : 'นำส่งกิจกรรมสำเร็จ',
+          ),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       _reload();
@@ -334,7 +341,9 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
         // "รอส่งขึ้นระบบ" (ยังไม่มี endpoint นำส่งจริง)
         final pending = [
           for (final a in items)
-            if ('${a['submitStatus'] ?? 'pending'}' == 'pending') a,
+            if ('${a['submitStatus'] ?? 'pending'}' == 'pending' ||
+                a['submitStatus'] == 'queued')
+              a,
         ];
         final failed = [
           for (final a in items)

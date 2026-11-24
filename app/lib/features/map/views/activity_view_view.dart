@@ -193,6 +193,7 @@ class ActivityViewView extends StatelessWidget {
                       : switch ('${activity['submitStatus'] ?? 'pending'}') {
                           'sent' => 'นำส่งแล้ว',
                           'failed' => 'นำส่งไม่สำเร็จ',
+                          'queued' => 'รอส่งอัตโนมัติเมื่อออนไลน์',
                           _ => 'บันทึกเรียบร้อย',
                         },
                 ),
