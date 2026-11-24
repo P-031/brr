@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -242,9 +243,10 @@ class ParcelService {
   Future<void> removeActivityDraft(String id) => _local.removeActivityDraft(id);
 
   /// นำส่งกิจกรรมที่บันทึกในเครื่องขึ้นระบบ —
-  /// `POST /plots/:id/activities` body = ฟิลด์กิจกรรมทั้งหมด +
-  /// รูปถ่ายบีบอัดเป็น base64 data URI (backend เก็บ payload ดิบ
-  /// เพดาน body 1MB — ไม่ต้องรอ multipart endpoint)
+  /// `POST /plots/:id/activities` body = `{id: uuid(serverId),`
+  /// ฟิลด์กิจกรรมทั้งชุด, photoCount}` (backend schema:
+  /// `{id, plantedAt?, detailPending?, photoCount 1-3}` —
+  /// field นอก schema ถูก strip เงียบๆ; รูปยังอยู่เครื่อง)
   /// สำเร็จ → mark 'sent', transport fail → mark 'queued' +
   /// throw [ActivityQueued], server ปฏิเสธ → mark 'failed' + throw
   /// ให้ UI แจ้งเหตุผล
@@ -256,25 +258,41 @@ class ParcelService {
       throw Exception('ออฟไลน์อยู่ — นำส่งไม่ได้');
     }
     final actId = '${activity['id']}';
+    // uuid ต้องคงเดิมข้าม retry — backend dedup ด้วย id ถ้า
+    // เปลี่ยนทุกครั้งจะสร้างกิจกรรมซ้ำใน DB; null = ร่างถูกลบ
+    // ไปแล้ว ห้ามยิง (ไม่งั้นเกิดกิจกรรมเรือนแม่ใน DB)
+    final serverId = await _local.ensureActivityServerId(actId);
+    if (serverId == null) {
+      throw Exception('ร่างกิจกรรมถูกลบไปแล้ว');
+    }
+    // photoCount นับเฉพาะไฟล์ที่ยังอยู่จริง — path ที่ไฟล์โดนลบ
+    // ไปแล้วไม่นับ; backend บังคับ ≥1 เลย mark 'failed' ให้ผู้ใช้
+    // ไปแก้ร่าง (flush จะไม่ยิงรายการที่ไม่มีทางสำเร็จซ้ำๆ)
     final actPhotos = activity['photos'];
-    // encode ล้มทั้งก้อน (isolate/ไฟล์) ห้ามทำ submit พัง —
-    // ส่งไปแบบไม่มีรูป ดีกว่ากิจกรรมค้างเพราะรูปเสีย
-    List<String> photoUris = const [];
-    if (actPhotos is List) {
+    final livePhotos = actPhotos is List
+        ? [
+            for (final p in actPhotos)
+              if (File('$p').existsSync()) p,
+          ]
+        : const <Object?>[];
+    if (livePhotos.isEmpty) {
       try {
-        photoUris = await _local.encodePhotosForUpload([
-          for (final p in actPhotos) '$p',
-        ]);
+        await _local.setActivitySubmitStatus(actId, 'failed');
       } catch (_) {}
+      throw Exception('ต้องแนบรูปอย่างน้อย 1 ใบ — ไฟล์รูปเดิมอาจถูกลบ');
     }
     final body = <String, dynamic>{
+      'id': serverId,
       for (final e in activity.entries)
-        if (!const {'id', 'submitStatus', 'plotId', 'photos'}.contains(e.key))
+        if (!const {
+          'id',
+          'serverId',
+          'submitStatus',
+          'plotId',
+          'photos',
+        }.contains(e.key))
           e.key: e.value,
-      // photoCount = จำนวนรูปที่ฝังส่งจริง — รูปที่ไฟล์หายก่อน
-      // ส่งไม่ถูกนับรวม (backend นับ photos ได้ตรงกับของที่มี)
-      'photoCount': photoUris.length,
-      if (photoUris.isNotEmpty) 'photos': photoUris,
+      'photoCount': livePhotos.length,
     };
     final http.Response res;
     try {

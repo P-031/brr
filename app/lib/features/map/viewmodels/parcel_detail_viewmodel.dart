@@ -3,6 +3,10 @@ import 'package:flutter/foundation.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
 import 'package:brr/features/map/models/parcel.dart';
 
+/// ผลการนำส่งกิจกรรม — backend บังคับ photoCount ≥1 เลยมี
+/// needPhoto เป็นกรณีที่บล็อกก่อนยิง (ไม่ให้ตก failed เปล่าๆ)
+enum ActivitySubmitResult { sent, queued, needPhoto }
+
 /// ViewModel ของ flow "ข้อมูลแปลง" ทั้งหมด — info sheet, หน้ารายละเอียด
 /// และ 3 หน้าแก้ไข/คำขอใต้เมนู ⋮ แชร์ instance เดียวกัน ดังนั้น
 /// detail future ถูกสร้างครั้งเดียวและ PATCH สำเร็จ → refetch แล้ว
@@ -43,15 +47,22 @@ class ParcelDetailViewModel extends ChangeNotifier {
   Future<void> removeActivityDraft(String id) =>
       _service.removeActivityDraft(id);
 
-  /// นำส่งกิจกรรมร่างขึ้นระบบ — คืน true เมื่อออฟไลน์แล้วถูก
-  /// คิวไว้ส่งอัตโนมัติ (UI แสดง "บันทึกไว้ส่งเมื่อออนไลน์" แทน
-  /// error); พลาดอื่น throw เพื่อให้ UI แจ้งเหตุผล
-  Future<bool> submitActivity(Map<String, dynamic> activity) async {
+  /// นำส่งกิจกรรมร่างขึ้นระบบ — backend บังคับ photoCount ≥1
+  /// เลยเช็กรูปก่อนยิง (ส่งไปก็โดน 400 ตก failed เปล่าๆ);
+  /// ผลลัพธ์ดู [ActivitySubmitResult], พลาดอื่น throw เพื่อ
+  /// ให้ UI แจ้งเหตุผล
+  Future<ActivitySubmitResult> submitActivity(
+    Map<String, dynamic> activity,
+  ) async {
+    final photos = activity['photos'];
+    if (photos is! List || photos.isEmpty) {
+      return ActivitySubmitResult.needPhoto;
+    }
     try {
       await _service.submitActivity(parcel.id, activity);
-      return false;
+      return ActivitySubmitResult.sent;
     } on ActivityQueued {
-      return true;
+      return ActivitySubmitResult.queued;
     }
   }
 

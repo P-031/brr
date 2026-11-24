@@ -84,23 +84,32 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
     final id = '${a['id']}';
     setState(() => _sendingId = id);
     try {
-      final queued = await widget.vm.submitActivity(a);
+      final result = await widget.vm.submitActivity(a);
       if (!mounted) return;
       _reload();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            queued
-                ? 'ออฟไลน์อยู่ — บันทึกไว้ส่งอัตโนมัติเมื่อออนไลน์'
-                : 'นำส่งกิจกรรมสำเร็จ',
-          ),
+          content: Text(switch (result) {
+            ActivitySubmitResult.sent => 'นำส่งกิจกรรมสำเร็จ',
+            ActivitySubmitResult.queued =>
+              'ออฟไลน์อยู่ — บันทึกไว้ส่งอัตโนมัติเมื่อออนไลน์',
+            // backend บังคับ photoCount ≥1 — บล็อกก่อนยิง
+            ActivitySubmitResult.needPhoto =>
+              'ต้องแนบรูปอย่างน้อย 1 ใบก่อนนำส่ง',
+          }),
         ),
       );
     } catch (e) {
       if (!mounted) return;
       _reload();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('นำส่งไม่สำเร็จ — $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'นำส่งไม่สำเร็จ — '
+            '${'$e'.replaceFirst('Exception: ', '')}',
+          ),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _sendingId = null);
     }

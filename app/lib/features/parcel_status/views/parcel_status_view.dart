@@ -57,7 +57,7 @@ class _BodyState extends State<_Body> {
           child: const Text(
             'สถานะแปลง',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
           ),
         ),
         Container(
@@ -89,7 +89,10 @@ class _BodyState extends State<_Body> {
                   child: TextButton.icon(
                     onPressed: vm.load,
                     icon: const Icon(Iconsax.refresh, size: 18),
-                    label: const Text('โหลดสถานะไม่สำเร็จ — ลองใหม่'),
+                    label: const Text(
+                      'โหลดสถานะไม่สำเร็จ — ลองใหม่',
+                      style: TextStyle(fontSize: 17),
+                    ),
                   ),
                 )
               else
@@ -120,7 +123,7 @@ class _BodyState extends State<_Body> {
                     icon: const Icon(Iconsax.refresh, size: 18),
                     label: const Text(
                       'โหลดรายการไม่สำเร็จ — ลองใหม่',
-                      style: TextStyle(fontSize: 15),
+                      style: TextStyle(fontSize: 17),
                     ),
                   ),
                 )
@@ -135,19 +138,22 @@ class _BodyState extends State<_Body> {
                     children: [
                       Text(
                         vm.error!.replaceFirst('Exception: ', ''),
-                        style: const TextStyle(fontSize: 16),
+                        style: const TextStyle(fontSize: 18),
                       ),
                       TextButton.icon(
                         onPressed: vm.load,
                         icon: const Icon(Iconsax.refresh, size: 18),
-                        label: const Text('ลองใหม่'),
+                        label: const Text(
+                          'ลองใหม่',
+                          style: TextStyle(fontSize: 17),
+                        ),
                       ),
                     ],
                   ),
                 )
               : items.isEmpty
               ? const Center(
-                  child: Text('ไม่มีข้อมูล', style: TextStyle(fontSize: 16)),
+                  child: Text('ไม่มีข้อมูล', style: TextStyle(fontSize: 19)),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -184,7 +190,7 @@ class _BodyState extends State<_Body> {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontSize: selected ? 20 : 16,
+          fontSize: selected ? 22 : 19,
           fontWeight: selected ? FontWeight.bold : FontWeight.w600,
           color: selected ? AppColors.green : Colors.black87,
         ),
@@ -265,14 +271,14 @@ class _RequestCard extends StatelessWidget {
                   Text(
                     r.plotName,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${r.kindLabel}${r.detail.isEmpty ? '' : ' — ${r.detail}'}',
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                    style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -282,14 +288,14 @@ class _RequestCard extends StatelessWidget {
                         'ปีการผลิต ${r.productionYear}',
                       _thaiDate(r.createdAt),
                     ].where((s) => s.isNotEmpty).join('  •  '),
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                   ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
             Chip(
-              label: Text(status, style: const TextStyle(fontSize: 12)),
+              label: Text(status, style: const TextStyle(fontSize: 14)),
               backgroundColor: AppColors.goldLight,
             ),
           ],

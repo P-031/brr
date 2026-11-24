@@ -126,7 +126,7 @@ class _MainViewState extends State<MainView> {
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: selected ? 15 : 14,
+                  fontSize: selected ? 17 : 16,
                   fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   color: selected ? Colors.white : Colors.black54,
                 ),

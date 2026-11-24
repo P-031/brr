@@ -222,7 +222,9 @@ class AuthViewModel extends ChangeNotifier {
       _error = e.message;
     } catch (e) {
       _status = AuthStatus.unauthenticated;
-      _error = 'เข้าสู่ระบบไม่สำเร็จ: $e';
+      _error =
+          'เข้าสู่ระบบไม่สำเร็จ: '
+          '${'$e'.replaceFirst('Exception: ', '')}';
     }
     notifyListeners();
   }
@@ -251,7 +253,9 @@ class AuthViewModel extends ChangeNotifier {
       _error = 'เซสชันของ ${account.username} หมดอายุ กรุณาเข้าสู่ระบบใหม่';
     } catch (e) {
       _status = AuthStatus.unauthenticated;
-      _error = 'เข้าสู่ระบบไม่สำเร็จ: $e';
+      _error =
+          'เข้าสู่ระบบไม่สำเร็จ: '
+          '${'$e'.replaceFirst('Exception: ', '')}';
     }
     notifyListeners();
   }

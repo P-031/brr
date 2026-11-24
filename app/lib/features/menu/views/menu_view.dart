@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
+import 'package:brr/core/config/app_info.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/failed_edits_viewmodel.dart';
 import 'package:brr/features/map/views/failed_edits_view.dart';
 import 'package:brr/features/menu/views/change_password_view.dart';
 import 'package:brr/features/menu/views/edit_profile_view.dart';
+import 'package:brr/features/settings/views/settings_view.dart';
 
 /// เมนู — profile header, settings list, and the only place with a
 /// sign-out action. Items are backend-ready placeholders for now.
@@ -62,7 +64,7 @@ class MenuView extends StatelessWidget {
                       Text(
                         user?.displayName ?? 'ผู้ใช้',
                         style: const TextStyle(
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -99,7 +101,14 @@ class MenuView extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _item(context, Iconsax.setting_2, 'ตั้งค่า'),
+                  _item(
+                    context,
+                    Iconsax.setting_2,
+                    'ตั้งค่า',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsView()),
+                    ),
+                  ),
                   _item(
                     context,
                     Iconsax.lock,
@@ -126,10 +135,10 @@ class MenuView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Card(
               child: ListTile(
-                leading: const Icon(Iconsax.logout, color: Colors.red),
+                leading: const Icon(Icons.logout, color: Colors.red),
                 title: const Text(
                   'ออกจากระบบ',
-                  style: TextStyle(color: Colors.red, fontSize: 16),
+                  style: TextStyle(color: Colors.red, fontSize: 18),
                 ),
                 onTap: () async {
                   final ok = await _confirmSignOut(context);
@@ -139,11 +148,11 @@ class MenuView extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          const Padding(
-            padding: EdgeInsets.only(bottom: 16),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
             child: Text(
-              'BRR เวอร์ชั่น 1.0.0',
-              style: TextStyle(color: Colors.black38, fontSize: 13),
+              'BRR เวอร์ชั่น ${AppInfo.version}',
+              style: const TextStyle(color: Colors.black38, fontSize: 14),
             ),
           ),
         ],
@@ -159,7 +168,7 @@ class MenuView extends StatelessWidget {
     ),
     child: Text(
       text,
-      style: const TextStyle(fontSize: 12, color: Colors.black54),
+      style: const TextStyle(fontSize: 14, color: Colors.black54),
     ),
   );
 
@@ -175,7 +184,7 @@ class MenuView extends StatelessWidget {
       children: [
         ListTile(
           leading: Icon(icon, color: iconColor),
-          title: Text(label, style: const TextStyle(fontSize: 15)),
+          title: Text(label, style: const TextStyle(fontSize: 18)),
           onTap:
               onTap ??
               () => ScaffoldMessenger.of(
@@ -223,7 +232,7 @@ class _FailedEditsTileState extends State<_FailedEditsTile> {
         ),
         title: const Text(
           'การแก้ไขที่ส่งไม่สำเร็จ',
-          style: TextStyle(fontSize: 15),
+          style: TextStyle(fontSize: 18),
         ),
         trailing: count > 0
             ? Container(
@@ -254,21 +263,50 @@ Future<bool?> _confirmSignOut(BuildContext context) => showDialog<bool>(
   context: context,
   builder: (ctx) => AlertDialog(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    // ลดระยะห่างขอบจอ → กรอบกว้างขึ้น (default 40 แคบไปบนจอเล็ก)
+    insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
     title: const Text(
       'ออกจากระบบ?',
-      style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
       textAlign: TextAlign.center,
     ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.of(ctx).pop(false),
-        child: const Text('ยกเลิก'),
+    titlePadding: const EdgeInsets.fromLTRB(24, 28, 24, 8),
+    contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 28),
+    // ปุ่มกว้างเท่ากันเต็มแถว — actions row เดิมปุ่มไปชิดขอบขวา
+    // บนจอแคบ ดูเบียด/ล้น; AlertDialog หดตามเนื้อหา เลยบังคับ
+    // content กว้างเต็มที่กรอบจะยืดได้
+    content: SizedBox(
+      width: double.maxFinite,
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text(
+                'ยกเลิก',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.red,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text(
+                'ออกจากระบบ',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
       ),
-      FilledButton(
-        style: FilledButton.styleFrom(backgroundColor: Colors.red),
-        onPressed: () => Navigator.of(ctx).pop(true),
-        child: const Text('ออกจากระบบ'),
-      ),
-    ],
+    ),
   ),
 );

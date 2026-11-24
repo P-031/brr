@@ -1,33 +1,24 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:brr/features/map/models/parcel.dart';
 
-/// บีบอัดรูป → base64 data URI ใน background isolate
-/// (decode รูป 12MP บน main thread ทำจอกระตุก)
-/// คืน null เมื่อ decode ไม่ได้ — caller ข้ามรูปนั้น
-String? _encodeJpegDataUri(({Uint8List bytes, int maxDim, int quality}) a) {
-  try {
-    final decoded = img.decodeImage(a.bytes);
-    if (decoded == null) return null;
-    final w = decoded.width, h = decoded.height;
-    final resized = w > a.maxDim || h > a.maxDim
-        ? img.copyResize(
-            decoded,
-            width: w >= h ? a.maxDim : null,
-            height: h > w ? a.maxDim : null,
-          )
-        : decoded;
-    return 'data:image/jpeg;base64,'
-        '${base64Encode(img.encodeJpg(resized, quality: a.quality))}';
-  } catch (_) {
-    return null;
-  }
+/// uuid v4 ในเครื่อง — ใช้เป็น serverId ของกิจกรรม (backend
+/// บังคับ id เป็น uuid + dedup ด้วย id นี้ ห้ามเปลี่ยนข้าม retry)
+String _newUuid() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+      '${hex.substring(20)}';
 }
 
 /// ชั้น local persistence ของแปลง — SharedPreferences + ไฟล์ใน
@@ -130,38 +121,6 @@ class ParcelLocalStore {
       debugPrint('persistPhoto: copy ล้มเหลว $path ($e)');
       return path;
     }
-  }
-
-  /// บีบอัดรูปเป็น base64 data URI สำหรับฝังใน JSON payload —
-  /// backend รับ body ≤1MB และเก็บ payload ดิบทั้งก้อน รูปจึง
-  /// เดินทางใน request เดียวกันได้โดยไม่ต้องมี multipart
-  /// endpoint (ภาพย่อยเป็น JPEG ≤1024px; ถ้ารวมกันเกิน ~700KB
-  /// บีบซ้ำที่ 640px) — รูปที่ไฟล์หาย/อ่านไม่ได้ถูกข้าม
-  /// ไม่ทำ submit พัง; คืน list เดียวกับลำดับที่ส่งมา
-  Future<List<String>> encodePhotosForUpload(List<String> paths) async {
-    final srcs = <Uint8List>[];
-    for (final path in paths) {
-      try {
-        srcs.add(await File(path).readAsBytes());
-      } catch (_) {}
-    }
-    for (final maxDim in const [1024, 640]) {
-      final out = <String>[];
-      var total = 0;
-      for (final bytes in srcs) {
-        final uri = await compute(_encodeJpegDataUri, (
-          bytes: bytes,
-          maxDim: maxDim,
-          quality: maxDim == 1024 ? 60 : 45,
-        ));
-        if (uri != null) {
-          out.add(uri);
-          total += uri.length;
-        }
-      }
-      if (total <= 700 * 1024 || maxDim == 640) return out;
-    }
-    return const [];
   }
 
   /// ลบรูปที่ persist ไว้ — ลบเฉพาะไฟล์ใต้ photos/ เท่านั้น กัน
@@ -472,6 +431,9 @@ class ParcelLocalStore {
       'id':
           activityId ??
           'act-${DateTime.now().microsecondsSinceEpoch}-${_actSeq++}',
+      // uuid สำหรับส่ง server — backend บังคับ id เป็น uuid และ
+      // dedup ด้วยตัวนี้; id เครื่อง 'act-…' ใช้เป็น key ภายในต่อ
+      'serverId': _newUuid(),
       'plotId': plotId,
       'photos': [for (final p in photoPaths) await persistPhoto(p)],
       'detailPending': detailPending,
@@ -526,6 +488,9 @@ class ParcelLocalStore {
       if (i >= 0) {
         entry['createdAt'] = items[i]['createdAt'];
         entry['submitStatus'] = items[i]['submitStatus'] ?? 'pending';
+        // ร่างเก่าอาจยังไม่มี serverId (สร้างก่อน schema นี้) —
+        // คงของเดิมถ้ามี ไม่งั้น dedup ฝั่ง server พัง
+        entry['serverId'] = items[i]['serverId'] ?? _newUuid();
         // ผู้บันทึกเดิม — ถ้า call นี้ไม่ได้ส่งมาให้คงค่าเดิมไว้
         entry['recordedBy'] ??= items[i]['recordedBy'];
         entry['recordedByRole'] ??= items[i]['recordedByRole'];
@@ -655,6 +620,25 @@ class ParcelLocalStore {
       (await _loadActivities())
           .where((a) => a['submitStatus'] == 'queued')
           .toList();
+
+  /// uuid ที่จะส่งขึ้น server ของกิจกรรม — ร่างเก่าที่สร้างก่อน
+  /// schema นี้ยังไม่มี serverId → gen แล้ว persist กลับเลย
+  /// (ห้าม gen ใหม่ทุก submit — backend dedup ด้วย id ถ้า
+  /// เปลี่ยนข้าม retry จะสร้างกิจกรรมซ้ำใน DB)
+  /// คืน null = ไม่เจอร่างในเครื่องแล้ว (ถูกลบระหว่าง submit)
+  /// → caller ห้ามยิง POST ไม่งั้นเกิดกิจกรรมเรือนแม่ใน DB
+  Future<String?> ensureActivityServerId(String id) => _serialized(() async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = await _loadActivities();
+    final i = items.indexWhere((a) => '${a['id']}' == id);
+    if (i < 0) return null;
+    final existing = items[i]['serverId'];
+    if (existing is String && existing.isNotEmpty) return existing;
+    final uuid = _newUuid();
+    items[i]['serverId'] = uuid;
+    await prefs.setString(_activityKey, jsonEncode(items));
+    return uuid;
+  });
 
   /// อัปเดต submitStatus ของกิจกรรม (pending/queued/failed/sent) —
   /// หน้านำส่งใช้แยก tab ตามสถานะนี้
