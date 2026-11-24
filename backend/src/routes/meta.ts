@@ -31,7 +31,8 @@ metaRouter.get(
       : await prisma.plot.findMany({
           where: { farmerId: { in: farmerIds } },
           select: { id: true, name: true },
-          orderBy: { name: "asc" },
+          orderBy: { updatedAt: "desc" },
+          take: 300,
         });
 
     res.json({

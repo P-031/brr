@@ -44,6 +44,7 @@ model User {
   plots      Plot[]
   caringFor  FarmerCare[] @relation("OfficerCare")
   caretakers FarmerCare[] @relation("FarmerCare")
+  notifications Notification[]
 
   @@index([role])
 }
@@ -213,6 +214,7 @@ model PlotRequest {
   payload   Json?
   createdAt DateTime  @default(now())
   plot      Plot      @relation(fields: [plotId], references: [id], onDelete: Cascade)
+  notifications Notification[]
   @@index([plotId, createdAt])
   @@index([status, createdAt])
 }
@@ -232,4 +234,20 @@ model Place {
   village     String
 
   @@id([province, district, subdistrict, village])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  requestId String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request   PlotRequest?  @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
 }
