@@ -532,12 +532,26 @@ fieldRouter.get(
       harvestGroup: z.string().trim().max(120).optional(),
     });
 
+    const requestKindLabel: Record<string, string> = {
+      status: "สถานะแปลง",
+      edit: "แก้ไขแปลง",
+      group: "กลุ่มแปลง",
+    };
+
+    async function notifyUser(userIds: string[], title: string, body: string, requestId: string) {
+      const ids = [...new Set(userIds)];
+      if (ids.length === 0) return;
+      await prisma.notification.createMany({
+        data: ids.map((userId) => ({ userId, title, body, requestId })),
+      });
+    }
+
   fieldRouter.post(
     "/plots/:plotId/requests",
     route(async (req, res) => {
       const user = currentUser(req);
       const plotId = pathId(req.params.plotId);
-      await visiblePlot(user, plotId);
+      const plot = await visiblePlot(user, plotId);
       const body = plotRequestBody.parse(req.body);
       if (body.kind === "status") {
         if (!body.value) throw new HttpError(400, "ยังไม่ได้เลือกสถานะ");
@@ -581,6 +595,16 @@ fieldRouter.get(
           payload,
         },
       });
+      const officers =await prisma.farmerCare.findMany({
+        where: { farmerId: plot.farmerId },
+        select: { officerId: true },
+      });
+      await notifyUser(
+        officers.map((row) => row.officerId).filter((id) => id !== user.id),
+        "มีคำขอใหม่",
+        `${user.displayName}ส่งคำขอ${requestKindLabel[body.kind] ?? ""} แปลง ${plot.name}`,
+        created.id,
+      );
       res.status(201).json({ id: created.id, kind: created.kind, value: created.value, status: created.status });
     }),
   );
@@ -731,6 +755,12 @@ fieldRouter.patch(
      }
       return updated;
     });
+    await notifyUser(
+      [existing.plot.farmerId].filter((id) => id !== user.id),
+      body.status === "อนุมัติ" ? "คำขอได้รับอนุมัติ" : "คำขอไม่ผ่าน",
+      `คำขอ${requestKindLabel[existing.kind] ?? ""} แปลง ${existing.plot.name} ${body.status}`,
+      existing.id,
+    );
 
     const outlines = await readBoundaries([saved.plotId]);
     res.json(plotRequestJson(saved, outlines.get(saved.plotId) ?? []));
@@ -742,10 +772,13 @@ fieldRouter.patch(
   route(async (req, res) => {
     const user = currentUser(req);
     const plotId = pathId(req.params.plotId);
-    const plot = await ownedPlot(user, plotId);
+    const plot = await visiblePlot(user, plotId);
     const body = updatePlotBody.parse(req.body);
     const survey = body.survey;
     const measured = survey ? measureSurvey(survey, new Date()) : undefined;
+    if (measured && user.role !== "FARMER") {
+      throw new HttpError(403, "เฉพาะเจ้าของแปลงที่แก้เส้นขอบได้");
+    }
     
 
     const saved = await prisma.$transaction(async (tx) => {
@@ -903,13 +936,13 @@ fieldRouter.get(
 fieldRouter.post(
   "/plots/:plotId/activities",
   route(async (req, res) => {
-    const plot = await ownedPlot(currentUser(req), pathId(req.params.plotId));
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
     const body = activityBody.parse(req.body);
     const { id, plantedAt: plantedAtText, detailPending, photoCount, ...rest } = body;
     const activityId = id ?? randomUUID();
     const plantedAt = plantedAtText ? parseDate(plantedAtText) : null;
     const detail = Object.fromEntries(
-      Object.entries(rest).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+      Object.entries(rest).filter(([, value]) => value !== undefined && value !== null),
     );
 
     if (id) {
@@ -954,12 +987,12 @@ fieldRouter.patch(
       await refuseDeleted("ACTIVITY", activityId);
       throw new HttpError(404, "ไม่พบกิจกรรม");
     }
-    const plot = await ownedPlot(currentUser(req), existing.plotId);
+    const plot = await visiblePlot(currentUser(req), existing.plotId);
     const body = updateActivityBody.parse(req.body);
     const { version, plantedAt: plantedAtText, detailPending, photoCount, ...rest } = body;
     const plantedAt = plantedAtText ? parseDate(plantedAtText) : undefined;
     const incoming = Object.fromEntries(
-      Object.entries(rest).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+      Object.entries(rest).filter(([, value]) => value !== undefined && value !== null),
     );
     const previous =
       existing.detail && typeof existing.detail === "object" && !Array.isArray(existing.detail)
@@ -1009,7 +1042,7 @@ fieldRouter.delete(
       }
       throw new HttpError(404, "ไม่พบกิจกรรม");
     }
-    const plot = await ownedPlot(user, existing.plotId);
+    const plot = await visiblePlot(user, existing.plotId);
 
     const removed = await prisma.$transaction(async (tx) => {
       const result = await tx.plotActivity.deleteMany({
@@ -1157,7 +1190,7 @@ fieldRouter.post(
   "/plots/:plotId/tasks",
   route(async (req, res) => {
     const user = currentUser(req);
-    const plot = await ownedPlot(user, pathId(req.params.plotId));
+    const plot = await visiblePlot(user, pathId(req.params.plotId));
     const body = taskBody.parse(req.body);
 
     const existing = await prisma.fieldTask.findUnique({ where: { id: body.id } });
@@ -1283,7 +1316,7 @@ fieldRouter.get(
 fieldRouter.put(
   "/plots/:plotId/risk-point",
   route(async (req, res) => {
-    const plot = await ownedPlot(currentUser(req), pathId(req.params.plotId));
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
     const body = riskBody.parse(req.body);
     const existing = await prisma.fromOption.findUnique({
       where: { group_label: { group: "riskLevels", label: body.type } },
@@ -1309,3 +1342,41 @@ fieldRouter.put(
     res.json(riskJson(row));
   })
 )
+
+fieldRouter.get(
+  "/notifications",
+  route(async (req, res) => {
+    const user = currentUser(req);
+    const where = { userId: user.id };
+    const [unread, rows] = await Promise.all([
+      prisma.notification.count({ where: {...where, readAt: null } }),
+      prisma.notification.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+    ]);
+    res.json({ 
+      unread,
+      items: rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        body: row.body,
+        createdAt: row.createdAt.toISOString(),
+        read: row.readAt !== null,
+      })),
+    });
+  }),
+);
+
+fieldRouter.post(
+  "/notifications/read",
+  route(async (req, res) => {
+    const user = currentUser(req);
+    await prisma.notification.updateMany({
+      where: { userId: user.id, readAt: null },
+      data: { readAt: new Date() },
+    });
+    res.json({ unread: 0 });
+  }),
+);
