@@ -43,10 +43,17 @@ class ParcelDetailViewModel extends ChangeNotifier {
   Future<void> removeActivityDraft(String id) =>
       _service.removeActivityDraft(id);
 
-  /// นำส่งกิจกรรมร่างขึ้นระบบ — สำเร็จย้ายไปแท็บ "ส่งสำเร็จ",
-  /// พลาดย้ายไป "ส่งไม่สำเร็จ" (throw เพื่อให้ UI แจ้งเหตุผล)
-  Future<void> submitActivity(Map<String, dynamic> activity) =>
-      _service.submitActivity(parcel.id, activity);
+  /// นำส่งกิจกรรมร่างขึ้นระบบ — คืน true เมื่อออฟไลน์แล้วถูก
+  /// คิวไว้ส่งอัตโนมัติ (UI แสดง "บันทึกไว้ส่งเมื่อออนไลน์" แทน
+  /// error); พลาดอื่น throw เพื่อให้ UI แจ้งเหตุผล
+  Future<bool> submitActivity(Map<String, dynamic> activity) async {
+    try {
+      await _service.submitActivity(parcel.id, activity);
+      return false;
+    } on ActivityQueued {
+      return true;
+    }
+  }
 
   /// จำนวนกิจกรรมใหม่ที่ยังไม่ได้เปิดดู — badge บนปุ่มเมนู
   Future<int> unseenActivityCount() => _service.unseenActivityCount(parcel.id);

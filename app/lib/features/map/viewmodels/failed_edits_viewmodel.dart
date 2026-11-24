@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
+import 'package:brr/features/map/data/parcel_local_store.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
 
 /// ViewModel ของหน้า "การแก้ไขที่ส่งไม่สำเร็จ" — รายการ PATCH ที่
@@ -19,12 +21,18 @@ class FailedEditsViewModel extends ChangeNotifier {
   factory FailedEditsViewModel.forContext(BuildContext context) =>
       FailedEditsViewModel.forApi(context.read<ApiClient>());
 
+  /// จำนวนรายการแบบ live — badge/แจ้งเตือน listen ตัวนี้ได้ทันที
+  /// ที่ store บันทึกรายการใหม่ ไม่ต้องรอเปิดเมนู
+  static ValueListenable<int> get countListenable => failedEditsCount;
+
   /// จำนวนรายการสำหรับ badge ที่เมนู — static เพราะเมนูไม่ได้ถือ
   /// VM ตัวเต็ม (อ่าน prefs ตรงๆ เบามาก)
   static Future<int> failedCountFor(BuildContext context) async {
-    return (await ParcelService(
+    final n = (await ParcelService(
       context.read<ApiClient>(),
     ).loadFailedEdits()).length;
+    failedEditsCount.value = n;
+    return n;
   }
 
   final ParcelService? _service;

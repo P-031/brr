@@ -131,7 +131,10 @@ class MenuView extends StatelessWidget {
                   'ออกจากระบบ',
                   style: TextStyle(color: Colors.red, fontSize: 16),
                 ),
-                onTap: vm.signOut,
+                onTap: () async {
+                  final ok = await _confirmSignOut(context);
+                  if (ok == true) vm.signOut();
+                },
               ),
             ),
           ),
@@ -196,63 +199,76 @@ class _FailedEditsTile extends StatefulWidget {
 }
 
 class _FailedEditsTileState extends State<_FailedEditsTile> {
-  int _count = 0;
-
   @override
   void initState() {
     super.initState();
-    _reload();
+    _seed();
   }
 
-  Future<void> _reload() async {
-    // context.read ข้างใน failedCountFor throw ถ้า widget unmount
-    // ไปแล้ว — guard ก่อนใช้ context เสมอ
+  /// seed จำนวนจาก prefs เข้า notifier (ค่า persist ข้ามรอบแอป)
+  /// — failedCountFor เขียนกลับเข้า countListenable เอง
+  Future<void> _seed() async {
     if (!mounted) return;
-    final n = await FailedEditsViewModel.failedCountFor(context);
-    if (mounted) setState(() => _count = n);
+    await FailedEditsViewModel.failedCountFor(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        ListTile(
-          leading: Icon(
-            Iconsax.warning_2,
-            color: _count > 0 ? Colors.orange : AppColors.green,
-          ),
-          title: const Text(
-            'การแก้ไขที่ส่งไม่สำเร็จ',
-            style: TextStyle(fontSize: 15),
-          ),
-          trailing: _count > 0
-              ? Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    '$_count',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                )
-              : null,
-          onTap: () async {
-            await Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const FailedEditsView()));
-            _reload();
-          },
+    return ValueListenableBuilder<int>(
+      valueListenable: FailedEditsViewModel.countListenable,
+      builder: (context, count, _) => ListTile(
+        leading: Icon(
+          Iconsax.warning_2,
+          color: count > 0 ? Colors.orange : AppColors.green,
         ),
-      ],
+        title: const Text(
+          'การแก้ไขที่ส่งไม่สำเร็จ',
+          style: TextStyle(fontSize: 15),
+        ),
+        trailing: count > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              )
+            : null,
+        onTap: () => Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => const FailedEditsView())),
+      ),
     );
   }
 }
+
+/// ยืนยันก่อนออกจากระบบ — กันแตะผิดแล้วหลุดทันที
+Future<bool?> _confirmSignOut(BuildContext context) => showDialog<bool>(
+  context: context,
+  builder: (ctx) => AlertDialog(
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    title: const Text(
+      'ออกจากระบบ?',
+      style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
+      textAlign: TextAlign.center,
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.of(ctx).pop(false),
+        child: const Text('ยกเลิก'),
+      ),
+      FilledButton(
+        style: FilledButton.styleFrom(backgroundColor: Colors.red),
+        onPressed: () => Navigator.of(ctx).pop(true),
+        child: const Text('ออกจากระบบ'),
+      ),
+    ],
+  ),
+);

@@ -3,6 +3,7 @@ import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/home/views/home_view.dart';
+import 'package:brr/features/map/viewmodels/failed_edits_viewmodel.dart';
 import 'package:brr/features/menu/views/menu_view.dart';
 import 'package:brr/features/parcel_status/views/parcel_status_view.dart';
 
@@ -18,6 +19,34 @@ class MainView extends StatefulWidget {
 
 class _MainViewState extends State<MainView> {
   int _index = 0;
+  int _prevFailed = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    FailedEditsViewModel.countListenable.addListener(_onFailedEdits);
+  }
+
+  @override
+  void dispose() {
+    FailedEditsViewModel.countListenable.removeListener(_onFailedEdits);
+    super.dispose();
+  }
+
+  /// เตือนทันทีที่มี PATCH โดน server ปฏิเสธ — เดิมผู้ใช้ต้อง
+  /// เปิดเมนูเองถึงจะเห็น badge; เตือนเฉพาะตอนจำนวนเพิ่ม
+  /// (retry/discard ลดลงไม่ต้องแจ้ง)
+  void _onFailedEdits() {
+    final n = FailedEditsViewModel.countListenable.value;
+    if (n > _prevFailed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('มีการแก้ไขที่ส่งไม่สำเร็จ — ตรวจสอบได้ในเมนู'),
+        ),
+      );
+    }
+    _prevFailed = n;
+  }
 
   @override
   Widget build(BuildContext context) {

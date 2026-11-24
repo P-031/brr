@@ -265,6 +265,14 @@ class ParcelService {
     final http.Response res;
     try {
       res = await _api.postJson(ApiEndpoints.plotActivities(plotId), body);
+    } on TransportException {
+      // เน็ตหลุด/timeout — คิวไว้ส่งอัตโนมัติตอนเน็ตกลับ
+      // (flushQueuedActivities) ไม่นับเป็น "ส่งไม่สำเร็จ"
+      // ที่ต้องให้ผู้ใช้ตัดสินใจเหมือน server ปฏิเสธ
+      try {
+        await _local.setActivitySubmitStatus(actId, 'queued');
+      } catch (_) {}
+      throw const ActivityQueued();
     } catch (_) {
       try {
         await _local.setActivitySubmitStatus(actId, 'failed');
@@ -283,6 +291,22 @@ class ParcelService {
       await _local.setActivitySubmitStatus(actId, 'failed');
     } catch (_) {}
     throw Exception('นำส่งไม่สำเร็จ: ${_errorDetail(res)}');
+  }
+
+  /// ส่งกิจกรรมที่คิวไว้ตอนออฟไลน์ขึ้นระบบอัตโนมัติ — เรียกเมื่อ
+  /// connectivity กลับมา; รายการที่เน็ตยังไม่นิ่งค้างเป็น 'queued'
+  /// ต่อรอรอบถัดไป, server ปฏิเสธ → 'failed' ให้ผู้ใช้ตัดสินใจ
+  Future<void> flushQueuedActivities() async {
+    if (!ApiConfig.enabled || _api == null) return;
+    for (final a in await _local.queuedActivities()) {
+      try {
+        await submitActivity('${a['plotId']}', a);
+      } on ActivityQueued {
+        // ยังส่งไม่ได้ — ปล่อยค้างในคิวรอรอบถัดไป
+      } catch (_) {
+        // server ปฏิเสธ → submitActivity mark 'failed' ให้แล้ว
+      }
+    }
   }
 
   /// จุดเสี่ยงล่าสุดของแปลง (เก็บทับรายการเดิมต่อ plotId)
@@ -781,63 +805,94 @@ class ParcelService {
   /// server = รายการนั้นใช้ไม่ได้แล้ว ตัดทิ้งไม่ให้ติดค้างนิรันดร์
   /// แต่บันทึกไว้ใน failed list ไม่ให้ข้อมูลที่ผู้ใช้แก้หายเงียบๆ
   Future<void> flushPendingEdits() async {
+    // PATCH ต่อเนื่องใช้เวลานานได้ (30s timeout × N รายการ) — ยิง
+    // network นอก _serialized write lock เดี๋ยว save อื่น (ร่าง/
+    // รูป/จุดเสี่ยง) ค้างตามคิว; กัน flush ซ้อนด้วย flag — snapshot
+    // เดียวกันส่งซ้ำ = PATCH เดิม idempotent แต่เสียเวลาเปล่า
+    if (_flushing || !ApiConfig.enabled || _api == null) return;
+    _flushing = true;
+    try {
+      await _flushPending();
+    } finally {
+      _flushing = false;
+    }
+  }
+
+  bool _flushing = false;
+
+  Future<void> _flushPending() async {
+    final api = _api;
+    if (api == null) return;
+    // snapshot คิวออกมาก่อน — entry ที่เข้ามาระหว่างยิงจะไม่โดนจับ
+    // (queuedAt ใหม่เสมอ removeWhere ไม่ชน)
+    final snapshot = await _local.loadPendingEdits();
     final failed = <Map<String, dynamic>>[];
-    await _local.updatePendingEdits((items) async {
-      if (!ApiConfig.enabled || _api == null) return;
-      for (var i = 0; i < items.length; i++) {
-        final e = items[i];
-        // entry เสีย (body ไม่ใช่ Map) — ส่งต่อไม่ได้ตลอดกาล ตัดทิ้ง
-        // ไม่งั้นตัวเสียตัวเดียวขวางคิวตัวหลังทั้งหมด (catch→break)
-        final rawBody = e['body'];
-        if (rawBody is! Map) {
-          items.removeAt(i--);
-          continue;
-        }
-        final plotId = '${e['plotId']}';
-        final body = Map<String, Object?>.from(rawBody);
-        http.Response res;
+    final sentKeys = <String>{}, droppedKeys = <String>{};
+    String keyOf(Map<String, dynamic> e) => '${e['plotId']}|${e['queuedAt']}';
+    for (final e in snapshot) {
+      final key = keyOf(e);
+      // entry เสีย (body ไม่ใช่ Map) — ส่งต่อไม่ได้ตลอดกาล ตัดทิ้ง
+      // ไม่งั้นตัวเสียตัวเดียวขวางคิวตัวหลังทั้งหมด (catch→break)
+      final rawBody = e['body'];
+      if (rawBody is! Map) {
+        droppedKeys.add(key);
+        continue;
+      }
+      final plotId = '${e['plotId']}';
+      final body = Map<String, Object?>.from(rawBody);
+      http.Response res;
+      try {
+        res = await api.patchJson(ApiEndpoints.plot(plotId), body);
+      } catch (_) {
+        // transport error — ยังออฟไลน์ เก็บตัวนี้+ที่เหลือไว้แล้วหยุด
+        break;
+      }
+      // version ที่คิวไว้ตั้งแต่ตอนแก้อาจ stale — server ตอบ 409
+      // VERSION_CONFLICT พร้อมรายละเอียดปัจจุบันใน `current`
+      // ดึง version สดแล้วส่งซ้ำครั้งเดียว แทนที่จะทิ้งการแก้ไข
+      // ที่ผู้ใช้ตั้งใจไว้ (แก้ไข offline ชนะตามลำดับคิว)
+      if (res.statusCode == 409) {
         try {
-          res = await _api.patchJson(ApiEndpoints.plot(plotId), body);
+          final j = jsonDecode(res.body);
+          final cur = j is Map ? j['current'] : null;
+          final fresh = cur is Map ? cur['version'] : null;
+          if (j is Map && j['code'] == 'VERSION_CONFLICT' && fresh is int) {
+            body['version'] = fresh;
+            res = await api.patchJson(ApiEndpoints.plot(plotId), body);
+          }
         } catch (_) {
-          // transport error — ยังออฟไลน์ เก็บตัวนี้+ที่เหลือไว้แล้วหยุด
+          // เน็ตหลุดระหว่าง retry — คิวไว้เหมือน transport error
           break;
         }
-        // version ที่คิวไว้ตั้งแต่ตอนแก้อาจ stale — server ตอบ 409
-        // VERSION_CONFLICT พร้อมรายละเอียดปัจจุบันใน `current`
-        // ดึง version สดแล้วส่งซ้ำครั้งเดียว แทนที่จะทิ้งการแก้ไข
-        // ที่ผู้ใช้ตั้งใจไว้ (แก้ไข offline ชนะตามลำดับคิว)
-        if (res.statusCode == 409) {
-          try {
-            final j = jsonDecode(res.body);
-            final cur = j is Map ? j['current'] : null;
-            final fresh = cur is Map ? cur['version'] : null;
-            if (j is Map && j['code'] == 'VERSION_CONFLICT' && fresh is int) {
-              body['version'] = fresh;
-              res = await _api.patchJson(ApiEndpoints.plot(plotId), body);
-            }
-          } catch (_) {
-            // เน็ตหลุดระหว่าง retry — คิวไว้เหมือน transport error
-            break;
-          }
-        }
-        if (res.statusCode == 200) {
-          items.removeAt(i--);
-          continue;
-        }
-        // 401/403 = session ยังไม่พร้อม (token ค้าง/หมดอายุ) ไม่ใช่
-        // การปฏิเสธจริง — คิงไว้ส่งรอบหน้าเหมือน transport error
-        if (res.statusCode == 401 || res.statusCode == 403) break;
-        // server ปฏิเสธจริงๆ (หลัง retry แล้วยังไม่ผ่าน / 4xx-5xx
-        // อื่น) — ตัดออกจากคิวแต่จดไว้ใน failed list พร้อมสาเหตุ
-        failed.add({
-          'plotId': plotId,
-          'body': body,
-          'status': res.statusCode,
-          'queuedAt': e['queuedAt'],
-        });
-        items.removeAt(i--);
       }
-    });
+      if (res.statusCode == 200) {
+        sentKeys.add(key);
+        continue;
+      }
+      // 401/403 = session ยังไม่พร้อม (token ค้าง/หมดอายุ) ไม่ใช่
+      // การปฏิเสธจริง — คิงไว้ส่งรอบหน้าเหมือน transport error
+      if (res.statusCode == 401 || res.statusCode == 403) break;
+      // server ปฏิเสธจริงๆ (หลัง retry แล้วยังไม่ผ่าน / 4xx-5xx
+      // อื่น) — ตัดออกจากคิวแต่จดไว้ใน failed list พร้อมสาเหตุ
+      failed.add({
+        'plotId': plotId,
+        'body': body,
+        'status': res.statusCode,
+        'queuedAt': e['queuedAt'],
+      });
+      droppedKeys.add(key);
+    }
+    // apply การลบใน write lock — เฉพาะ entry ที่ snapshot เห็น
+    // (plotId|queuedAt ตรง); entry ใหม่ที่ merge/เพิ่มระหว่าง
+    // ยิงจะรอดและถูกส่งรอบหน้า
+    if (sentKeys.isNotEmpty || droppedKeys.isNotEmpty) {
+      await _local.updatePendingEdits((items) async {
+        items.removeWhere((e) {
+          final k = keyOf(e);
+          return sentKeys.contains(k) || droppedKeys.contains(k);
+        });
+      });
+    }
     // เขียน failed หลังจบ transform — recordFailedEdit ใช้ write
     // queue เดียวกัน เรียกซ้อนข้างใน updatePendingEdits จะ deadlock
     for (final f in failed) {
@@ -1100,6 +1155,16 @@ ParcelPage _parseParcelList(String body) {
 /// "บันทึกไว้ในเครื่อง" แทน error; ระบบส่งต่อเองเมื่อเน็ตกลับ
 class PendingEditQueued implements Exception {
   const PendingEditQueued();
+}
+
+/// โยนเมื่อนำส่งกิจกรรมไม่ได้เพราะออฟไลน์/timeout — กิจกรรมถูก
+/// mark 'queued' ไว้ส่งอัตโนมัติเมื่อเน็ตกลับ caller แสดง
+/// "บันทึกไว้ส่งเมื่อออนไลน์" แทน error
+class ActivityQueued implements Exception {
+  const ActivityQueued();
+
+  @override
+  String toString() => 'ออฟไลน์อยู่ — บันทึกไว้ส่งอัตโนมัติเมื่อออนไลน์';
 }
 
 final _mockParcels = <Parcel>[

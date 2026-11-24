@@ -13,6 +13,10 @@ import 'package:brr/features/map/models/parcel.dart';
 ///
 /// [ParcelService] delegate มาที่นี่ — service เหลือแค่ network;
 /// view/VM เห็นแค่ API เดิมของ service ไม่ต้องรู้จัก store นี้
+/// จำนวนการแก้ไขที่ server ปฏิเสธค้างอยู่ — UI ฟังตัวนี้เพื่อ
+/// refresh badge/แจ้งเตือนทันที ไม่ต้องเปิดเมนูถึงจะเห็น
+final failedEditsCount = ValueNotifier<int>(0);
+
 class ParcelLocalStore {
   ParcelLocalStore();
 
@@ -590,7 +594,14 @@ class ParcelLocalStore {
     }
   });
 
-  /// อัปเดต submitStatus ของกิจกรรม (pending/failed/sent) —
+  /// กิจกรรมทั้งหมดที่คิวรอส่งอัตโนมัติ (ตอนกดนำส่งแล้วเน็ต
+  /// หลุด/timeout) — flush เมื่อ connectivity กลับมา
+  Future<List<Map<String, dynamic>>> queuedActivities() async =>
+      (await _loadActivities())
+          .where((a) => a['submitStatus'] == 'queued')
+          .toList();
+
+  /// อัปเดต submitStatus ของกิจกรรม (pending/queued/failed/sent) —
   /// หน้านำส่งใช้แยก tab ตามสถานะนี้
   Future<void> setActivitySubmitStatus(String id, String status) =>
       _serialized(() async {
@@ -860,12 +871,14 @@ class ParcelLocalStore {
           items.removeAt(0);
         }
         await prefs.setString(_failedEditKey, jsonEncode(items));
+        failedEditsCount.value = items.length;
       });
 
   /// ล้างรายการที่ปฏิเสธ — เรียกหลังผู้ใช้รับทราบ/แก้ไขแล้ว
   Future<void> clearFailedEdits() => _serialized(() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_failedEditKey);
+    failedEditsCount.value = 0;
   });
 
   /// โหลด→แก้→บันทึก failed list ภายใต้ write queue เดียว —
@@ -878,6 +891,7 @@ class ParcelLocalStore {
     final items = await loadFailedEdits();
     final result = await transform(items);
     await prefs.setString(_failedEditKey, jsonEncode(items));
+    failedEditsCount.value = items.length;
     return result;
   });
 }

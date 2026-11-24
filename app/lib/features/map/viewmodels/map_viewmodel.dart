@@ -169,10 +169,23 @@ class MapViewModel extends ChangeNotifier {
               if (p.isDraft || p.intersectsBox(vb.w, vb.s, vb.e, vb.n)) p,
           ];
     if (inView.length <= _maxRenderedParcels) return inView;
-    return [
-      ...inView.where((p) => p.isDraft),
-      ...inView.where((p) => !p.isDraft).take(_maxRenderedParcels),
-    ];
+    final drafts = inView.where((p) => p.isDraft).toList();
+    final rest = inView.where((p) => !p.isDraft).toList();
+    if (vb != null) {
+      // เลือกแปลงที่ใกล้กลางจอก่อน — เดิม take() ตัดตามลำดับข้อมูล
+      // ทำให้แปลงที่มองเห็นชัดๆ หายก่อนแปลงที่อยู่ริมกรอบ
+      final cy = (vb.n + vb.s) / 2;
+      final cx = (vb.e + vb.w) / 2;
+      double d2(Parcel p) {
+        final c = p.center;
+        final dy = c.latitude - cy;
+        final dx = c.longitude - cx;
+        return dy * dy + dx * dx;
+      }
+
+      rest.sort((a, b) => d2(a).compareTo(d2(b)));
+    }
+    return [...drafts, ...rest.take(_maxRenderedParcels)];
   }
 
   void setYearFilter(String? year) {

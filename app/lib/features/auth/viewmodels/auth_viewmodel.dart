@@ -293,9 +293,13 @@ class AuthViewModel extends ChangeNotifier {
     _netWasDown = !online;
     if (!online || !isAuthenticated) return;
     if (_offline) unawaited(_refreshDedup());
-    // คิว PATCH ที่ค้างจากตอนออฟไลน์ — ส่งอัตโนมัติเมื่อเน็ตกลับ
-    // ไม่ต้องรอผู้ใช้เปิดหน้ารายละเอียดแปลงอีกครั้ง
-    if (becameOnline) unawaited(ParcelService(api).flushPendingEdits());
+    // คิว PATCH + กิจกรรมที่ค้างจากตอนออฟไลน์ — ส่งอัตโนมัติ
+    // เมื่อเน็ตกลับ ไม่ต้องรอผู้ใช้เปิดหน้ารายละเอียดแปลงอีกครั้ง
+    if (becameOnline) {
+      final svc = ParcelService(api);
+      unawaited(svc.flushPendingEdits());
+      unawaited(svc.flushQueuedActivities());
+    }
   }
 
   @override
@@ -325,8 +329,10 @@ class AuthViewModel extends ChangeNotifier {
       _offline = false;
       await _store.save(_session!);
       // token สด + server ติดต่อได้ — จังหวะดีสุดในการส่งคิว
-      // PATCH ที่ค้างจากตอนออฟไลน์
-      unawaited(ParcelService(api).flushPendingEdits());
+      // PATCH + กิจกรรมที่ค้างจากตอนออฟไลน์
+      final svc = ParcelService(api);
+      unawaited(svc.flushPendingEdits());
+      unawaited(svc.flushQueuedActivities());
     } on AuthException {
       await _clear();
     } catch (_) {
