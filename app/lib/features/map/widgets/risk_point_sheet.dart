@@ -4,11 +4,35 @@ import 'package:iconsax/iconsax.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
+import 'package:brr/core/utils/json_safe.dart';
 
 /// (icon, พื้น, ขอบ/ตัวหนังสือ) ต่อประเภทจุดเสี่ยง — 3 สีต่างชัด
 /// ตามโจทย์: น้ำท่วม=แดง, แห้งแล้ง=ส้ม, น้ำท่วม-แล้ง 50-50=เหลือง
+/// backend ส่ง สูง/ปานกลาง/ต่ำ — map: สูง=น้ำท่วม กลาง=แล้ง ต่ำ=50-50
 /// ชื่อใหม่จาก backend ที่ยังไม่รู้จักได้ชุดเทา generic
+///
+/// label จาก backend → ชื่อชนิดภัยที่แสดงบน chip จริง
+String riskDisplayName(String name) {
+  if (name.contains('สูง')) return 'น้ำท่วม';
+  if (name.contains('กลาง')) return 'แห้งแล้ง';
+  if (name.contains('ต่ำ')) return '50-50';
+  return name;
+}
+
 (IconData, Color, Color) riskChipStyle(String name) {
+  if (name.contains('ต่ำ')) {
+    return (
+      Icons.brightness_6,
+      const Color(0xFFFFEB3B),
+      const Color(0xFF7A5C00),
+    );
+  }
+  if (name.contains('สูง')) {
+    return (Icons.tsunami, const Color(0xFFFFCDD2), const Color(0xFFC62828));
+  }
+  if (name.contains('กลาง')) {
+    return (Icons.wb_sunny, const Color(0xFFFFCC80), const Color(0xFFBF4D00));
+  }
   if (name.contains('50')) {
     return (
       Icons.brightness_6,
@@ -17,24 +41,12 @@ import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
     );
   }
   if (name.contains('น้ำ')) {
-    return (
-      Icons.tsunami,
-      const Color(0xFFFFCDD2),
-      const Color(0xFFC62828),
-    );
+    return (Icons.tsunami, const Color(0xFFFFCDD2), const Color(0xFFC62828));
   }
   if (name.contains('แล้ง')) {
-    return (
-      Icons.wb_sunny,
-      const Color(0xFFFFCC80),
-      const Color(0xFFBF4D00),
-    );
+    return (Icons.wb_sunny, const Color(0xFFFFCC80), const Color(0xFFBF4D00));
   }
-  return (
-    Iconsax.warning_2,
-    const Color(0xFFE0E0E0),
-    const Color(0xFF616161),
-  );
+  return (Iconsax.warning_2, const Color(0xFFE0E0E0), const Color(0xFF616161));
 }
 
 /// Sheet "กำหนดเป็นจุดเสี่ยงภัยพิบัติ" — เปิดจากการ์ดจุดเสี่ยงใน
@@ -76,6 +88,9 @@ class _RiskPointSheet extends StatefulWidget {
 class _RiskPointSheetState extends State<_RiskPointSheet> {
   final _nameCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
+  // cache ไว้ตั้งแต่ init — ส่งใหม่เข้า FutureBuilder ทุก build จะ
+  // ยิง /meta/options ซ้ำทุกครั้งที่ setState (กด chip/พิมพ์ช่อง)
+  late final Future<FormOptions> _options = widget.vm.loadOptions();
   String? _type;
   int _severity = 3;
   bool _saving = false;
@@ -92,7 +107,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
         _type ??= '${r['type'] ?? ''}'.isEmpty ? null : '${r['type']}';
         _nameCtrl.text = '${r['name'] ?? ''}';
         _noteCtrl.text = '${r['note'] ?? ''}';
-        _severity = (r['severity'] as num?)?.toInt() ?? 3;
+        _severity = toIntOrNull(r['severity']) ?? 3;
       });
     });
   }
@@ -107,9 +122,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
   Future<void> _needType() => showDialog<void>(
     context: context,
     builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -123,9 +136,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.green,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: AppColors.green),
               onPressed: () => Navigator.of(ctx).pop(),
               child: const Text('ตกลง', style: TextStyle(fontSize: 16)),
             ),
@@ -152,9 +163,8 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
       if (mounted) Navigator.of(context).pop(_type);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -180,11 +190,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                icon,
-                size: 24,
-                color: selected ? fg : Colors.black87,
-              ),
+              Icon(icon, size: 24, color: selected ? fg : Colors.black87),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -252,10 +258,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
       borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: _selColors.$2, width: 1.5),
     ),
-    contentPadding: const EdgeInsets.symmetric(
-      horizontal: 14,
-      vertical: 13,
-    ),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
   );
 
   @override
@@ -317,9 +320,13 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
           const SizedBox(height: 12),
           // ตัวเลือกประเภทจาก backend riskLevels
           FutureBuilder<FormOptions>(
-            future: widget.vm.loadOptions(),
+            future: _options,
             builder: (context, snap) {
-              final levels = snap.data?.riskLevels ?? const <String>[];
+              // แสดงเป็นชื่อชนิดภัย + กลับลำดับ — น้ำท่วม(สูง)มาก่อน 50-50(ต่ำ)ท้าย
+              final levels = [
+                for (final l in snap.data?.riskLevels ?? const <String>[])
+                  riskDisplayName(l),
+              ].reversed.toList();
               if (levels.isEmpty) {
                 return const Text(
                   'โหลดตัวเลือกไม่สำเร็จ',
@@ -343,6 +350,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
           ),
           const SizedBox(height: 10),
           TextField(
+            textAlign: TextAlign.start,
             controller: _nameCtrl,
             style: const TextStyle(fontSize: 17),
             decoration: _fieldDeco('เช่น น้ำท่วม - แปลง ...'),
@@ -382,10 +390,13 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
           ),
           const SizedBox(height: 10),
           TextField(
+            textAlign: TextAlign.start,
             controller: _noteCtrl,
             maxLines: 3,
             style: const TextStyle(fontSize: 17),
-            decoration: _fieldDeco('เช่น น้ำหลากจากคลองธรรมชาติช่วงฝนตกหนัก...'),
+            decoration: _fieldDeco(
+              'เช่น น้ำหลากจากคลองธรรมชาติช่วงฝนตกหนัก...',
+            ),
           ),
           const SizedBox(height: 22),
           Row(

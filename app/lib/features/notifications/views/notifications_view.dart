@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 
 /// Unread count driving the home-screen bell badge.
 /// TODO: wire to the backend notifications endpoint.
@@ -16,19 +17,19 @@ class NotificationsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    unreadNotifications.value = _items.length;
+    // อัปเดท badge หลังเฟรม — setValue ระหว่าง build กระทบ listener
+    // ที่กำลัง build อยู่ (setState during build)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unreadNotifications.value = _items.length;
+    });
     return Scaffold(
-      appBar: AppBar(title: const Text('การแจ้งเตือน')),
+      appBar: brrAppBar('การแจ้งเตือน'),
       body: _items.isEmpty
           ? const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Iconsax.notification,
-                    size: 64,
-                    color: Colors.black26,
-                  ),
+                  Icon(Iconsax.notification, size: 64, color: Colors.black26),
                   SizedBox(height: 12),
                   Text(
                     'ยังไม่มีการแจ้งเตือน',
@@ -45,19 +46,13 @@ class NotificationsView extends StatelessWidget {
                 return ListTile(
                   leading: const CircleAvatar(
                     backgroundColor: AppColors.goldLight,
-                    child: Icon(
-                      Iconsax.notification,
-                      color: AppColors.green,
-                    ),
+                    child: Icon(Iconsax.notification, color: AppColors.green),
                   ),
                   title: Text(n.title),
                   subtitle: Text(n.body),
                   trailing: Text(
                     n.time,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.black45,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: Colors.black45),
                   ),
                 );
               },

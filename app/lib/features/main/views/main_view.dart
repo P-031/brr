@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
-import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/home/views/home_view.dart';
 import 'package:brr/features/menu/views/menu_view.dart';
 import 'package:brr/features/parcel_status/views/parcel_status_view.dart';
@@ -28,16 +26,14 @@ class _MainViewState extends State<MainView> {
         index: _index,
         children: [
           const HomeView(),
-          ParcelStatusView(api: context.read<AuthViewModel>().api),
+          const ParcelStatusView(),
           const MenuView(),
         ],
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          boxShadow: [
-            BoxShadow(color: Colors.black12, blurRadius: 8),
-          ],
+          boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
         ),
         child: SafeArea(
           child: Padding(
@@ -70,11 +66,7 @@ class _MainViewState extends State<MainView> {
         onTap: () => setState(() => _index = index),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          transform: Matrix4.translationValues(
-            0,
-            selected ? -10 : 0,
-            0,
-          ),
+          transform: Matrix4.translationValues(0, selected ? -10 : 0, 0),
           padding: EdgeInsets.symmetric(vertical: selected ? 16 : 10),
           decoration: BoxDecoration(
             color: selected ? AppColors.green : Colors.transparent,
@@ -106,8 +98,7 @@ class _MainViewState extends State<MainView> {
                 label,
                 style: TextStyle(
                   fontSize: selected ? 15 : 14,
-                  fontWeight:
-                      selected ? FontWeight.bold : FontWeight.normal,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   color: selected ? Colors.white : Colors.black54,
                 ),
               ),

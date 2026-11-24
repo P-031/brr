@@ -26,6 +26,11 @@ class UserProfile {
   /// 'OFFICER' / 'FARMER' — from the Keycloak realm roles.
   final String? role;
 
+  static const roleOfficer = 'OFFICER';
+  static const roleFarmer = 'FARMER';
+
+  bool get isOfficer => role == roleOfficer;
+
   /// เขตที่รับผิดชอบ — จาก custom claim `zone` ของ token (null ถ้า
   /// Keycloak ยังไม่ส่งมา)
   final String? zone;
@@ -33,20 +38,20 @@ class UserProfile {
   static String? _roleFromClaims(Map<String, dynamic> claims) {
     final access = claims['realm_access'];
     if (access is! Map || access['roles'] is! List) return null;
-    final roles = (access['roles'] as List).cast<String>();
-    if (roles.contains('officer')) return 'OFFICER';
-    if (roles.contains('farmer')) return 'FARMER';
+    final roles = {for (final r in access['roles'] as List) '$r'};
+    if (roles.contains('officer')) return roleOfficer;
+    if (roles.contains('farmer')) return roleFarmer;
     return null;
   }
 
   factory UserProfile.fromClaims(Map<String, dynamic> claims) {
     return UserProfile(
-      id: claims['sub'] as String? ?? '',
-      username: claims['preferred_username'] as String? ?? '',
-      name: claims['name'] as String?,
-      email: claims['email'] as String?,
+      id: '${claims['sub'] ?? ''}',
+      username: '${claims['preferred_username'] ?? ''}',
+      name: claims['name']?.toString(),
+      email: claims['email']?.toString(),
       role: _roleFromClaims(claims),
-      zone: claims['zone'] as String?,
+      zone: claims['zone']?.toString(),
     );
   }
 

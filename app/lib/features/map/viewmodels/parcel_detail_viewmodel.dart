@@ -32,8 +32,52 @@ class ParcelDetailViewModel extends ChangeNotifier {
 
   /// จำนวนกิจกรรมที่บันทึกในเครื่องของแปลงนี้ — หน้าบันทึกกิจกรรม
   /// ใช้ตั้งชื่อ "ครั้งที่ N"
-  Future<int> activityDraftCount() =>
-      _service.activityDraftCount(parcel.id);
+  Future<int> activityDraftCount() => _service.activityDraftCount(parcel.id);
+
+  /// กิจกรรมที่บันทึกไว้ในเครื่องของแปลง — ใหม่สุดก่อน
+  /// (หน้า "นำส่งกิจกรรมที่บันทึกไว้ในเครื่อง")
+  Future<List<Map<String, dynamic>>> activityDrafts() =>
+      _service.activitiesFor(parcel.id);
+
+  /// ลบกิจกรรมในเครื่อง (+ รูปที่ persist ไว้ตามรายการ)
+  Future<void> removeActivityDraft(String id) =>
+      _service.removeActivityDraft(id);
+
+  /// นำส่งกิจกรรมร่างขึ้นระบบ — สำเร็จย้ายไปแท็บ "ส่งสำเร็จ",
+  /// พลาดย้ายไป "ส่งไม่สำเร็จ" (throw เพื่อให้ UI แจ้งเหตุผล)
+  Future<void> submitActivity(Map<String, dynamic> activity) =>
+      _service.submitActivity(parcel.id, activity);
+
+  /// จำนวนกิจกรรมใหม่ที่ยังไม่ได้เปิดดู — badge บนปุ่มเมนู
+  Future<int> unseenActivityCount() => _service.unseenActivityCount(parcel.id);
+
+  /// ทำเครื่องหมายว่าดูกิจกรรมครบแล้ว — badge หาย
+  Future<void> markActivitiesSeen() => _service.markActivitiesSeen(parcel.id);
+
+  /// การยืนยันแปลงข้ามปีล่าสุดของแปลง — เก็บในเครื่องรอ endpoint
+  Future<Map<String, dynamic>?> parcelConfirm() =>
+      _service.parcelConfirmFor(parcel.id);
+
+  /// รายการปีการผลิตสำหรับ dropdown "ปีการผลิตเป้าหมาย" —
+  /// ใช้ `/plots/years` ชุดเดียวกับหน้าดาวน์โหลด
+  Future<List<String>> loadYears() async => [
+    for (final y in (await _service.fetchYearIndex()).years.keys) ?y,
+  ];
+
+  Future<void> saveParcelConfirm({
+    String? targetYear,
+    String? status,
+    String? note,
+    List<String> photoPaths = const [],
+    String? recordedBy,
+  }) => _service.saveParcelConfirm(
+    plotId: parcel.id,
+    targetYear: targetYear,
+    status: status,
+    note: note,
+    photoPaths: photoPaths,
+    recordedBy: recordedBy,
+  );
 
   /// บันทึกกิจกรรมลงเครื่อง — photos = path ไฟล์ที่ถ่าย;
   /// `detailPending` = บันทึกเฉพาะรูปรอกรอกรายละเอียด
@@ -41,16 +85,103 @@ class ParcelDetailViewModel extends ChangeNotifier {
     required List<String> photoPaths,
     bool detailPending = false,
     String? plantedAt,
+    String? caneGroup,
+    String? herbicideUsed,
+    String? fertilizerRate,
+    String? npkN,
+    String? npkP,
+    String? npkK,
+    bool? mpiApplied,
+    List<Map<String, dynamic>>? fertilizerRounds,
+    String? organicFertilizerType,
+    String? organicRate,
+    String? organicDate,
+    String? dolomiteRate,
+    String? dolomiteDate,
+    bool? weedPresent,
+    bool? subsoiled,
+    String? subsoilDepth,
+    bool? diseasePresent,
+    String? diseaseType,
+    String? diseaseSpread,
+    bool? diseaseManaged,
+    bool? pestPresent,
+    String? pestType,
+    String? pestSpread,
+    String? pestDamage,
+    bool? pestManaged,
+    bool? hilled,
+    String? germinationPercent,
+    String? harvestGroupFarmerId,
+    String? harvestGroupFarmer,
+    String? lossReason,
+    String? lossAreaRai,
+    String? yieldEstimate,
+    String? totalTons,
+    String? cutVarietyDeduction,
+    String? cutLossKgPerRai,
+    String? cutLossTons,
+    String? cutLossReason,
+    String? actualHarvestTons,
+    bool? seedCane,
+    String? seedCaneNote,
+    String? suggestion,
+    String? activityId,
+    String? recordedBy,
+    String? recordedByRole,
   }) => _service.saveActivityDraft(
     plotId: parcel.id,
     photoPaths: photoPaths,
     detailPending: detailPending,
     plantedAt: plantedAt,
+    caneGroup: caneGroup,
+    herbicideUsed: herbicideUsed,
+    fertilizerRate: fertilizerRate,
+    npkN: npkN,
+    npkP: npkP,
+    npkK: npkK,
+    mpiApplied: mpiApplied,
+    fertilizerRounds: fertilizerRounds,
+    organicFertilizerType: organicFertilizerType,
+    organicRate: organicRate,
+    organicDate: organicDate,
+    dolomiteRate: dolomiteRate,
+    dolomiteDate: dolomiteDate,
+    weedPresent: weedPresent,
+    subsoiled: subsoiled,
+    subsoilDepth: subsoilDepth,
+    diseasePresent: diseasePresent,
+    diseaseType: diseaseType,
+    diseaseSpread: diseaseSpread,
+    diseaseManaged: diseaseManaged,
+    pestPresent: pestPresent,
+    pestType: pestType,
+    pestSpread: pestSpread,
+    pestDamage: pestDamage,
+    pestManaged: pestManaged,
+    hilled: hilled,
+    germinationPercent: germinationPercent,
+    harvestGroupFarmerId: harvestGroupFarmerId,
+    harvestGroupFarmer: harvestGroupFarmer,
+    lossReason: lossReason,
+    lossAreaRai: lossAreaRai,
+    yieldEstimate: yieldEstimate,
+    totalTons: totalTons,
+    cutVarietyDeduction: cutVarietyDeduction,
+    cutLossKgPerRai: cutLossKgPerRai,
+    cutLossTons: cutLossTons,
+    cutLossReason: cutLossReason,
+    actualHarvestTons: actualHarvestTons,
+    seedCane: seedCane,
+    seedCaneNote: seedCaneNote,
+    suggestion: suggestion,
+    activityId: activityId,
+    recordedBy: recordedBy,
+    recordedByRole: recordedByRole,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint
-  Future<Map<String, dynamic>?> riskPoint() =>
-      _service.riskPointFor(parcel.id);
+  Future<Map<String, dynamic>?> riskPoint() => _service.riskPointFor(parcel.id);
 
   Future<void> saveRiskPoint({
     required String type,
@@ -65,23 +196,64 @@ class ParcelDetailViewModel extends ChangeNotifier {
     note: note,
   );
 
+  /// โครงการส่งเสริมที่เลือกไว้ของแปลง — เก็บในเครื่องรอ endpoint
+  Future<Map<String, dynamic>?> plotProject() =>
+      _service.plotProjectFor(parcel.id);
+
+  Future<void> savePlotProject({
+    required List<String> items,
+    Map<String, String> choices = const {},
+    required bool passed,
+  }) => _service.savePlotProject(
+    plotId: parcel.id,
+    items: items,
+    choices: choices,
+    passed: passed,
+  );
+
+  /// สถานะแปลงตัดที่บันทึกไว้ในเครื่อง — เก็บในเครื่องรอ endpoint
+  Future<Map<String, dynamic>?> cutStatus() => _service.cutStatusFor(parcel.id);
+
+  Future<void> saveCutStatus({
+    required String status,
+    String? statusCode,
+    String? startDate,
+    String? endDate,
+    String? estimateTons,
+    String? cutCaneTons,
+  }) => _service.saveCutStatus(
+    plotId: parcel.id,
+    status: status,
+    statusCode: statusCode,
+    startDate: startDate,
+    endDate: endDate,
+    estimateTons: estimateTons,
+    cutCaneTons: cutCaneTons,
+  );
+
   /// PATCH รูท/ลำดับ แล้ว refetch detail — listener (sheet/detail
   /// view) เห็นค่าใหม่ทันทีโดยไม่ต้อง reopen
-  Future<void> updateRouteSeq({String? rootNo, String? sequenceNo}) async {
+  /// คืน true เมื่อออฟไลน์ → บันทึกเข้าคิวในเครื่อง ส่งเองเมื่อเน็ตกลับ
+  Future<bool> updateRouteSeq({String? rootNo, String? sequenceNo}) async {
     final current = await detail;
     final rawVersion = current?['version'];
     final version = rawVersion is int ? rawVersion : null;
     if (version == null) {
       throw Exception('ยังโหลดข้อมูลแปลงไม่ครบ ลองใหม่อีกครั้ง');
     }
-    await _service.updateParcelMeta(
-      parcel.id,
-      version: version,
-      rootNo: rootNo,
-      sequenceNo: sequenceNo,
-    );
+    try {
+      await _service.updateParcelMeta(
+        parcel.id,
+        version: version,
+        rootNo: rootNo,
+        sequenceNo: sequenceNo,
+      );
+    } on PendingEditQueued {
+      return true;
+    }
     _detail = _service.fetchParcelDetail(parcel.id);
     notifyListeners();
+    return false;
   }
 
   /// ส่งคำขออัปเดตแปลง — `kind` = 'status' (คำขอ1) / 'edit' (คำขอ2)

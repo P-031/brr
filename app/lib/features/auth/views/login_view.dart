@@ -111,11 +111,7 @@ class _LoginViewState extends State<LoginView> {
                   child: const CircleAvatar(
                     radius: 40,
                     backgroundColor: Colors.white,
-                    child: Icon(
-                      Iconsax.lock,
-                      size: 40,
-                      color: AppColors.green,
-                    ),
+                    child: Icon(Iconsax.lock, size: 40, color: AppColors.green),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -139,18 +135,18 @@ class _LoginViewState extends State<LoginView> {
                     onTap: vm.isBusy
                         ? null
                         : () async {
-                              final accounts = vm.savedAccounts;
-                              final i = await showOptionPopup(
-                                context,
-                                labels: [
-                                  for (final a in accounts)
-                                    '${a.displayName} (${a.username})',
-                                ],
-                              );
-                              if (i != null) {
-                                vm.signInWithSaved(accounts[i]);
-                              }
-                            },
+                            final accounts = vm.savedAccounts;
+                            final i = await showOptionPopup(
+                              context,
+                              labels: [
+                                for (final a in accounts)
+                                  '${a.displayName} (${a.username})',
+                              ],
+                            );
+                            if (i != null) {
+                              vm.signInWithSaved(accounts[i]);
+                            }
+                          },
                     child: InputDecorator(
                       decoration: _decoration(
                         label:
@@ -169,8 +165,9 @@ class _LoginViewState extends State<LoginView> {
                             ),
                           ),
                           Icon(
-                            Iconsax.arrow_down,
-                            color: Colors.black45,
+                            Iconsax.arrow_circle_down,
+                            size: 28,
+                            color: Colors.black87,
                           ),
                         ],
                       ),
@@ -181,6 +178,7 @@ class _LoginViewState extends State<LoginView> {
                 _animatedField(
                   focused: _userFocus.hasFocus,
                   child: TextFormField(
+                    textAlign: TextAlign.center,
                     controller: _userCtrl,
                     focusNode: _userFocus,
                     enabled: !vm.isBusy,
@@ -200,6 +198,7 @@ class _LoginViewState extends State<LoginView> {
                 _animatedField(
                   focused: _passFocus.hasFocus,
                   child: TextFormField(
+                    textAlign: TextAlign.center,
                     controller: _passCtrl,
                     focusNode: _passFocus,
                     enabled: !vm.isBusy,
@@ -255,11 +254,36 @@ class _LoginViewState extends State<LoginView> {
                   ),
                 ),
                 if (vm.error != null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    vm.error!,
-                    style: TextStyle(color: scheme.error),
-                    textAlign: TextAlign.center,
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: scheme.error.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: scheme.error.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Iconsax.warning_2, size: 20, color: scheme.error),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            vm.error!,
+                            style: TextStyle(
+                              fontSize: 15,
+                              height: 1.45,
+                              color: scheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ],

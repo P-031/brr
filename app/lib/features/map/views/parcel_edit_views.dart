@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/widgets/option_popup.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
+import 'package:brr/core/utils/json_safe.dart';
 
 /// หน้าในเมนู ⋮ ของรายละเอียดแปลง — ตาม ref แอปจริง สีตามธีมแอป
 /// (dark green card + ปุ่มเขียว)
@@ -37,11 +39,10 @@ class _ParcelCtx {
   final String? status;
 
   factory _ParcelCtx.of(Parcel p, Map<String, dynamic>? detail) {
-    final meta =
-        (detail?['meta'] as Map<String, dynamic>?) ?? p.meta ?? const {};
-    final farmer = detail?['farmer'] as Map<String, dynamic>?;
-    final areaMap = detail?['area'] as Map<String, dynamic>?;
-    final rai = (areaMap?['raiDecimal'] as num?)?.toDouble() ?? p.areaRai;
+    final meta = asStringMap(detail?['meta']) ?? p.meta ?? const {};
+    final farmer = asStringMap(detail?['farmer']);
+    final areaMap = asStringMap(detail?['area']);
+    final rai = toDoubleOrNull(areaMap?['raiDecimal']) ?? p.areaRai;
     return _ParcelCtx(
       landNo: p.landNo,
       plotCode: p.plotCode,
@@ -141,16 +142,24 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      await widget.vm.updateRouteSeq(
+      final queued = await widget.vm.updateRouteSeq(
         rootNo: _root.text.trim(),
         sequenceNo: _seq.text.trim(),
       );
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) {
+        if (queued) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('บันทึกไว้ในเครื่องแล้ว — จะส่งเมื่อออนไลน์'),
+            ),
+          );
+        }
+        Navigator.of(context).pop(true);
+      }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -161,10 +170,7 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
-      appBar: AppBar(
-        backgroundColor: AppColors.green,
-        title: const Text('แก้ไข รูท & ลำดับ'),
-      ),
+      appBar: brrAppBar('แก้ไข รูท & ลำดับ'),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: widget.vm.detail,
         builder: (context, snap) {
@@ -189,10 +195,7 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
-                  children: [
-                    _field('รูท', _root),
-                    _field('ลำดับ', _seq),
-                  ],
+                  children: [_field('รูท', _root), _field('ลำดับ', _seq)],
                 ),
               ),
               const SizedBox(height: 18),
@@ -221,40 +224,45 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
     );
   }
 
-  /// แถว label + ช่องเส้นใต้ตาม ref — text รับได้ทั้งเลขไทย/อังกฤษ
-  /// ขอบใต้ช่องเปลี่ยนเป็นสีทองตอนโฟกัส
+  /// label อยู่บน + ช่องพิมพ์ในกรอบเต็มความกว้าง — text รับได้
+  /// ทั้งเลขไทย/อังกฤษ ขอบเปลี่ยนเป็นสีทองตอนโฟกัส
   Widget _field(String label, TextEditingController ctrl) {
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 70,
-          child: Text(
-            '$label :',
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
           ),
         ),
-        Expanded(
-          child: TextField(
-            controller: ctrl,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16.5,
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
+        const SizedBox(height: 6),
+        TextField(
+          controller: ctrl,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 16.5,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+          cursorColor: AppColors.gold,
+          decoration: InputDecoration(
+            isDense: true,
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 10,
             ),
-            cursorColor: AppColors.gold,
-            decoration: const InputDecoration(
-              isDense: true,
-              enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.black38),
-              ),
-              focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: AppColors.gold, width: 2),
-              ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: AppColors.gold, width: 2),
             ),
           ),
         ),
@@ -266,11 +274,7 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
 /// base ของหน้าคำขอ 2 หน้า — โหลด options จาก backend + scaffold
 /// พื้นเทา + header card
 abstract class _RequestViewBase extends StatefulWidget {
-  const _RequestViewBase({
-    super.key,
-    required this.vm,
-    required this.title,
-  });
+  const _RequestViewBase({super.key, required this.vm, required this.title});
 
   final ParcelDetailViewModel vm;
   final String title;
@@ -300,9 +304,8 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
     if (value == null || _sending) return;
     final blocker = submitBlocker;
     if (blocker != null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(blocker)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(blocker)));
       return;
     }
     setState(() => _sending = true);
@@ -317,9 +320,8 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -360,18 +362,13 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
           context,
           title: hint,
           labels: shown,
-          selectedIndex: current == null
-              ? null
-              : options.indexOf(current),
+          selectedIndex: current == null ? null : options.indexOf(current),
         );
         if (i == null) return;
         (onChanged ?? (v) => setState(() => _selected = v))(options[i]);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -390,7 +387,11 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
                 ),
               ),
             ),
-            const Icon(Iconsax.arrow_down, color: Colors.black54),
+            const Icon(
+              Iconsax.arrow_circle_down,
+              size: 28,
+              color: Colors.black87,
+            ),
           ],
         ),
       ),
@@ -401,10 +402,7 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
-      appBar: AppBar(
-        backgroundColor: AppColors.green,
-        title: Text(widget.title),
-      ),
+      appBar: brrAppBar(widget.title),
       body: FutureBuilder<Map<String, dynamic>?>(
         future: widget.vm.detail,
         builder: (context, snap) {
@@ -430,8 +428,7 @@ class StatusRequestView extends _RequestViewBase {
   State<StatusRequestView> createState() => _StatusRequestViewState();
 }
 
-class _StatusRequestViewState
-    extends _RequestViewBaseState<StatusRequestView> {
+class _StatusRequestViewState extends _RequestViewBaseState<StatusRequestView> {
   String? _reason;
   List<String> _activeReasons = const [];
 
@@ -460,8 +457,7 @@ class _StatusRequestViewState
         _selected ??= opts.contains(ctx.status)
             ? ctx.status
             : (opts.isNotEmpty ? opts.first : null);
-        final reasons =
-            snap.data?.statusReasons[_selected] ?? const <String>[];
+        final reasons = snap.data?.statusReasons[_selected] ?? const <String>[];
         _activeReasons = reasons;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -633,9 +629,8 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
         farmers = _farmers ??= await widget.vm.loadFarmers();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('$e')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text('$e')));
         }
         return;
       }
@@ -646,7 +641,10 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
         labels: [for (final f in farmers) f.name],
         selectedIndex: _newFarmer == null
             ? null
-            : farmers.indexWhere((f) => f.id == _newFarmer!.id),
+            : () {
+                final i = farmers.indexWhere((f) => f.id == _newFarmer!.id);
+                return i < 0 ? null : i;
+              }(),
         searchHint: 'ค้นหาชาวไร่',
       );
       if (i != null) setState(() => _newFarmer = farmers[i]);
@@ -666,9 +664,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 15,
-                color: _newFarmer == null
-                    ? Colors.black45
-                    : Colors.black87,
+                color: _newFarmer == null ? Colors.black45 : Colors.black87,
               ),
             ),
           ),
@@ -790,8 +786,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
               dropdown(
                 opts,
                 display: [
-                  for (var i = 0; i < opts.length; i++)
-                    '${i + 1}. ${opts[i]}',
+                  for (var i = 0; i < opts.length; i++) '${i + 1}. ${opts[i]}',
                 ],
                 onChanged: (v) => setState(() {
                   _selected = v;
@@ -822,8 +817,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                       value: _caneTypeNew,
                       bindSelected: false,
                       hint: 'เลือกประเภทอ้อย$_caneMode',
-                      onChanged: (v) =>
-                          setState(() => _caneTypeNew = v),
+                      onChanged: (v) => setState(() => _caneTypeNew = v),
                     ),
                   ],
                 ]),
@@ -833,6 +827,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                 _subCard('แก้ไขข้อมูลชาวไร่และแปลง', [
                   _subLabel('รหัสแปลงใหม่'),
                   TextField(
+                    textAlign: TextAlign.center,
                     controller: _plotCodeCtrl,
                     decoration: InputDecoration(
                       hintText: 'กรอกรหัสแปลงใหม่',
@@ -869,11 +864,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Iconsax.warning_2,
-                color: Color(0xFFD6336C),
-                size: 22,
-              ),
+              const Icon(Iconsax.warning_2, color: Color(0xFFD6336C), size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -930,8 +921,7 @@ class GroupRequestView extends _RequestViewBase {
   State<GroupRequestView> createState() => _GroupRequestViewState();
 }
 
-class _GroupRequestViewState
-    extends _RequestViewBaseState<GroupRequestView> {
+class _GroupRequestViewState extends _RequestViewBaseState<GroupRequestView> {
   String? _maintain;
   String? _harvest;
 
@@ -945,19 +935,15 @@ class _GroupRequestViewState
     try {
       final status = await widget.vm.submitRequest(
         kind: requestKind,
-        fields: {
-          'maintainGroup': _maintain,
-          'harvestGroup': _harvest,
-        },
+        fields: {'maintainGroup': _maintain, 'harvestGroup': _harvest},
       );
       if (mounted) {
         Navigator.of(context).pop('ส่งคำขอสำเร็จ — สถานะ: $status');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     } finally {
       if (mounted) setState(() => _sending = false);

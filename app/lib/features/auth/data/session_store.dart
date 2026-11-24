@@ -41,13 +41,21 @@ class SessionStore {
   Future<List<SavedAccount>> readAccounts() async {
     final raw = await _storage.read(key: _kAccounts);
     if (raw == null) return const [];
+    // storage เสีย (เขียนค้าง/ข้อมูลคอร์รัปต์) → ถือว่าไม่มีบัญชีจำไว้
+    // ดีกว่า throw ทำหน้าเลือกบัญชี/login พังทั้งหน้า
+    final Object? decoded;
     try {
-      return (jsonDecode(raw) as List)
-          .map((j) => SavedAccount.fromJson(j as Map<String, dynamic>))
-          .toList();
+      decoded = jsonDecode(raw);
     } catch (_) {
       return const [];
     }
+    if (decoded is! List) return const [];
+    return [
+      for (final j in decoded)
+        if (j is Map)
+          // parse ต่อตัว — entry พังในตัวเดียวไม่ลากตัวอื่นหาย
+          ?SavedAccount.tryFromJson(Map<String, dynamic>.from(j)),
+    ];
   }
 
   Future<void> saveAccounts(List<SavedAccount> accounts) async {

@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
+import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/widgets/skeleton.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/features/map/views/parcel_edit_views.dart';
+import 'package:brr/core/utils/json_safe.dart';
 
 /// หน้ารายละเอียดแปลงเต็มจอ (ตาม ref แอปจริง) — เปิดจากปุ่ม "เพิ่มเติม"
 /// ใน info sheet — section cards: ข้อมูลแปลง / การปลูก / ชาวไร่ /
@@ -15,11 +20,6 @@ class ParcelDetailView extends StatelessWidget {
   /// VM เดียวกับ info sheet — detail future แชร์กันและ PATCH จาก
   /// หน้าในเมนู ⋮ จะ notify ให้หน้านี้โหลดข้อมูลใหม่อัตโนมัติ
   final ParcelDetailViewModel vm;
-
-  static const _thaiMonths = [
-    'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-    'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
-  ];
 
   static String? _str(dynamic v) {
     final s = '$v';
@@ -36,17 +36,15 @@ class ParcelDetailView extends StatelessWidget {
     return DateTime.tryParse('${detail?['createdAt']}');
   }
 
-  static String _fmtDate(DateTime d) =>
-      '${d.day} ${_thaiMonths[d.month - 1]} ${d.year + 543}';
+  static String _fmtDate(DateTime d) => formatThaiDate(d);
 
   @override
   Widget build(BuildContext context) {
     final p = vm.parcel;
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
-      appBar: AppBar(
-        backgroundColor: AppColors.green,
-        title: const Text('รายละเอียด'),
+      appBar: brrAppBar(
+        'รายละเอียด',
         actions: [
           IconButton(
             onPressed: () => _openMenu(context),
@@ -59,179 +57,204 @@ class ParcelDetailView extends StatelessWidget {
         builder: (context, _) => FutureBuilder<Map<String, dynamic>?>(
           future: vm.detail,
           builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done && !p.isDraft) {
-            // skeleton เลียนหน้าจริง — บล็อกรูปถ่าย + การ์ด
-            // section (หัวข้อ + แถว label:value)
-            return const _DetailSkeleton();
-          }
-          final detail = snap.data;
-          final meta =
-              (detail?['meta'] as Map<String, dynamic>?) ?? p.meta ?? const {};
-          final farmer = detail?['farmer'] as Map<String, dynamic>?;
-          final landNo = p.landNo;
-          final plotCode = p.plotCode;
-          final variety =
-              _str(detail?['variety']) ??
-              _str(meta['caneVariety']) ??
-              p.variety;
-          final planted = _plantedDate(meta, detail);
-          final ageDays = planted == null
-              ? null
-              : DateTime.now().difference(planted).inDays;
-          final areaMap = detail?['area'] as Map<String, dynamic>?;
-          final areaText = areaMap == null
-              ? p.areaThai
-              : '${areaMap['rai'] ?? 0} ไร่ ${areaMap['ngan'] ?? 0} งาน '
-                    '${(areaMap['wa'] as num? ?? 0).toStringAsFixed(0)} ตร.วา';
-          final grade = _str(meta['grade']) ?? _str(meta['plotGrade']);
-          final status = p.isDraft
-              ? 'แปลงร่าง (ยังไม่บันทึก)'
-              : _str(p.status) ?? _str(detail?['status']);
-          final caneGroup = _str(meta['caneGroup']);
-          // รูปถ่ายแปลงจาก backend — schema ยังไม่มี ลองหลาย key
-          // เผื่ออนาคต; ไม่มี → placeholder กล้อง
-          final photoUrl =
-              _str(detail?['photoUrl']) ??
-              _str(detail?['imageUrl']) ??
-              _str(meta['photoUrl']) ??
-              _str(meta['imageUrl']);
+            if (snap.connectionState != ConnectionState.done && !p.isDraft) {
+              // skeleton เลียนหน้าจริง — บล็อกรูปถ่าย + การ์ด
+              // section (หัวข้อ + แถว label:value)
+              return const _DetailSkeleton();
+            }
+            final detail = snap.data;
+            final meta = asStringMap(detail?['meta']) ?? p.meta ?? const {};
+            final farmer = asStringMap(detail?['farmer']);
+            final landNo = p.landNo;
+            final plotCode = p.plotCode;
+            final variety =
+                _str(detail?['variety']) ??
+                _str(meta['caneVariety']) ??
+                p.variety;
+            final planted = _plantedDate(meta, detail);
+            final ageDays = planted == null
+                ? null
+                : DateTime.now().difference(planted).inDays;
+            final areaMap = asStringMap(detail?['area']);
+            final areaText = areaMap == null
+                ? p.areaThai
+                : '${areaMap['rai'] ?? 0} ไร่ ${areaMap['ngan'] ?? 0} งาน '
+                      '${(toDoubleOrNull(areaMap['wa']) ?? 0).toStringAsFixed(0)} ตร.วา';
+            final grade = _str(meta['grade']) ?? _str(meta['plotGrade']);
+            final status = p.isDraft
+                ? 'แปลงร่าง (ยังไม่บันทึก)'
+                : _str(p.status) ?? _str(detail?['status']);
+            final caneGroup = _str(meta['caneGroup']);
+            // รูปถ่ายแปลงจาก backend — schema ยังไม่มี ลองหลาย key
+            // เผื่ออนาคต; ไม่มี → placeholder กล้อง
+            final photoUrl =
+                _str(detail?['photoUrl']) ??
+                _str(detail?['imageUrl']) ??
+                _str(meta['photoUrl']) ??
+                _str(meta['imageUrl']);
 
-          // meta ที่ยังไม่ได้โชว์ใน section ไหน — รวมไว้ท้ายหน้า
-          final misc = <(String, String?)>[
-            ('โครงการ', _str(meta['project'])),
-            ('แปลงก่อนหน้า', _str(meta['prevPlotNo'])),
-            ('กรรมสิทธิ์', _str(meta['ownership'])),
-            ('ภูมิประเทศ', _str(meta['terrain'])),
-            ('พื้นที่สูญเสีย', _str(meta['hasLoss'])),
-            ('สูญเสีย (ไร่)', _str(meta['lossRai'])),
-            ('ผลผลิตเป้าหมาย (ตัน)', _str(meta['targetYield'])),
-            ('หมายเหตุ', _str(meta['note'])),
-          ].where((r) => r.$2 != null).toList();
+            // meta ที่ยังไม่ได้โชว์ใน section ไหน — รวมไว้ท้ายหน้า
+            final misc = <(String, String?)>[
+              ('โครงการ', _str(meta['project'])),
+              ('แปลงก่อนหน้า', _str(meta['prevPlotNo'])),
+              ('กรรมสิทธิ์', _str(meta['ownership'])),
+              ('ภูมิประเทศ', _str(meta['terrain'])),
+              ('พื้นที่สูญเสีย', _str(meta['hasLoss'])),
+              ('สูญเสีย (ไร่)', _str(meta['lossRai'])),
+              ('ผลผลิตเป้าหมาย (ตัน)', _str(meta['targetYield'])),
+              ('หมายเหตุ', _str(meta['note'])),
+            ].where((r) => r.$2 != null).toList();
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
-            children: [
-              // รูปถ่ายแปลง — จาก backend เท่านั้น ไม่มี → placeholder
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 32),
+              children: [
+                // รูปถ่ายแปลง — backend ก่อน; ไม่มี → รูปล่าสุดจาก
+                // กิจกรรมที่บันทึกในเครื่อง; ไม่มีอีก → placeholder
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.all(10),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: photoUrl != null
+                        ? Image.network(
+                            photoUrl,
+                            height: 170,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => _photoPlaceholder(),
+                          )
+                        : FutureBuilder<List<Map<String, dynamic>>>(
+                            future: vm.activityDrafts(),
+                            builder: (context, s) {
+                              String? local;
+                              for (final a in s.data ?? const []) {
+                                final rawPs = a['photos'];
+                                final ps = rawPs is List ? rawPs : const [];
+                                if (ps.isNotEmpty) {
+                                  local = '${ps.first}';
+                                  break;
+                                }
+                              }
+                              return local != null
+                                  ? Image.file(
+                                      File(local),
+                                      height: 170,
+                                      width: double.infinity,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) =>
+                                          _photoPlaceholder(),
+                                    )
+                                  : _photoPlaceholder();
+                            },
+                          ),
+                  ),
                 ),
-                padding: const EdgeInsets.all(10),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: photoUrl != null
-                      ? Image.network(
-                          photoUrl,
-                          height: 170,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, _, _) => _photoPlaceholder(),
-                        )
-                      : _photoPlaceholder(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _Section(
-                rows: [
-                  _row('ปีการผลิต', _str(meta['productionYear'])),
-                  _row('ชื่อแปลง', landNo),
-                  _row('รหัสแปลง', plotCode, blue: true),
-                  _row('ประเภทอ้อย', _str(meta['caneType'])),
-                  _row('พื้นที่(ไร่)', areaText, blue: true),
-                  _row('พันธุ์อ้อย', variety),
-                  _row('สถานะแปลง', status),
-                  _row(
-                    'เกรดแปลง',
-                    grade == null ? null : 'เกรด $grade',
-                    color: AppColors.gold,
-                  ),
-                ],
-              ),
-              _Section(
-                title: 'การปลูก',
-                rows: [
-                  _row(
-                    'วันที่ปลูก',
-                    planted == null ? null : _fmtDate(planted),
-                  ),
-                  _row(
-                    'อายุอ้อย',
-                    ageDays == null || ageDays < 0 ? null : 'อายุ $ageDays วัน',
-                    blue: true,
-                  ),
-                ],
-              ),
-              _Section(
-                title: 'ข้อมูลชาวไร่',
-                rows: [
-                  _row(
-                    'รหัส',
-                    _str(farmer?['username']) ?? _str(farmer?['id']),
-                    blue: true,
-                  ),
-                  _row('ชื่อ', _str(farmer?['displayName']) ?? p.owner),
-                  _row('อีเมล', _str(farmer?['email'])),
-                ],
-              ),
-              _Section(
-                title: 'ข้อมูลนักส่งเสริม',
-                rows: [
-                  _row('รหัส', _str(meta['officerCode']), blue: true),
-                  _row('ชื่อ', _str(meta['officerName'])),
-                  _row('อีเมล', _str(meta['officerEmail'])),
-                ],
-              ),
-              _Section(
-                title: 'สถานที่',
-                rows: [
-                  _row('เขต', _str(meta['zone'])),
-                  _row('จังหวัด', _str(meta['province'])),
-                  _row('อำเภอ', _str(meta['district'])),
-                  _row('ตำบล', _str(meta['subdistrict'])),
-                  _row('หมู่บ้าน', _str(meta['village'])),
-                ],
-              ),
-              _Section(
-                title: 'รูท & ลำดับ',
-                rows: [
-                  _row('รูท', _str(meta['rootNo'])),
-                  _row('ลำดับ', _str(meta['sequenceNo'])),
-                ],
-              ),
-              _Section(
-                title: 'ข้อมูลกลุ่ม',
-                rows: const [],
-                // schema มี caneGroup ชุดเดียว — การ์ดไหนที่ชื่อกลุ่ม
-                // ตรงประเภทก็ใส่ให้ อีกใบรอ backend เพิ่มฟิลด์
-                // (maintainGroup/harvestGroup + *Code/*OwnerName)
-                child: Column(
-                  children: [
-                    _groupCard(
-                      'กลุ่มบำรุง',
-                      'maintainGroup',
-                      caneGroup,
-                      caneGroup?.contains('บำรุง') == true,
-                      meta,
-                    ),
-                    const SizedBox(height: 8),
-                    _groupCard(
-                      'กลุ่มตัด',
-                      'harvestGroup',
-                      caneGroup,
-                      caneGroup?.contains('ตัด') == true,
-                      meta,
+                const SizedBox(height: 10),
+                _Section(
+                  rows: [
+                    _row('ปีการผลิต', _str(meta['productionYear'])),
+                    _row('ชื่อแปลง', landNo),
+                    _row('รหัสแปลง', plotCode, blue: true),
+                    _row('ประเภทอ้อย', _str(meta['caneType'])),
+                    _row('พื้นที่(ไร่)', areaText, blue: true),
+                    _row('พันธุ์อ้อย', variety),
+                    _row('สถานะแปลง', status),
+                    _row(
+                      'เกรดแปลง',
+                      grade == null ? null : 'เกรด $grade',
+                      color: AppColors.gold,
                     ),
                   ],
                 ),
-              ),
-              if (misc.isNotEmpty)
                 _Section(
-                  title: 'ข้อมูลเพิ่มเติม',
-                  rows: [for (final r in misc) _row(r.$1, r.$2)],
+                  title: 'การปลูก',
+                  rows: [
+                    _row(
+                      'วันที่ปลูก',
+                      planted == null ? null : _fmtDate(planted),
+                    ),
+                    _row(
+                      'อายุอ้อย',
+                      ageDays == null || ageDays < 0
+                          ? null
+                          : 'อายุ $ageDays วัน',
+                      blue: true,
+                    ),
+                  ],
                 ),
-            ],
-          );
+                _Section(
+                  title: 'ข้อมูลชาวไร่',
+                  rows: [
+                    _row(
+                      'รหัส',
+                      _str(farmer?['username']) ?? _str(farmer?['id']),
+                      blue: true,
+                    ),
+                    _row('ชื่อ', _str(farmer?['displayName']) ?? p.owner),
+                    _row('อีเมล', _str(farmer?['email'])),
+                  ],
+                ),
+                _Section(
+                  title: 'ข้อมูลนักส่งเสริม',
+                  rows: [
+                    _row('รหัส', _str(meta['officerCode']), blue: true),
+                    _row('ชื่อ', _str(meta['officerName'])),
+                    _row('อีเมล', _str(meta['officerEmail'])),
+                  ],
+                ),
+                _Section(
+                  title: 'สถานที่',
+                  rows: [
+                    _row('เขต', _str(meta['zone'])),
+                    _row('จังหวัด', _str(meta['province'])),
+                    _row('อำเภอ', _str(meta['district'])),
+                    _row('ตำบล', _str(meta['subdistrict'])),
+                    _row('หมู่บ้าน', _str(meta['village'])),
+                  ],
+                ),
+                _Section(
+                  title: 'รูท & ลำดับ',
+                  rows: [
+                    _row('รูท', _str(meta['rootNo'])),
+                    _row('ลำดับ', _str(meta['sequenceNo'])),
+                  ],
+                ),
+                _Section(
+                  title: 'ข้อมูลกลุ่ม',
+                  rows: const [],
+                  // schema มี caneGroup ชุดเดียว — การ์ดไหนที่ชื่อกลุ่ม
+                  // ตรงประเภทก็ใส่ให้ อีกใบรอ backend เพิ่มฟิลด์
+                  // (maintainGroup/harvestGroup + *Code/*OwnerName)
+                  child: Column(
+                    children: [
+                      _groupCard(
+                        'กลุ่มบำรุง',
+                        'maintainGroup',
+                        caneGroup,
+                        caneGroup?.contains('บำรุง') == true,
+                        meta,
+                      ),
+                      const SizedBox(height: 8),
+                      _groupCard(
+                        'กลุ่มตัด',
+                        'harvestGroup',
+                        caneGroup,
+                        caneGroup?.contains('ตัด') == true,
+                        meta,
+                      ),
+                    ],
+                  ),
+                ),
+                if (misc.isNotEmpty)
+                  _Section(
+                    title: 'ข้อมูลเพิ่มเติม',
+                    rows: [for (final r in misc) _row(r.$1, r.$2)],
+                  ),
+              ],
+            );
           },
         ),
       ),
@@ -249,14 +272,11 @@ class ParcelDetailView extends StatelessWidget {
       title: Text(label, style: const TextStyle(fontSize: 15)),
       onTap: () async {
         Navigator.of(context).pop();
-        final saved = await Navigator.of(context).push<Object>(
-          MaterialPageRoute(builder: (_) => page),
-        );
+        final saved = await Navigator.of(context)
+            .push<Object>(MaterialPageRoute(builder: (_) => page));
         if (saved != null && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(saved is String ? saved : 'บันทึกสำเร็จ'),
-            ),
+            SnackBar(content: Text(saved is String ? saved : 'บันทึกสำเร็จ')),
           );
         }
       },
@@ -365,8 +385,7 @@ class ParcelDetailView extends StatelessWidget {
           _row('ชื่อกลุ่ม', name),
           _row(
             'ชื่อ',
-            _str(meta['${keyPrefix}OwnerName']) ??
-                _str(meta['groupOwnerName']),
+            _str(meta['${keyPrefix}OwnerName']) ?? _str(meta['groupOwnerName']),
           ),
         ],
       ),
@@ -374,8 +393,12 @@ class ParcelDetailView extends StatelessWidget {
   }
 
   /// แถว label ซ้าย / value ขวาติดขอบ — ค่าว่างแสดง '—'
-  static Widget _row(String label, String? value,
-      {bool blue = false, Color? color}) {
+  static Widget _row(
+    String label,
+    String? value, {
+    bool blue = false,
+    Color? color,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(

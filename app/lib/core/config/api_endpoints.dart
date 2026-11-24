@@ -21,6 +21,11 @@ class ApiEndpoints {
   /// คำขอแปลงทั้งหมดที่ผู้ใช้มองเห็น — หน้าสถานะแปลง
   static const String plotRequests = '/plot-requests';
 
+  /// นำส่งกิจกรรมของแปลง — POST ร่างที่บันทึกในเครื่องขึ้นระบบ
+  /// TODO(backend): endpoint ยังไม่มี — call แล้วจะเจอ 404
+  /// เมื่อ backend เขียนเสร็จใช้ได้ทันที
+  static String plotActivities(String id) => '/plots/$id/activities';
+
   /// Master option lists for pickers/dropdowns — extend this payload
   /// server-side instead of hardcoding lists in the app.
   static const String metaOptions = '/meta/options';

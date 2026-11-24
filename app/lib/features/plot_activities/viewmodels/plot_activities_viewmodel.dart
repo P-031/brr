@@ -1,11 +1,14 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/location_service.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/data/satellite_thumb_service.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/plot_activities/models/plot_list_item.dart';
 
 /// หน้ากิจกรรมแปลง — รายการแปลงแบบเพจ (30/ครั้ง) + ตัวกรองจาก backend
@@ -18,11 +21,19 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   }
 
   /// สร้างจาก session api — view ส่งแค่นี้ ไม่ต้องเห็น ParcelService
-  PlotActivitiesViewModel.forApi(ApiClient? api)
-    : this(ParcelService(api));
+  PlotActivitiesViewModel.forApi(ApiClient? api) : this(ParcelService(api));
+
+  /// หยิบ ApiClient จาก Provider ที่ root — view ไม่ต้องถือ
+  /// type ของชั้น data ส่งต่อเอง (MVVM)
+  factory PlotActivitiesViewModel.forContext(BuildContext context) =>
+      PlotActivitiesViewModel.forApi(context.read<ApiClient>());
 
   final ParcelService _service;
   final LocationService _location = LocationService();
+
+  /// loader รูปดาวเทียมให้ widget SatelliteThumb — view ไม่เห็น
+  /// ชั้น data ตรงๆ
+  SatThumbLoader get satThumb => SatelliteThumbService.load;
 
   /// ตำแหน่งผู้ใช้ปัจจุบัน (ปุ่มโฟกัส GPS บนแผนที่ย่อ)
   Future<LatLng?> currentPosition() => _location.currentPosition();
@@ -39,15 +50,20 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   bool get optionsLoaded => _optionsLoaded;
 
   // ---------- ฟิลเตอร์ที่เลือก (เลือกได้หลายค่า) ----------
-  final Set<String> _years = {};
+  // null = "ไม่มีปีการผลิต" — backend รองรับ nullYear ตรงๆ
+  final Set<String?> _years = {};
   final Set<String> _zones = {};
   final Set<String> _caneTypes = {};
   final Set<bool> _planted = {}; // true=ปลูกแล้ว false=ยังไม่ปลูก
-  final Set<String> _groupKinds = {}; // 'harvest'=กลุ่มตัด 'maintain'=กลุ่มบำรุง
+  final Set<String> _groupKinds =
+      {}; // 'harvest'=กลุ่มตัด 'maintain'=กลุ่มบำรุง
   String _search = '';
   Timer? _searchDebounce;
+  // เลขรุ่น fetch — refresh ใหม่ทำให้ loadMore ที่ค้างอยู่เป็น stale
+  // ทิ้งผลลัพธ์ของมัน ไม่ให้ย้อนไป merge ทับรายการล่าสุด
+  int _fetchEpoch = 0;
 
-  Set<String> get years => _years;
+  Set<String?> get years => _years;
   Set<String> get zones => _zones;
   Set<String> get caneTypes => _caneTypes;
   Set<bool> get planted => _planted;
@@ -84,7 +100,7 @@ class PlotActivitiesViewModel extends ChangeNotifier {
 
   void select(String id) {
     _selectedId = _selectedId == id ? null : id;
-    notifyListeners();
+    _safeNotify();
   }
 
   PlotListItem? get selected {
@@ -98,9 +114,8 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   Future<void> _loadFilterOptions() async {
     try {
       final index = await _service.fetchYearIndex();
-      _yearOptions =
-          index.years.keys.whereType<String>().toList()
-            ..sort((a, b) => b.compareTo(a));
+      _yearOptions = index.years.keys.whereType<String>().toList()
+        ..sort((a, b) => b.compareTo(a));
       _optionsLoaded = true;
     } catch (_) {}
     try {
@@ -108,41 +123,55 @@ class PlotActivitiesViewModel extends ChangeNotifier {
       _zoneOptions = options.zones;
       _caneTypeOptions = options.caneTypes;
     } catch (_) {}
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> refresh() async {
+    final epoch = ++_fetchEpoch;
     _loading = true;
     _error = null;
     _items = const [];
     _nextCursor = null;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _fetch(cursor: null);
+      if (epoch != _fetchEpoch) return;
       _items = page.items;
       _nextCursor = page.nextCursor;
       _total = page.total;
     } catch (e) {
-      _error = '$e'.replaceFirst('Exception: ', '');
+      if (epoch == _fetchEpoch) {
+        _error = '$e'.replaceFirst('Exception: ', '');
+      }
     }
+    // epoch stale → refresh ใหม่กำลังทำงาน เป็นคนเคลียร์ _loading เอง
+    if (epoch != _fetchEpoch) return;
     _loading = false;
-    notifyListeners();
+    _safeNotify();
   }
 
   Future<void> loadMore() async {
     if (_nextCursor == null || _loadingMore || _loading) return;
+    final epoch = _fetchEpoch;
     _loadingMore = true;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _fetch(cursor: _nextCursor);
+      // refresh มาแทรกระหว่างรอ → ผลของเพจเก่าไม่เอามาต่อ list ใหม่
+      if (epoch != _fetchEpoch) return;
       _items = [..._items, ...page.items];
       _nextCursor = page.nextCursor;
       _total = page.total;
     } catch (e) {
-      _error = '$e'.replaceFirst('Exception: ', '');
+      if (epoch == _fetchEpoch) {
+        _error = '$e'.replaceFirst('Exception: ', '');
+      }
+    } finally {
+      // finally ไม่ใช่ tail ปกติ — return ตอน epoch stale ข้างบน
+      // ก็ต้องเคลียร์ flag ไม่งั้น _loadingMore ค้างตลอด (ปุ่มตาย)
+      _loadingMore = false;
+      _safeNotify();
     }
-    _loadingMore = false;
-    notifyListeners();
   }
 
   Future<PlotPage> _fetch({required String? cursor}) => _service.fetchPlots(
@@ -169,7 +198,7 @@ class PlotActivitiesViewModel extends ChangeNotifier {
   // ---------- set ฟิลเตอร์แล้วรีเฟรช ----------
   /// apply ครั้งเดียวจาก filter sheet — refresh รอบเดียวไม่ยิงซ้ำ
   void applyFilters({
-    required Set<String> years,
+    required Set<String?> years,
     required Set<String> zones,
     required Set<String> caneTypes,
     required Set<bool> planted,
@@ -202,12 +231,21 @@ class PlotActivitiesViewModel extends ChangeNotifier {
 
   void _apply(void Function() change) {
     change();
-    notifyListeners();
+    _safeNotify();
     unawaited(refresh());
+  }
+
+  bool _disposed = false;
+
+  /// fetch/timer ที่กลับมาหลังหน้าปิด — notify บน VM ที่ disposed
+  /// แล้ว crash "used after disposed" ข้ามเงียบๆ แทน
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _searchDebounce?.cancel();
     super.dispose();
   }

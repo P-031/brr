@@ -6,6 +6,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
+import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 
 /// แก้ไขโปรไฟล์ — avatar, email, phone. Values are collected and
@@ -39,40 +41,17 @@ class _EditProfileViewState extends State<EditProfileView> {
   }
 
   Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Iconsax.camera, color: AppColors.green),
-              title: const Text('ถ่ายรูป'),
-              onTap: () => Navigator.pop(sheetContext, ImageSource.camera),
-            ),
-            ListTile(
-              leading: const Icon(
-                Iconsax.gallery,
-                color: AppColors.green,
-              ),
-              title: const Text('เลือกจากแกลเลอรี'),
-              onTap: () => Navigator.pop(sheetContext, ImageSource.gallery),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
+    final source = await showImageSourceSheet(context);
     if (source == null) return;
-    final x = await ImagePicker().pickImage(
-      source: source,
-      maxWidth: 1024,
-    );
-    if (x != null) setState(() => _photo = x);
+    // pickImage throw ได้ (already_active / camera busy บนบางเครื่อง)
+    try {
+      final x = await ImagePicker().pickImage(source: source, maxWidth: 1024);
+      if (x != null && mounted) setState(() => _photo = x);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('เลือกรูปไม่สำเร็จ')));
+    }
   }
 
   Future<void> _save() async {
@@ -84,7 +63,7 @@ class _EditProfileViewState extends State<EditProfileView> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('บันทึกโปรไฟล์แล้ว')));
+    ).showSnackBar(const SnackBar(content: Text('บันทึกโปรไฟล์ในเครื่องแล้ว')));
     Navigator.pop(context);
   }
 
@@ -92,7 +71,7 @@ class _EditProfileViewState extends State<EditProfileView> {
   Widget build(BuildContext context) {
     final user = context.watch<AuthViewModel>().user;
     return Scaffold(
-      appBar: AppBar(title: const Text('แก้ไขโปรไฟล์')),
+      appBar: brrAppBar('แก้ไขโปรไฟล์'),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -112,6 +91,10 @@ class _EditProfileViewState extends State<EditProfileView> {
                           : (user?.photoPath != null
                                 ? FileImage(File(user!.photoPath!))
                                 : null),
+                      onBackgroundImageError:
+                          _photo != null || user?.photoPath != null
+                          ? (_, _) {}
+                          : null,
                       child: _photo == null && user?.photoPath == null
                           ? Text(
                               (user?.displayName.isNotEmpty == true
@@ -153,6 +136,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           ),
           const SizedBox(height: 28),
           TextFormField(
+            textAlign: TextAlign.center,
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
@@ -163,6 +147,7 @@ class _EditProfileViewState extends State<EditProfileView> {
           ),
           const SizedBox(height: 16),
           TextFormField(
+            textAlign: TextAlign.center,
             controller: _phoneCtrl,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(

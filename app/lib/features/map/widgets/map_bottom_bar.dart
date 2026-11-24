@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/features/map/models/measurement_result.dart';
 import 'package:brr/features/map/viewmodels/map_viewmodel.dart';
 import 'package:brr/features/map/views/measurement_save_view.dart';
 
@@ -166,11 +167,7 @@ class _BackButton extends StatelessWidget {
           shape: BoxShape.circle,
           border: Border.all(color: AppColors.green),
         ),
-        child: const Icon(
-          Iconsax.arrow_left,
-          size: 20,
-          color: AppColors.green,
-        ),
+        child: const Icon(Iconsax.arrow_left, size: 20, color: AppColors.green),
       ),
     );
   }
@@ -214,6 +211,8 @@ class _MapBottomBarState extends State<MapBottomBar>
   }
 
   void _dragPanel(DragUpdateDetails d) {
+    // height 0 ระหว่าง layout เฟรมแรก → หารศูนย์ได้ NaN
+    if (_panelHeight <= 0) return;
     _ctrl.value = (_ctrl.value - d.delta.dy / _panelHeight).clamp(0.0, 1.0);
   }
 
@@ -413,7 +412,7 @@ class _MapBottomBarState extends State<MapBottomBar>
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: FilledButton.icon(
+                          child: FilledButton(
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
                                 vertical: 14,
@@ -421,8 +420,7 @@ class _MapBottomBarState extends State<MapBottomBar>
                               ),
                             ),
                             onPressed: () => _finish(context),
-                            icon: const Icon(Iconsax.tick_circle, size: 24),
-                            label: const Text(
+                            child: const Text(
                               'เสร็จสิ้น',
                               style: TextStyle(
                                 fontSize: 16,
@@ -533,10 +531,7 @@ class _MapBottomBarState extends State<MapBottomBar>
                 ),
               ),
               onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text(
-                'ยกเลิกการวัด',
-                style: TextStyle(fontSize: 16),
-              ),
+              child: const Text('ยกเลิกการวัด', style: TextStyle(fontSize: 16)),
             ),
           ],
         ),

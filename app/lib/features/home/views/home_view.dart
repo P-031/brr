@@ -38,9 +38,7 @@ class HomeView extends StatelessWidget {
                   BlendMode.darken,
                 ),
               ),
-              borderRadius: BorderRadius.vertical(
-                bottom: Radius.circular(28),
-              ),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
             ),
             child: Column(
               children: [
@@ -81,6 +79,11 @@ class HomeView extends StatelessWidget {
                     backgroundImage: user?.photoPath != null
                         ? FileImage(File(user!.photoPath!))
                         : null,
+                    // ไฟล์รูปถูกลบภายนอก → provider throw; กัน error
+                    // spam แล้ว fallback เป็นวงกลมว่างเหมือนเดิม
+                    onBackgroundImageError: user?.photoPath != null
+                        ? (_, _) {}
+                        : null,
                     child: user?.photoPath == null
                         ? Text(
                             name.isNotEmpty ? name[0].toUpperCase() : '?',
@@ -103,10 +106,7 @@ class HomeView extends StatelessWidget {
                   ),
                 ),
                 if (email != null)
-                  Text(
-                    email,
-                    style: const TextStyle(color: Colors.white70),
-                  ),
+                  Text(email, style: const TextStyle(color: Colors.white70)),
               ],
             ),
           ),
@@ -115,10 +115,7 @@ class HomeView extends StatelessWidget {
             Container(
               width: double.infinity,
               margin: const EdgeInsets.all(16),
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: AppColors.goldLight,
                 borderRadius: BorderRadius.circular(12),
@@ -145,15 +142,14 @@ class HomeView extends StatelessWidget {
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => DraftsView(
-                        vm: DraftsViewModel.forApi(vm.api),
-                        isOfficer: vm.user?.role == 'OFFICER',
+                        vm: DraftsViewModel.forContext(context),
+                        isOfficer: vm.user?.isOfficer ?? false,
                         onStartMeasure: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => MapView(
-                              createViewModel: () => MapViewModel(
-                                api: vm.api,
-                                canDrawManually:
-                                    vm.user?.role == 'OFFICER',
+                              createViewModel: () => MapViewModel.forContext(
+                                context,
+                                canDrawManually: vm.user?.isOfficer ?? false,
                               ),
                             ),
                           ),
@@ -170,9 +166,9 @@ class HomeView extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => MapView(
                         parcelBrowser: true,
-                        createViewModel: () => MapViewModel(
-                          api: vm.api,
-                          canDrawManually: vm.user?.role == 'OFFICER',
+                        createViewModel: () => MapViewModel.forContext(
+                          context,
+                          canDrawManually: vm.user?.isOfficer ?? false,
                         ),
                       ),
                     ),
@@ -184,7 +180,7 @@ class HomeView extends StatelessWidget {
                   subtitle: 'รายการแปลงพร้อมตัวกรอง — ปี เขต ประเภทอ้อย สถานะ',
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => PlotActivitiesView(api: vm.api),
+                      builder: (_) => const PlotActivitiesView(),
                     ),
                   ),
                 ),
@@ -215,10 +211,7 @@ class _MenuCard extends StatelessWidget {
     return Card(
       elevation: 2,
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 20,
-          vertical: 8,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         leading: Icon(icon, size: 40, color: AppColors.green),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
         subtitle: Text(subtitle),

@@ -11,8 +11,6 @@ const taskName = {
   FERTILIZE: "ใส่ปุ๋ย",
   SPRAY: "พ่นยา",
   HARVEST: "ตัดอ้อย",
-  PREPARE: "เตรียมแปลง",
-  CARE: "ดูแล",
 } as const;
 
 export type TaskName = (typeof taskName)[keyof typeof taskName];
@@ -22,11 +20,7 @@ export const taskKindByName = {
   ใส่ปุ๋ย: "FERTILIZE",
   พ่นยา: "SPRAY",
   ตัดอ้อย: "HARVEST",
-  เตรียมแปลง: "PREPARE",
-  ดูแล: "CARE",
 } as const;
-
-export const cutStatuses = ["เปิดแปลง", "ตัดอ้อย", "ปิดแปลง"] as const;
 
 export function formatDate(date: Date): string {
   const year = date.getUTCFullYear();
@@ -81,9 +75,6 @@ export function plotSummary(plot: {
   note?: string | null;
   groupKind?: string | null;
   status?: string | null;
-  cutStatus?: string | null;
-  maintainGroup?: string | null;
-  harvestGroup?: string | null;
   farmer: { id: string; username: string; displayName: string };
 }) {
   return {
@@ -131,9 +122,6 @@ export function plotMeta(plot: Parameters<typeof plotSummary>[0]) {
     targetYield: plot.targetYield ?? null,
     note: plot.note ?? null,
     groupKind: plot.groupKind ?? null,
-    cutStatus: plot.cutStatus ?? null,
-    maintainGroup: plot.maintainGroup ?? null,
-    harvestGroup: plot.harvestGroup ?? null,
   }
 }
 

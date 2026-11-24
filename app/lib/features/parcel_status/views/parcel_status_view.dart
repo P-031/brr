@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
-import 'package:brr/core/services/api_client.dart';
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/skeleton.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
 import 'package:brr/features/map/widgets/satellite_thumb.dart';
 import 'package:brr/features/parcel_status/models/plot_request.dart';
@@ -14,15 +14,13 @@ import 'package:brr/features/parcel_status/viewmodels/parcel_status_viewmodel.da
 /// ชื่อ tab มาจาก backend (/meta/options → parcelStatuses) เสมอ;
 /// รายการแปลงจะต่อเมื่อมี endpoint (ดู ParcelStatusViewModel)
 class ParcelStatusView extends StatelessWidget {
-  const ParcelStatusView({super.key, this.api});
-
-  /// ApiClient เดียวกับ session — null = โหมดออฟไลน์ (แสดงว่าง)
-  final ApiClient? api;
+  const ParcelStatusView({super.key});
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ParcelStatusViewModel.forApi(api),
+      // VM หยิบ ApiClient จาก Provider root เอง (forContext)
+      create: (ctx) => ParcelStatusViewModel.forContext(ctx),
       child: const _Body(),
     );
   }
@@ -113,18 +111,52 @@ class _BodyState extends State<_Body> {
           ),
         ),
         Expanded(
-          child: items.isEmpty
-              ? const Center(
-                  child: Text(
-                    'ไม่มีข้อมูล',
-                    style: TextStyle(fontSize: 16),
+          child: vm.requestsError != null
+              // แถบ tab โหลดได้แต่ list ล้ม — แจ้ง + ให้ retry เฉพาะ
+              // ส่วน list ไม่ทำทั้งหน้าเสีย
+              ? Center(
+                  child: TextButton.icon(
+                    onPressed: vm.load,
+                    icon: const Icon(Iconsax.refresh, size: 18),
+                    label: const Text(
+                      'โหลดรายการไม่สำเร็จ — ลองใหม่',
+                      style: TextStyle(fontSize: 15),
+                    ),
                   ),
+                )
+              : vm.loading
+              ? const Center(child: CircularProgressIndicator())
+              : vm.error != null
+              // แถบสถานะมาไม่ได้เลย — บอกสาเหตุกลางจอ ไม่ใช่โชว์
+              // "ไม่มีข้อมูล" ทั้งที่ปัญหาคือติดต่อ server ไม่ได้
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        vm.error!.replaceFirst('Exception: ', ''),
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      TextButton.icon(
+                        onPressed: vm.load,
+                        icon: const Icon(Iconsax.refresh, size: 18),
+                        label: const Text('ลองใหม่'),
+                      ),
+                    ],
+                  ),
+                )
+              : items.isEmpty
+              ? const Center(
+                  child: Text('ไม่มีข้อมูล', style: TextStyle(fontSize: 16)),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
                   itemCount: items.length,
-                  itemBuilder: (context, i) =>
-                      _RequestCard(r: items[i], status: tabs[_tab]),
+                  itemBuilder: (context, i) => _RequestCard(
+                    r: items[i],
+                    status: tabs[_tab],
+                    loader: vm.satThumb,
+                  ),
                 ),
         ),
       ],
@@ -142,9 +174,7 @@ class _BodyState extends State<_Body> {
         color: Colors.transparent,
         border: Border(
           bottom: BorderSide(
-            color: selected
-                ? const Color(0xFFFFD54F)
-                : Colors.transparent,
+            color: selected ? const Color(0xFFFFD54F) : Colors.transparent,
             width: 3,
           ),
         ),
@@ -192,10 +222,15 @@ class _BodyState extends State<_Body> {
 /// การ์ดคำขอแปลง 1 รายการ — ชื่อแปลง + ประเภทคำขอ + ค่าที่ขอ +
 /// ผู้ส่ง/วันที่ + chip สถานะ (ตรง tab ที่เลือก)
 class _RequestCard extends StatelessWidget {
-  const _RequestCard({required this.r, required this.status});
+  const _RequestCard({
+    required this.r,
+    required this.status,
+    required this.loader,
+  });
 
   final PlotRequestEntry r;
   final String status;
+  final SatThumbLoader loader;
 
   String _thaiDate(DateTime? d) {
     if (d == null) return '';
@@ -219,6 +254,7 @@ class _RequestCard extends StatelessWidget {
             SatelliteThumb(
               points: r.points,
               cacheKey: 'req-${r.id}',
+              loader: loader,
               fallback: ParcelOutline(points: r.points),
             ),
             const SizedBox(width: 12),
@@ -236,10 +272,7 @@ class _RequestCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     '${r.kindLabel}${r.detail.isEmpty ? '' : ' — ${r.detail}'}',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey.shade700,
-                    ),
+                    style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -249,10 +282,7 @@ class _RequestCard extends StatelessWidget {
                         'ปีการผลิต ${r.productionYear}',
                       _thaiDate(r.createdAt),
                     ].where((s) => s.isNotEmpty).join('  •  '),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ),
@@ -284,9 +314,7 @@ class _TabSkeleton extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: selected
-                ? const Color(0xFFFFD54F)
-                : Colors.transparent,
+            color: selected ? const Color(0xFFFFD54F) : Colors.transparent,
             width: 3,
           ),
         ),

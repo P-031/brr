@@ -1,11 +1,14 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/data/satellite_thumb_service.dart';
 import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
-import 'package:brr/features/map/views/measurement_save_view.dart';
+import 'package:brr/features/map/models/measurement_result.dart';
 
 /// ViewModel หน้า "ข้อมูลฉบับร่าง" — แปลงที่กด "บันทึกข้อมูลลงเครื่อง
 /// (ฉบับร่าง)" ไว้ อยู่ใน SharedPreferences ไม่เคยยิงขึ้น backend
@@ -18,6 +21,11 @@ class DraftsViewModel extends ChangeNotifier {
 
   /// สร้างจาก session api — view ส่งแค่นี้ ไม่ต้องเห็น ParcelService
   DraftsViewModel.forApi(ApiClient? api) : this(ParcelService(api));
+
+  /// หยิบ ApiClient จาก Provider ที่ root — view ไม่ต้องถือ
+  /// type ของชั้น data ส่งต่อเอง (MVVM)
+  factory DraftsViewModel.forContext(BuildContext context) =>
+      DraftsViewModel.forApi(context.read<ApiClient>());
 
   final ParcelService _service;
 
@@ -41,8 +49,14 @@ class DraftsViewModel extends ChangeNotifier {
 
   /// รายการตามฟิลเตอร์ที่เลือก — ร่างเก่าไม่มี status = ยังไม่ยืนยัน
   List<Parcel> get filteredDrafts => switch (_statusFilter) {
-    'confirmed' => [for (final d in _drafts) if (d.status == 'confirmed') d],
-    'pending' => [for (final d in _drafts) if (d.status != 'confirmed') d],
+    'confirmed' => [
+      for (final d in _drafts)
+        if (d.status == 'confirmed') d,
+    ],
+    'pending' => [
+      for (final d in _drafts)
+        if (d.status != 'confirmed') d,
+    ],
     _ => _drafts,
   };
 
@@ -64,6 +78,10 @@ class DraftsViewModel extends ChangeNotifier {
 
   /// id ของร่างที่กำลังยืนยัน/แก้ไขอยู่ — ปิดปุ่มใบนั้นกันกดซ้ำ
   String? get busyId => _busyId;
+
+  /// loader รูปดาวเทียมให้ widget SatelliteThumb — view ผูกเข้า
+  /// widget ไม่เห็นชั้น data ตรงๆ
+  SatThumbLoader get satThumb => SatelliteThumbService.load;
 
   /// fetcher ของหน้าฟอร์มแก้ไขร่าง — ส่งต่อ service เหมือน
   /// MapViewModel ทำให้หน้าบันทึกการวัด
@@ -99,9 +117,9 @@ class DraftsViewModel extends ChangeNotifier {
   Future<String?> confirm(Parcel p) {
     return _save(
       p,
-      (service, points) async {
-        final id = await service.ensureClientId(p);
-        return service.createParcel(
+      (points) async {
+        final id = await _service.ensureClientId(p);
+        return _service.createParcel(
         id: id,
         name: p.name,
         variety: p.variety ?? '',
@@ -131,14 +149,13 @@ class DraftsViewModel extends ChangeNotifier {
             ? null
             : '${p.meta?['targetYield']}',
         note: _s(p, 'note'),
-        photos: [
-          for (final x in p.meta?['photos'] as List? ?? const []) '$x',
-        ],
+        photos: _photosOf(p),
         points: points,
         survey: _surveyOf(p),
         );
       },
       confirm: true,
+      photos: _photosOf(p),
     );
   }
 
@@ -148,9 +165,9 @@ class DraftsViewModel extends ChangeNotifier {
   Future<String?> applyEdit(Parcel old, MeasurementResult r) {
     return _save(
       old,
-      (service, points) async {
-        final id = await service.ensureClientId(old);
-        return service.createParcel(
+      (points) async {
+        final id = await _service.ensureClientId(old);
+        return _service.createParcel(
         id: id,
         name: r.name,
         productionYear: r.productionYear,
@@ -184,6 +201,7 @@ class DraftsViewModel extends ChangeNotifier {
       // ส่งจริง → ร่างเดิมกลายเป็น "ยืนยันแล้ว"; บันทึกร่างใหม่
       // → ลบตัวเก่า (ถูกร่างใหม่แทนแล้ว)
       confirm: !r.draft,
+      photos: r.photos,
     );
   }
 
@@ -204,18 +222,38 @@ class DraftsViewModel extends ChangeNotifier {
     return Map<String, Object?>.from(raw);
   }
 
+  /// meta['photos'] จาก backend/เครื่องอาจไม่ใช่ List เสมอ
+  /// (field ผิดชนิด) — cast ดิบจะพังทั้งหน้ารายการ
+  static List<String> _photosOf(Parcel p) {
+    final raw = p.meta?['photos'];
+    return raw is List ? [for (final x in raw) '$x'] : const [];
+  }
+
   /// สร้าง parcel ผ่าน callback → สำเร็จแล้วจัดการร่างต้นทาง
   /// (ยืนยัน = stamp confirmed; แก้ไข = ลบทิ้งเพราะถูกแทนด้วยร่างใหม่)
+  /// callback ปิดล้อม _service ไว้ใน VM — ไม่รั่วชนิด service ออกนอกชั้น
   Future<String?> _save(
     Parcel source,
-    Future<Parcel> Function(ParcelService, List<LatLng>) create, {
+    Future<Parcel> Function(List<LatLng>) create, {
     bool confirm = false,
+    List<String> photos = const [],
   }) async {
     _busyId = source.id;
     notifyListeners();
     try {
-      await create(_service, source.points);
+      final created = await create(source.points);
       if (confirm) {
+        // รูปประกอบการวัดไม่มี endpoint อัปโหลด — เก็บเป็น activity
+        // draft ผูกกับแปลงจริงที่สร้าง กันรูปหายเงียบๆ ตอนยืนยัน
+        if (photos.isNotEmpty) {
+          try {
+            await _service.saveActivityDraft(
+              plotId: created.id,
+              photoPaths: photos,
+              detailPending: true,
+            );
+          } catch (_) {}
+        }
         await _service.markDraftConfirmed(source.id);
       } else {
         await _service.removeDraft(source.id);

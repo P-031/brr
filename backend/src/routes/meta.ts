@@ -1,20 +1,26 @@
 import { Router } from "express";
 import { currentUser } from "../auth";
 import { route } from "../http";
+import { farmerIdsForList } from "../plotAccess";
 import { prisma } from "../prisma";
-import { taskKindByName  }  from "../serialize";
-import { cutStatuses } from "../serialize";
-
 
 export const metaRouter = Router();
 
 metaRouter.get(
     "/meta/options",
     route(async (req, res) => {
-        currentUser(req);
-        const [options, places] = await Promise.all([
+        const user = currentUser(req);
+        const farmerIds = await farmerIdsForList(user, undefined);
+        const [options, places, plots] = await Promise.all([
             prisma.fromOption.findMany({ orderBy: [{ group: "asc"}, { sort: "asc"}, { label: "asc" }] }),
             prisma.place.findMany(),
+            farmerIds.length === 0
+            ? Promise.resolve([])
+            : prisma.plot.findMany({
+                where: { farmerId: { in: farmerIds } },
+                select: {id: true, name: true },
+                orderBy: {name: "asc"},
+            }),
         ]);
     
     const labels = (group: string) => options.filter((row) => row.group === group).map((row) => row.label);
@@ -38,11 +44,9 @@ metaRouter.get(
         plotRequestTypes: labels("plotRequestTypes"),
         parcelStatuses: labels("parcelStatuses"),
         riskLevels: labels("riskLevels"),
-        taskKinds: Object.keys(taskKindByName),
-        cutStatuses: [...cutStatuses],
         provinces: Object.keys(locations),
         locations,
-        prevPlots: [],
+        prevPlots: plots.map((plot) => ({ code: plot.id, name: plot.name })),
     });
   }),
 );

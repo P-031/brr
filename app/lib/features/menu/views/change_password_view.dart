@@ -3,6 +3,7 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 
 /// เปลี่ยนรหัสผ่าน — old / new / confirm with per-field visibility
@@ -32,20 +33,17 @@ class _ChangePasswordState extends State<ChangePasswordView> {
     super.dispose();
   }
 
-  InputDecoration _deco(
-    String label,
-    bool show,
-    VoidCallback toggle,
-  ) => InputDecoration(
-    labelText: label,
-    labelStyle: const TextStyle(fontSize: 19),
-    prefixIcon: const Icon(Iconsax.lock, color: AppColors.green),
-    suffixIcon: IconButton(
-      icon: Icon(show ? Icons.visibility : Iconsax.eye_slash),
-      onPressed: toggle,
-    ),
-    border: const OutlineInputBorder(),
-  );
+  InputDecoration _deco(String label, bool show, VoidCallback toggle) =>
+      InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(fontSize: 19),
+        prefixIcon: const Icon(Iconsax.lock, color: AppColors.green),
+        suffixIcon: IconButton(
+          icon: Icon(show ? Icons.visibility : Iconsax.eye_slash),
+          onPressed: toggle,
+        ),
+        border: const OutlineInputBorder(),
+      );
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -56,22 +54,22 @@ class _ChangePasswordState extends State<ChangePasswordView> {
     );
     if (!mounted) return;
     setState(() => _busy = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(err ?? 'เปลี่ยนรหัสผ่านแล้ว')),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(err ?? 'เปลี่ยนรหัสผ่านแล้ว')));
     if (err == null) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('เปลี่ยนรหัสผ่าน')),
+      appBar: brrAppBar('เปลี่ยนรหัสผ่าน'),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             TextFormField(
+              textAlign: TextAlign.center,
               controller: _oldCtrl,
               obscureText: !_showOld,
               style: const TextStyle(fontSize: 19),
@@ -85,6 +83,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
             ),
             const SizedBox(height: 16),
             TextFormField(
+              textAlign: TextAlign.center,
               controller: _newCtrl,
               obscureText: !_showNew,
               style: const TextStyle(fontSize: 19),
@@ -99,6 +98,7 @@ class _ChangePasswordState extends State<ChangePasswordView> {
             ),
             const SizedBox(height: 16),
             TextFormField(
+              textAlign: TextAlign.center,
               controller: _confirmCtrl,
               obscureText: !_showConfirm,
               style: const TextStyle(fontSize: 19),

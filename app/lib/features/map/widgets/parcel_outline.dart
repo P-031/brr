@@ -34,11 +34,7 @@ class ParcelOutline extends StatelessWidget {
       child: points.length >= 3
           ? CustomPaint(painter: _RingPainter(points))
           : const Center(
-              child: Icon(
-                Iconsax.map_1,
-                color: Colors.white54,
-                size: 28,
-              ),
+              child: Icon(Iconsax.map_1, color: Colors.white54, size: 28),
             ),
     );
   }
@@ -86,7 +82,8 @@ class _RingPainter extends CustomPainter {
     canvas.drawPath(
       path,
       Paint()
-        ..color = const Color(0xFFA8AB3A) // เขียวมะกอกแบบ ref
+        ..color =
+            const Color(0xFFA8AB3A) // เขียวมะกอกแบบ ref
         ..style = PaintingStyle.fill,
     );
     canvas.drawPath(

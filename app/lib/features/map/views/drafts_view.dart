@@ -3,9 +3,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
+import 'package:brr/core/utils/thai_date.dart';
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/widgets/skeleton.dart';
+import 'package:brr/features/map/models/measurement_result.dart';
 import 'package:brr/features/map/models/parcel.dart';
+import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/viewmodels/drafts_viewmodel.dart';
 import 'package:brr/features/map/views/measurement_save_view.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
@@ -32,7 +36,8 @@ class DraftsView extends StatelessWidget {
   final DraftsViewModel vm;
 
   /// ปุ่มไปหน้าวัดพื้นที่ — null = ไม่แสดง (เข้าจากแผนที่อยู่แล้ว)
-  final VoidCallback? onStartMeasure;
+  /// await แล้ว refresh — ร่างที่เพิ่งบันทึกจากหน้าวัดโชว์ทันที
+  final Future<void> Function()? onStartMeasure;
 
   /// officer → ฟอร์มแก้ไขมีตัวเลือกชาวไร่เจ้าของแปลง
   final bool isOfficer;
@@ -59,7 +64,10 @@ class DraftsView extends StatelessWidget {
     if (result == null || !context.mounted) return;
     final err = await vm.applyEdit(p, result);
     if (!context.mounted) return;
-    _toast(context, err ?? (result.draft ? 'บันทึกร่างแล้ว' : 'บันทึกแปลงแล้ว'));
+    _toast(
+      context,
+      err ?? (result.draft ? 'บันทึกร่างแล้ว' : 'บันทึกแปลงแล้ว'),
+    );
   }
 
   /// ยืนยัน — ส่งข้อมูลที่บันทึกไว้ขึ้น server โดยไม่ต้องกรอกใหม่
@@ -70,8 +78,8 @@ class DraftsView extends StatelessWidget {
         icon: const Icon(Iconsax.tick_circle, color: AppColors.green, size: 28),
         title: const Text('ยืนยันบันทึกแปลง'),
         content: Text(
-          'ส่ง "${p.name}" ขึ้น server ด้วยข้อมูลที่บันทึกไว้'
-          ' — ร่างในเครื่องจะถูกลบเมื่อสำเร็จ',
+          'ส่ง "${_landNo(p)}" ขึ้น server ด้วยข้อมูลที่บันทึกไว้'
+          ' — ร่างจะถูกบันทึกว่า "ยืนยันแล้ว" และแก้ไขไม่ได้อีก',
         ),
         actions: [
           TextButton(
@@ -98,7 +106,7 @@ class DraftsView extends StatelessWidget {
         icon: const Icon(Iconsax.trash, color: Colors.red, size: 28),
         title: const Text('ลบฉบับร่าง'),
         content: Text(
-          'ลบ "${p.name}" ออกจากเครื่องถาวร — ข้อมูลร่างไม่ได้ส่งขึ้น'
+          'ลบ "${_landNo(p)}" ออกจากเครื่องถาวร — ข้อมูลร่างไม่ได้ส่งขึ้น'
           ' server ลบแล้วกู้ไม่ได้',
         ),
         actions: [
@@ -121,9 +129,11 @@ class DraftsView extends StatelessWidget {
   }
 
   void _openInfo(BuildContext context, Parcel p) {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => _DraftDetailView(p)));
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => _DraftDetailView(p, loader: vm.satThumb),
+      ),
+    );
   }
 
   /// ปุ่มดาวโหลดขวาบน — confirm ก่อนแล้วยิง GET /risk-points
@@ -246,13 +256,12 @@ class DraftsView extends StatelessWidget {
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFF4F4F4),
-        appBar: AppBar(
-          backgroundColor: AppColors.green,
-          title: const Text('ข้อมูลฉบับร่าง'),
+        appBar: brrAppBar(
+          'ข้อมูลฉบับร่าง',
           actions: [
             IconButton(
               tooltip: 'ตัวกรองสถานะ',
-              icon: const Icon(Icons.filter_list, size: 26),
+              icon: const Icon(Iconsax.setting_4, size: 26),
               onPressed: () => _openFilter(context),
             ),
             IconButton(
@@ -277,7 +286,11 @@ class DraftsView extends StatelessWidget {
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    onPressed: onStartMeasure,
+                    onPressed: () async {
+                      await onStartMeasure!();
+                      // อาจมีร่างใหม่จากการวัด — โหลด list ใหม่
+                      await vm.refresh();
+                    },
                     icon: const Icon(Iconsax.rulerpen, size: 20),
                     label: const Text(
                       'เริ่มวัดพื้นที่ใหม่',
@@ -365,7 +378,7 @@ class DraftsView extends StatelessWidget {
                       width: double.infinity,
                       child: FilledButton.icon(
                         onPressed: vm.loadMore,
-                        icon: const Icon(Iconsax.arrow_down, size: 22),
+                        icon: const Icon(Iconsax.arrow_circle_down, size: 22),
                         label: const Text(
                           'โหลดเพิ่ม',
                           style: TextStyle(
@@ -375,9 +388,7 @@ class DraftsView extends StatelessWidget {
                         ),
                         style: FilledButton.styleFrom(
                           backgroundColor: AppColors.green,
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 12,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
@@ -386,6 +397,7 @@ class DraftsView extends StatelessWidget {
                 final p = shown[i];
                 return _DraftCard(
                   p,
+                  loader: vm.satThumb,
                   busy: vm.busyId == p.id,
                   onTap: () => _openInfo(context, p),
                   onEdit: () => _edit(context, p),
@@ -401,33 +413,31 @@ class DraftsView extends StatelessWidget {
   }
 }
 
-const _thaiMonths = [
-  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
-  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
-];
-
 /// เวลาบันทึก — savedAt ปกติ; ร่างเก่า (ก่อนมีฟิลด์) ถอด ms จาก
 /// id `local-<millis>`
 String _savedText(Parcel p) {
   var t = p.savedAt;
   if (t == null && p.id.startsWith('local-')) {
-    final ms = int.tryParse(p.id.substring(6));
+    // id รูปแบบ local-<millis|micros>(-<seq>) — เอาเลขก่อนขีดแรก
+    final ms = int.tryParse(p.id.substring(6).split('-').first);
     if (ms != null) t = DateTime.fromMillisecondsSinceEpoch(ms);
   }
   if (t == null) return '—';
-  final hm =
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
-  return '${t.day} ${_thaiMonths[t.month - 1]} ${t.year + 543} $hm น.';
+  return formatThaiDateTime(t);
 }
 
-String _landNo(Parcel p) => p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+String _landNo(Parcel p) {
+  final n = p.name.replaceAll(RegExp(r'\s*#\d+\s*$'), '').trim();
+  return n.isEmpty ? 'ไม่ระบุชื่อ' : n;
+}
 
-/// การ์ดร่าง 1 ใบ — ชื่อไร่/ขนาดพื้นที่/เวลาบันทึก + ปุ่มยืนยันเขียว
-/// เมนู ⋮ เหลือแก้ไข/ลบ (ยืนยันย้ายออกมาเป็นปุ่มเด่น); แตะการ์ดเปิด
-/// หน้ารายละเอียด; busy = กำลังยิง API อยู่
+/// การ์ดร่าง 1 ใบ — ชื่อไร่/ขนาดพื้นที่/เวลาบันทึก + ปุ่มการกระทำ
+/// 3 ปุ่มล่างการ์ด แก้ไข/ลบ/ยืนยัน; แตะการ์ดเปิดหน้ารายละเอียด;
+/// busy = กำลังยิง API อยู่
 class _DraftCard extends StatelessWidget {
   const _DraftCard(
     this.p, {
+    required this.loader,
     this.busy = false,
     this.onTap,
     this.onEdit,
@@ -436,60 +446,12 @@ class _DraftCard extends StatelessWidget {
   });
 
   final Parcel p;
+  final SatThumbLoader loader;
   final bool busy;
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
   final VoidCallback? onConfirm;
   final VoidCallback? onDelete;
-
-  /// เมนูการกระทำเด้งจากล่าง — แก้ไข (ทอง) / ลบ (แดง)
-  void _openActions(BuildContext context) {
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // ยืนยันแล้วข้อมูลขึ้น server ไปแล้ว — แก้ไขไม่ได้อีก
-            if (p.status != 'confirmed') ...[
-              ListTile(
-                leading: const Icon(Iconsax.edit_2, color: AppColors.gold),
-                title: const Text(
-                  'แก้ไข',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                onTap: () {
-                  Navigator.of(sheetContext).pop();
-                  onEdit?.call();
-                },
-              ),
-              const Divider(height: 1),
-            ],
-            ListTile(
-              leading: const Icon(Iconsax.trash, color: Colors.redAccent),
-              title: const Text(
-                'ลบ',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              onTap: () {
-                Navigator.of(sheetContext).pop();
-                onDelete?.call();
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -500,7 +462,7 @@ class _DraftCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -510,6 +472,7 @@ class _DraftCard extends StatelessWidget {
                   SatelliteThumb(
                     points: p.points,
                     cacheKey: p.id,
+                    loader: loader,
                     fallback: ParcelOutline(points: p.points),
                   ),
                   const SizedBox(width: 12),
@@ -583,62 +546,100 @@ class _DraftCard extends StatelessWidget {
                           color: AppColors.green,
                         ),
                       ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(height: 1),
+              const SizedBox(height: 10),
+              // ปุ่มการกระทำ 3 ปุ่มล่างการ์ด — แก้ไข(ทอง)/ลบ(แดง)/
+              // ยืนยัน(เขียว); ยืนยันแล้ว → badge แทนปุ่ม กันกดซ้ำ
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        side: const BorderSide(
+                          color: Colors.redAccent,
+                          width: 1.6,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
+                      onPressed: onDelete,
+                      icon: const Icon(Iconsax.trash, size: 22),
+                      label: const Text(
+                        'ลบ',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (p.status != 'confirmed') ...[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFFA000),
+                          side: const BorderSide(
+                            color: Color(0xFFFFA000),
+                            width: 1.6,
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                        ),
+                        onPressed: onEdit,
+                        icon: const Icon(Iconsax.edit_2, size: 22),
+                        label: const Text(
+                          'แก้ไข',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  if (p.status == 'confirmed')
+                    const Expanded(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Iconsax.tick_circle5,
+                            size: 22,
+                            color: AppColors.green,
+                          ),
+                          SizedBox(width: 5),
+                          Text(
+                            'ยืนยันแล้ว',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.green,
+                            ),
+                          ),
+                        ],
+                      ),
                     )
                   else
-                    Column(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.more_vert,
-                            color: Colors.black45,
-                          ),
-                          onPressed: () => _openActions(context),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
+                    Expanded(
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: AppColors.green,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
                         ),
-                        // ยืนยันแล้ว → badge เขียวแทนปุ่ม กันกดส่งซ้ำ
-                        if (p.status == 'confirmed')
-                          const Padding(
-                            padding: EdgeInsets.only(top: 4, right: 6),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Iconsax.tick_circle5,
-                                  size: 16,
-                                  color: AppColors.green,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  'ยืนยันแล้ว',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.green,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )
-                        else
-                          FilledButton(
-                            style: FilledButton.styleFrom(
-                              backgroundColor: AppColors.green,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 6,
-                              ),
-                            ),
-                            onPressed: onConfirm,
-                            child: const Text(
-                              'ยืนยัน',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
+                        onPressed: onConfirm,
+                        child: const Text(
+                          'ยืนยัน',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
                           ),
-                      ],
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -653,21 +654,21 @@ class _DraftCard extends StatelessWidget {
 /// หน้ารายละเอียดร่าง — แตะการ์ดแล้วมาหน้านี้ 3 การ์ด:
 /// ข้อมูลแปลง / รูปแปลงดาวเทียม / รูปที่ถ่ายตอนบันทึก
 class _DraftDetailView extends StatelessWidget {
-  const _DraftDetailView(this.p);
+  const _DraftDetailView(this.p, {required this.loader});
 
   final Parcel p;
+  final SatThumbLoader loader;
 
   @override
   Widget build(BuildContext context) {
+    final metaPhotos = p.meta?['photos'];
     final photos = [
-      for (final x in p.meta?['photos'] as List? ?? const []) '$x',
+      if (metaPhotos is List)
+        for (final x in metaPhotos) '$x',
     ];
     return Scaffold(
       backgroundColor: const Color(0xFFF4F4F4),
-      appBar: AppBar(
-        backgroundColor: AppColors.green,
-        title: const Text('รายละเอียดฉบับร่าง'),
-      ),
+      appBar: brrAppBar('รายละเอียดฉบับร่าง'),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
@@ -691,6 +692,7 @@ class _DraftDetailView extends StatelessWidget {
                 child: SatelliteThumb(
                   points: p.points,
                   cacheKey: p.id,
+                  loader: loader,
                   width: cons.maxWidth,
                   height: 220,
                   radius: 12,
@@ -874,4 +876,3 @@ class _InfoRow extends StatelessWidget {
     );
   }
 }
-

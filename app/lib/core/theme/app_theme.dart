@@ -37,10 +37,7 @@ class AppTheme {
           fontWeight: FontWeight.w600,
         ),
         // ช่องสูงขึ้น แตะง่าย อ่านง่ายบนจอเล็ก
-        contentPadding: EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 18,
-        ),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

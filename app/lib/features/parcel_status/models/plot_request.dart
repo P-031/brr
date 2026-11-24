@@ -1,5 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
+import 'package:brr/features/map/models/geo_outline.dart';
+
 /// คำขอแปลงจาก `GET /plot-requests` — บันทึกจริงบน backend
 /// (ตาราง PlotRequest) ใช้แสดงในหน้าสถานะแปลงตาม tab
 class PlotRequestEntry {
@@ -41,19 +43,15 @@ class PlotRequestEntry {
     if (v is String && v.isNotEmpty) {
       final extras = [
         if (reason is String && reason.isNotEmpty) reason,
-        if (payload['canePlantMode'] case final s?)
-          'อ้อยหลักใหม่: $s',
-        if (payload['caneTypeNew'] case final s?)
-          'อ้อยปลูกใหม่: $s',
-        if (payload['newPlotCode'] case final s?)
-          'รหัสแปลงใหม่: $s',
+        if (payload['canePlantMode'] case final s?) 'อ้อยหลักใหม่: $s',
+        if (payload['caneTypeNew'] case final s?) 'อ้อยปลูกใหม่: $s',
+        if (payload['newPlotCode'] case final s?) 'รหัสแปลงใหม่: $s',
         if (payload['newFarmer'] case final s?) 'ชาวไร่ใหม่: $s',
       ];
       return extras.isEmpty ? v : '$v — ${extras.join(' • ')}';
     }
     final parts = [
-      if (payload['maintainGroup'] case final s?)
-        'กลุ่มบำรุง: $s',
+      if (payload['maintainGroup'] case final s?) 'กลุ่มบำรุง: $s',
       if (payload['harvestGroup'] case final s?) 'กลุ่มตัด: $s',
     ];
     return parts.join('  •  ');
@@ -66,26 +64,18 @@ class PlotRequestEntry {
     _ => kind,
   };
 
-  factory PlotRequestEntry.fromJson(Map<String, dynamic> j) =>
-      PlotRequestEntry(
-        id: '${j['id']}',
-        plotId: '${j['plotId']}',
-        plotName: '${j['plotName'] ?? ''}',
-        productionYear: j['productionYear'] as String?,
-        requester: j['requester'] as String?,
-        kind: '${j['kind'] ?? ''}',
-        payload: j['payload'] is Map<String, dynamic>
-            ? j['payload'] as Map<String, dynamic>
-            : const {},
-        status: '${j['status'] ?? ''}',
-        createdAt: DateTime.tryParse('${j['createdAt']}'),
-        points: [
-          for (final c in j['outline'] as List? ?? const [])
-            if (c is Map<String, dynamic>)
-              LatLng(
-                (c['latitude'] as num).toDouble(),
-                (c['longitude'] as num).toDouble(),
-              ),
-        ],
-      );
+  factory PlotRequestEntry.fromJson(Map<String, dynamic> j) => PlotRequestEntry(
+    id: '${j['id'] ?? ''}',
+    plotId: '${j['plotId'] ?? ''}',
+    plotName: '${j['plotName'] ?? ''}',
+    productionYear: j['productionYear']?.toString(),
+    requester: j['requester']?.toString(),
+    kind: '${j['kind'] ?? ''}',
+    payload: j['payload'] is Map
+        ? Map<String, dynamic>.from(j['payload'] as Map)
+        : const {},
+    status: '${j['status'] ?? ''}',
+    createdAt: DateTime.tryParse('${j['createdAt']}'),
+    points: outlineLatLngs(j['outline']),
+  );
 }
