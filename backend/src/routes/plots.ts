@@ -847,10 +847,10 @@ const updateActivityBody = z
   detailPending: z.boolean().optional(),
   photoCount: z.number().int().min(0).max(3).optional(),
 })
-.refine(
-  (value) => value.plantedAt !== undefined || value.detailPending !== undefined || value.photoCount !== undefined,
-  { message: "ไม่มีข้อมูลที่ให้แก้ไข" },
-);
+.passthrough()
+.refine((value) => Object.keys(value).some((key) => key !== "version"), {
+  message: "ไม่มีข้อมูลที่ให้แก้ไข",
+});
 
 fieldRouter.get(
   "/activities",
@@ -956,15 +956,25 @@ fieldRouter.patch(
     }
     const plot = await ownedPlot(currentUser(req), existing.plotId);
     const body = updateActivityBody.parse(req.body);
-    const plantedAt = body.plantedAt ? parseDate(body.plantedAt) : undefined;
+    const { version, plantedAt: plantedAtText, detailPending, photoCount, ...rest } = body;
+    const plantedAt = plantedAtText ? parseDate(plantedAtText) : undefined;
+    const incoming = Object.fromEntries(
+      Object.entries(rest).filter(([, value]) => value !== undefined && value !== null && value !== ""),
+    );
+    const previous =
+      existing.detail && typeof existing.detail === "object" && !Array.isArray(existing.detail)
+        ? (existing.detail as Record<string, unknown>)
+        : {};
+    const detail = Object.keys(incoming).length > 0 ? { ...previous, ...incoming } : undefined;
 
     const saved = await prisma.$transaction(async (tx) => {
       const updated = await tx.plotActivity.updateMany({
-        where: { id: activityId, version: body.version},
+        where: { id: activityId, version },
         data: {
           plantedAt,
-          detailPending: body.detailPending,
-          photoCount: body.photoCount,
+          detailPending,
+          photoCount,
+          detail: detail as Prisma.InputJsonValue | undefined,
           version: { increment: 1 }
         },
       });
@@ -1273,7 +1283,7 @@ fieldRouter.get(
 fieldRouter.put(
   "/plots/:plotId/risk-point",
   route(async (req, res) => {
-    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const plot = await ownedPlot(currentUser(req), pathId(req.params.plotId));
     const body = riskBody.parse(req.body);
     const existing = await prisma.fromOption.findUnique({
       where: { group_label: { group: "riskLevels", label: body.type } },
