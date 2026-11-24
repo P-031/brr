@@ -212,7 +212,7 @@ class DraftsViewModel extends ChangeNotifier {
       final n = await _service.downloadRiskPoints();
       return n == 0 ? 'ดาวน์โหลดแล้วแต่ไม่มีข้อมูลจุดเสี่ยง' : null;
     } catch (e) {
-      return '$e';
+      return '$e'.replaceFirst('Exception: ', '');
     }
   }
 
@@ -273,7 +273,7 @@ class DraftsViewModel extends ChangeNotifier {
       await refresh();
       return null;
     } catch (e) {
-      return '$e';
+      return '$e'.replaceFirst('Exception: ', '');
     } finally {
       _busyId = null;
       notifyListeners();

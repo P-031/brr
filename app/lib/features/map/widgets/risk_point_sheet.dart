@@ -163,8 +163,9 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
       if (mounted) Navigator.of(context).pop(_type);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

@@ -746,8 +746,9 @@ class _ActivityDetailViewState extends State<ActivityDetailView> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

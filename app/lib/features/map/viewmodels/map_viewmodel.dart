@@ -378,7 +378,7 @@ class MapViewModel extends ChangeNotifier {
       _invalidateRender();
       if (!page.truncated) _coverage = _parseBox(ParcelService.fullBox);
     } catch (e) {
-      _error = '$e';
+      _error = '$e'.replaceFirst('Exception: ', '');
       // server ดึงไม่ได้ก็ยังโชว์ร่างในเครื่อง — ร่างต้องอยู่บน
       // แผนที่ตลอดจนกว่าจะลบหรือยืนยันขึ้น server
       _parcels = await _service.fetchDrafts();
@@ -773,7 +773,7 @@ class MapViewModel extends ChangeNotifier {
       }
       return null;
     } catch (e) {
-      return '$e';
+      return '$e'.replaceFirst('Exception: ', '');
     } finally {
       _saving = false;
       _safeNotify();

@@ -3,10 +3,7 @@ import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/brr_app_bar.dart';
-
-/// Unread count driving the home-screen bell badge.
-/// TODO: wire to the backend notifications endpoint.
-final ValueNotifier<int> unreadNotifications = ValueNotifier(0);
+import 'package:brr/features/notifications/data/notification_store.dart';
 
 /// การแจ้งเตือน — list page; currently no data source.
 class NotificationsView extends StatelessWidget {

@@ -2,10 +2,33 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:brr/features/map/models/parcel.dart';
+
+/// บีบอัดรูป → base64 data URI ใน background isolate
+/// (decode รูป 12MP บน main thread ทำจอกระตุก)
+/// คืน null เมื่อ decode ไม่ได้ — caller ข้ามรูปนั้น
+String? _encodeJpegDataUri(({Uint8List bytes, int maxDim, int quality}) a) {
+  try {
+    final decoded = img.decodeImage(a.bytes);
+    if (decoded == null) return null;
+    final w = decoded.width, h = decoded.height;
+    final resized = w > a.maxDim || h > a.maxDim
+        ? img.copyResize(
+            decoded,
+            width: w >= h ? a.maxDim : null,
+            height: h > w ? a.maxDim : null,
+          )
+        : decoded;
+    return 'data:image/jpeg;base64,'
+        '${base64Encode(img.encodeJpg(resized, quality: a.quality))}';
+  } catch (_) {
+    return null;
+  }
+}
 
 /// ชั้น local persistence ของแปลง — SharedPreferences + ไฟล์ใน
 /// documents ทั้งหมด (ร่างแปลง/กิจกรรม/จุดเสี่ยง/โครงการ/ยืนยันแปลง/
@@ -107,6 +130,38 @@ class ParcelLocalStore {
       debugPrint('persistPhoto: copy ล้มเหลว $path ($e)');
       return path;
     }
+  }
+
+  /// บีบอัดรูปเป็น base64 data URI สำหรับฝังใน JSON payload —
+  /// backend รับ body ≤1MB และเก็บ payload ดิบทั้งก้อน รูปจึง
+  /// เดินทางใน request เดียวกันได้โดยไม่ต้องมี multipart
+  /// endpoint (ภาพย่อยเป็น JPEG ≤1024px; ถ้ารวมกันเกิน ~700KB
+  /// บีบซ้ำที่ 640px) — รูปที่ไฟล์หาย/อ่านไม่ได้ถูกข้าม
+  /// ไม่ทำ submit พัง; คืน list เดียวกับลำดับที่ส่งมา
+  Future<List<String>> encodePhotosForUpload(List<String> paths) async {
+    final srcs = <Uint8List>[];
+    for (final path in paths) {
+      try {
+        srcs.add(await File(path).readAsBytes());
+      } catch (_) {}
+    }
+    for (final maxDim in const [1024, 640]) {
+      final out = <String>[];
+      var total = 0;
+      for (final bytes in srcs) {
+        final uri = await compute(_encodeJpegDataUri, (
+          bytes: bytes,
+          maxDim: maxDim,
+          quality: maxDim == 1024 ? 60 : 45,
+        ));
+        if (uri != null) {
+          out.add(uri);
+          total += uri.length;
+        }
+      }
+      if (total <= 700 * 1024 || maxDim == 640) return out;
+    }
+    return const [];
   }
 
   /// ลบรูปที่ persist ไว้ — ลบเฉพาะไฟล์ใต้ photos/ เท่านั้น กัน

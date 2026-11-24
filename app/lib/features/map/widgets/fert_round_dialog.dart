@@ -71,7 +71,7 @@ class _FertRoundDialogState extends State<FertRoundDialog> {
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (picked != null) setState(() => _date = picked);
+    if (picked != null && mounted) setState(() => _date = picked);
   }
 
   Future<void> _pickFormula() async {
@@ -82,7 +82,7 @@ class _FertRoundDialogState extends State<FertRoundDialog> {
       labels: labels,
       selectedIndex: _formula == null ? null : labels.indexOf(_formula!),
     );
-    if (idx == null) return;
+    if (idx == null || !mounted) return;
     setState(() {
       _formula = labels[idx];
       // ชื่อสูตรที่มี N-P-K ในตัว เช่น "สูตร 15-5-30" → เติมช่องให้เลย

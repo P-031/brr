@@ -334,8 +334,9 @@ class _MapBodyState extends State<_MapBody> {
       return true;
     } catch (e) {
       if (mounted && !auto) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
       return false;
     } finally {

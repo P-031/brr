@@ -186,7 +186,7 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
         Navigator.of(context).pop('บันทึกยืนยันแปลงข้ามปีแล้ว');
       }
     } catch (e) {
-      if (mounted) _toast('$e');
+      if (mounted) _toast('$e'.replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

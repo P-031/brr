@@ -59,6 +59,28 @@ class _BodyState extends State<_Body> {
     'ดาวเทียม': 'assets/images/maptype_satellite.jpg',
   };
 
+  Marker _plotMarker(PlotActivitiesViewModel vm, PlotListItem p) => Marker(
+    markerId: MarkerId(p.id),
+    position: LatLng(p.centerLat!, p.centerLng!),
+    icon: vm.selectedId == p.id
+        ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow)
+        : BitmapDescriptor.defaultMarker,
+    infoWindow: InfoWindow(title: p.name),
+    onTap: () {
+      // แตะหมุด = เลือกแปลงเหมือนแตะการ์ด —
+      // reset guard ให้ซูมใหม่ได้แม้แปลงเดิม
+      _lastFocusedId = null;
+      vm.select(p.id);
+    },
+  );
+
+  /// หมุดทุกแปลงแบบเดี่ยว — เคยลอง cluster แต่ผู้ใช้บอก
+  /// ใช้ยาก คืนเป็นแสดงทุกหมุดเหมือนเดิม
+  Set<Marker> _miniMarkers(PlotActivitiesViewModel vm) => {
+    for (final p in vm.items)
+      if (p.centerLat != null && p.centerLng != null) _plotMarker(vm, p),
+  };
+
   void _resetNorth() => _mapCtrl?.animateCamera(
     CameraUpdate.newCameraPosition(
       CameraPosition(target: _miniCam.target, zoom: _miniCam.zoom),
@@ -686,26 +708,7 @@ class _BodyState extends State<_Body> {
                     // แผนที่ถนน — ภาพดาวเทียมพื้นที่ไร่อ้อยเขียวล้วน
                     // ดูเหมือนพื้นสีเขียวเปล่าๆ ไม่ใช่แผนที่
                     mapType: _mapType,
-                    markers: {
-                      for (final p in vm.items)
-                        if (p.centerLat != null && p.centerLng != null)
-                          Marker(
-                            markerId: MarkerId(p.id),
-                            position: LatLng(p.centerLat!, p.centerLng!),
-                            icon: vm.selectedId == p.id
-                                ? BitmapDescriptor.defaultMarkerWithHue(
-                                    BitmapDescriptor.hueYellow,
-                                  )
-                                : BitmapDescriptor.defaultMarker,
-                            infoWindow: InfoWindow(title: p.name),
-                            onTap: () {
-                              // แตะหมุด = เลือกแปลงเหมือนแตะการ์ด —
-                              // reset guard ให้ซูมใหม่ได้แม้แปลงเดิม
-                              _lastFocusedId = null;
-                              vm.select(p.id);
-                            },
-                          ),
-                    },
+                    markers: _miniMarkers(vm),
                     // polygon แปลงที่วัดจริง — เห็นขอบแปลงตอนซูม
                     // แปลงที่เลือกเขียวหนา แปลงอื่นเส้นบางจางๆ
                     polygons: {

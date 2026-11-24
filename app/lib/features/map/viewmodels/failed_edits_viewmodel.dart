@@ -92,7 +92,7 @@ class FailedEditsViewModel extends ChangeNotifier {
       await load();
       return null;
     } catch (e) {
-      return '$e';
+      return '$e'.replaceFirst('Exception: ', '');
     } finally {
       _busyId = null;
       _safeNotify();
