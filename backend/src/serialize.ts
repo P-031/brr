@@ -82,6 +82,7 @@ export function plotSummary(plot: {
   groupKind?: string | null;
   status?: string | null;
   cutStatus?: string | null;
+  plantedAt?: Date | null;
   maintainGroup?: string | null;
   harvestGroup?: string | null;
   farmer: { id: string; username: string; displayName: string };
@@ -132,6 +133,7 @@ export function plotMeta(plot: Parameters<typeof plotSummary>[0]) {
     note: plot.note ?? null,
     groupKind: plot.groupKind ?? null,
     cutStatus: plot.cutStatus ?? null,
+    plantedAt: plot.plantedAt ? formatDate(plot.plantedAt) : null,
     maintainGroup: plot.maintainGroup ?? null,
     harvestGroup: plot.harvestGroup ?? null,
   }
@@ -184,6 +186,28 @@ export function taskJson(task: {
     done: task.done,
     version: task.version,
     updatedAt: task.updatedAt.toISOString(),
+  };
+}
+
+export function activityJson(row: {
+  id: string;
+  plotId: string;
+  plantedAt: Date | null;
+  detailPending: boolean;
+  photoCount: number;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}) {
+  return {
+    id: row.id,
+    plotId: row.plotId,
+    plantedAt: row.plantedAt ? formatDate(row.plantedAt) : null,
+    detailPending: row.detailPending,
+    photoCount: row.photoCount,
+    version: row.version,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 

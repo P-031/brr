@@ -9,7 +9,7 @@ import { baseVersion, clientId, refuseDeleted, versionConflict, versionQuery, wa
 import { blockingOverlaps, overlapError } from "../overlap";
 import { farmerIdsForList, ownedPlot, requireFarmer, summarySelect, toDetail, visiblePlot } from "../plotAccess";
 import { prisma } from "../prisma";
-import { areaFields, plotSummary, surveyJson, taskJson, taskKindByName, yieldJson } from "../serialize";
+import { activityJson, areaFields, plotSummary, surveyJson, taskJson, taskKindByName, yieldJson } from "../serialize";
 import { normalizeRing, polygonAreaSqm, ringCenter, type LatLng } from "../area";
 import { readBoundaries } from "../boundary";
 import { firstCrossingEdge, measureSurvey, surveyRules, type MeasuredSurvey, type Survey } from "../survey";
@@ -822,6 +822,190 @@ fieldRouter.delete(
       return true;
     });
     if (!removed) throw versionConflict(await toDetail(await visiblePlot(user, plotId)));
+    res.status(204).send();
+  }),
+);
+
+const activityBody = z.object({
+  id: clientId,
+  plantedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  detailPending: z.boolean().default(false),
+  photoCount: z.number().int().min(1).max(3),
+});
+
+const updateActivityBody = z
+.object({
+  version: baseVersion,
+  plantedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  detailPending: z.boolean().optional(),
+  photoCount: z.number().int().min(1).max(3).optional(),
+})
+.refine(
+  (value) => value.plantedAt !== undefined || value.detailPending !== undefined || value.photoCount !== undefined,
+  { message: "ไม่มีข้อมูลที่ให้แก้ไข" },
+);
+
+fieldRouter.get(
+  "/activities",
+  route(async (req, res) => {
+    const limit = z.coerce.number().int().min(1).max(50).default(30).parse(queryText(req.query.limit));
+    const cursorText = queryText(req.query.cursor);
+    const farmerIds = await farmerIdsForList(currentUser(req), undefined);
+    if (farmerIds.length === 0 ) {
+      res.json({ items: [], nextCursor: null });
+      return;
+    }
+    const cursor = cursorText ? decodeCursor(cursorText) : undefined;
+    const where: Prisma.PlotActivityWhereInput = {
+      plot: { farmerId: { in: farmerIds } },
+      ...(cursor 
+        ? {
+          OR: [
+            {createdAt: { lt: cursor.createdAt } },
+            { AND: [{ createdAt: cursor.createdAt }, { id: { lt: cursor.id } }] },
+          ],
+        }
+      : {}),
+    };
+    const rows = await prisma.plotActivity.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+    });
+    const page = rows.slice(0, limit);
+    const last = page[page.length - 1];
+    res.json({
+      items: page.map(activityJson),
+      nextCursor: rows.length > limit && last ? encodeCursor(last.createdAt, last.id) : null,
+    });
+  }),
+);
+
+fieldRouter.get(
+  "/plots/:plotId/activities",
+  route(async (req, res) => {
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const rows = await prisma.plotActivity.findMany({
+      where: { plotId: plot.id },
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ items: rows.map(activityJson) });
+  }),
+);
+
+fieldRouter.post(
+  "/plots/:plotId/activities",
+  route(async (req, res) => {
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const body = activityBody.parse(req.body);
+    const plantedAt = body.plantedAt ? parseDate(body.plantedAt) : null;
+
+    const existing = await prisma.plotActivity.findUnique({ where: { id: body.id } });
+    if (existing) {
+      if (existing.plotId !== plot.id) throw new HttpError(409, "รหัสกิจกรรมนี้ถูกใช้แล้ว");
+      res.json(activityJson(existing));
+      return;
+    }
+    await refuseDeleted("ACTIVITY", body.id);
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const created = await tx.plotActivity.create({
+        data: {
+          id: body.id,
+          plotId: plot.id,
+          plantedAt,
+          detailPending: body.detailPending,
+          photoCount: body.photoCount,
+        },
+      });
+      if (plantedAt) {
+        await tx.plot.update({
+          where: { id: plot.id },
+          data: {  plantedAt, version: { increment: 1 } },
+        });
+      }
+      return created;
+    });
+    res.status(201).json(activityJson(saved));
+  }),
+);
+
+fieldRouter.patch(
+  "/activities/:activityId",
+  route(async (req, res) => {
+    const activityId = pathId(req.params.activityId);
+    const existing = await prisma.plotActivity.findUnique({ where: { id: activityId } });
+    if (!existing) {
+      await refuseDeleted("ACTIVITY", activityId);
+      throw new HttpError(404, "ไม่พบกิจกรรม");
+    }
+    const plot = await visiblePlot(currentUser(req), existing.plotId);
+    const body = updateActivityBody.parse(req.body);
+    const plantedAt = body.plantedAt ? parseDate(body.plantedAt) : undefined;
+
+    const saved = await prisma.$transaction(async (tx) => {
+      const updated = await tx.plotActivity.updateMany({
+        where: { id: activityId, version: body.version},
+        data: {
+          plantedAt,
+          detailPending: body.detailPending,
+          photoCount: body.photoCount,
+          version: { increment: 1 }
+        },
+      });
+      if (updated.count === 0) return null;
+      if (plantedAt) {
+        await tx.plot.update({
+          where: { id: plot.id },
+          data: { plantedAt, version: { increment: 1 } },
+        });
+      }
+      return tx.plotActivity.findUniqueOrThrow({ where: { id: activityId } });
+    });
+    if (!saved) {
+      const current = await prisma.plotActivity.findUniqueOrThrow({ where: { id: activityId } });
+      throw versionConflict(activityJson(current));
+    }
+    res.json(activityJson(saved));
+  }),
+);
+
+fieldRouter.delete(
+  "/activities/:activityId",
+  route(async (req, res) => {
+    const user = currentUser(req);
+    const activityId = pathId(req.params.activityId);
+    const version = versionQuery(req.query.version);
+    const existing = await prisma.plotActivity.findUnique({ where: { id: activityId } });
+    if (!existing) {
+      if (await wasDeletedBy("ACTIVITY", activityId, user.id)) {
+        res.status(204).send();
+        return;
+      }
+      throw new HttpError(404, "ไม่พบกิจกรรม");
+    }
+    const plot = await visiblePlot(user, existing.plotId);
+
+    const removed = await prisma.$transaction(async (tx) => {
+      const result = await tx.plotActivity.deleteMany({
+        where: { id: activityId, ...(version ? { version } : {}) },
+      });
+      if (result.count === 0) return false;
+      await tx.deletedRecord.create({
+        data: {
+          kind: "ACTIVITY",
+          recordId: activityId,
+          farmerId: plot.farmerId,
+          plotId: plot.id,
+          season: plot.season,
+        },
+      });
+      return true;
+    });
+    if (!removed) {
+      const current = await prisma.plotActivity.findUniqueOrThrow({ where: { id: activityId } });
+      throw versionConflict(activityJson(current));
+    }
     res.status(204).send();
   }),
 );

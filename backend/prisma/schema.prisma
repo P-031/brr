@@ -29,6 +29,7 @@ enum RecordKind {
   PLOT
   YIELD
   TASK
+  ACTIVITY
 }
 
 model User {
@@ -93,10 +94,12 @@ model Plot {
   status      String?
   /// เปิดแปลง / ตัดอ้อย / ปิดแปลง
   cutStatus String?
+  plantedAt     DateTime? @db.Date
   maintainGroup String?
   harvestGroup  String?
 
   requests PlotRequest[]  
+  activities  PlotActivity[]
   /// Read and written with raw SQL in src/boundary.ts. Prisma Client cannot touch this column.
   boundary   Unsupported("geometry(Polygon, 4326)")?
   /// Bumped on every change. Offline edits must send the version they started from.
@@ -157,6 +160,21 @@ model FieldTask {
   plot      Plot     @relation(fields: [plotId], references: [id], onDelete: Cascade)
 
   @@index([plotId, date])
+  @@index([updatedAt])
+}
+
+model PlotActivity {
+  id        String    @id
+  plotId    String
+  plantedAt DateTime? @db.Date
+  detailPending Boolean @default(false)
+  photoCount  Int     @default(0)
+  version     Int     @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  plot        Plot      @relation(fields: [plotId], references: [id], onDelete: Cascade)
+
+  @@index([plotId, createdAt])
   @@index([updatedAt])
 }
 
