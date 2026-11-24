@@ -195,6 +195,7 @@ export function activityJson(row: {
   plantedAt: Date | null;
   detailPending: boolean;
   photoCount: number;
+  detail: unknown;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -205,6 +206,7 @@ export function activityJson(row: {
     plantedAt: row.plantedAt ? formatDate(row.plantedAt) : null,
     detailPending: row.detailPending,
     photoCount: row.photoCount,
+    ...(row.detail && typeof row.detail === "object" && !Array.isArray(row.detail ) ? row.detail: {}),
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

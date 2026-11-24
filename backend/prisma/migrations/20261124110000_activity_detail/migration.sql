@@ -1,0 +1,1 @@
+ALTER TABLE "PlotActivity" ADD COLUMN "detail" JSONB;
