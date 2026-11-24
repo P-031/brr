@@ -266,8 +266,7 @@ class ParcelService {
       throw Exception('ร่างกิจกรรมถูกลบไปแล้ว');
     }
     // photoCount นับเฉพาะไฟล์ที่ยังอยู่จริง — path ที่ไฟล์โดนลบ
-    // ไปแล้วไม่นับ; backend บังคับ ≥1 เลย mark 'failed' ให้ผู้ใช้
-    // ไปแก้ร่าง (flush จะไม่ยิงรายการที่ไม่มีทางสำเร็จซ้ำๆ)
+    // ไปแล้วไม่นับ (backend รับ 0 ได้ตาม contract ล่าสุด)
     final actPhotos = activity['photos'];
     final livePhotos = actPhotos is List
         ? [
@@ -275,12 +274,6 @@ class ParcelService {
               if (File('$p').existsSync()) p,
           ]
         : const <Object?>[];
-    if (livePhotos.isEmpty) {
-      try {
-        await _local.setActivitySubmitStatus(actId, 'failed');
-      } catch (_) {}
-      throw Exception('ต้องแนบรูปอย่างน้อย 1 ใบ — ไฟล์รูปเดิมอาจถูกลบ');
-    }
     final body = <String, dynamic>{
       'id': serverId,
       for (final e in activity.entries)

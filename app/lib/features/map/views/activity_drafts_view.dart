@@ -84,19 +84,16 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
     final id = '${a['id']}';
     setState(() => _sendingId = id);
     try {
-      final result = await widget.vm.submitActivity(a);
+      final queued = await widget.vm.submitActivity(a);
       if (!mounted) return;
       _reload();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(switch (result) {
-            ActivitySubmitResult.sent => 'นำส่งกิจกรรมสำเร็จ',
-            ActivitySubmitResult.queued =>
-              'ออฟไลน์อยู่ — บันทึกไว้ส่งอัตโนมัติเมื่อออนไลน์',
-            // backend บังคับ photoCount ≥1 — บล็อกก่อนยิง
-            ActivitySubmitResult.needPhoto =>
-              'ต้องแนบรูปอย่างน้อย 1 ใบก่อนนำส่ง',
-          }),
+          content: Text(
+            queued
+                ? 'ออฟไลน์อยู่ — บันทึกไว้ส่งอัตโนมัติเมื่อออนไลน์'
+                : 'นำส่งกิจกรรมสำเร็จ',
+          ),
         ),
       );
     } catch (e) {
