@@ -78,12 +78,12 @@ class ParcelStatusViewModel extends ChangeNotifier {
       try {
         _statuses = (await service.fetchOptions()).parcelStatuses;
       } catch (e) {
-        _error = '$e';
+        _error = '$e'.replaceFirst('Exception: ', '');
       }
       try {
         _requests = await service.fetchPlotRequests();
       } catch (e) {
-        _requestsError = '$e';
+        _requestsError = '$e'.replaceFirst('Exception: ', '');
       }
     }
     _loading = false;

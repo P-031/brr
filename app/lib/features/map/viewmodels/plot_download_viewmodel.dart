@@ -95,7 +95,7 @@ class PlotDownloadViewModel extends ChangeNotifier {
         ..clear()
         ..addAll(displayYears.keys);
     } catch (e) {
-      _error = '$e';
+      _error = '$e'.replaceFirst('Exception: ', '');
     }
     notifyListeners();
   }
@@ -131,7 +131,7 @@ class PlotDownloadViewModel extends ChangeNotifier {
     } catch (e) {
       _downloading = false;
       _processing = false;
-      _downloadError = '$e';
+      _downloadError = '$e'.replaceFirst('Exception: ', '');
       notifyListeners();
       return null;
     }
@@ -160,7 +160,7 @@ class PlotDownloadViewModel extends ChangeNotifier {
     } catch (e) {
       _downloading = false;
       _processing = false;
-      _downloadError = '$e';
+      _downloadError = '$e'.replaceFirst('Exception: ', '');
       notifyListeners();
       return null;
     }

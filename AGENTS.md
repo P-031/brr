@@ -120,12 +120,13 @@ cd D:\BRR\brr\backend && npx tsc --noEmit    # verify ฝั่ง backend
 - analyzer มี info `material.dart deprecated → material_ui` — ของ toolchain ใหม่ ไม่ใช่ bug ไม่ต้องแก้
 - Emulator เปิด `flutter emulators --launch` อาจ exit 1 ถ้ามี AVD เดิมรันอยู่ — เช็ก `adb devices` ก่อน ใช้ตัวเดิมได้เลย
 - Google Maps บน emulator มี log Play services เยอะ — เป็น environmental ไม่ใช่บั๊กแอป
-- หมุดบนแผนที่ย่อทับกันหนาแน่นตอนซูมออก — รู้แล้ว ยังไม่ได้ทำ clustering (ทำได้ถ้าขอ)
+- หมุดบนแผนที่ย่อทับกันหนาแน่นตอนซูมออก — เคยลองทำ clustering แล้ว **ผู้ใช้ reject** (ใช้ยากสำหรับคนทั่วไป) revert เป็นแสดงทุกหมุดเดี่ยวเหมือนเดิม — ห้ามเพิ่ม clustering กลับเว้นแต่สั่งใหม่
 
 ## 9. ข้อตกลงกับผู้ใช้
 
 - ตอบไทย สั้นกระชับ — สรุปเป็น bullet/ตารางได้
 - เปลี่ยนแปลงทีละนิดตาม feedback รูปภาพ (เขา annotate รูปส่งมาบ่อย)
 - **หลังแก้โค้ด: แจ้งเฉยๆ ไม่ build/install ให้** — เขาทำเอง (`flutter build apk --release` + adb install)
+- **MVVM เคร่งครัดทุกงาน (สั่งโดยตรง ห้ามลืม)** — view ห้ามเห็น/เรียก service, store, ApiClient ตรงเด็ดขาด (เข้าถึงผ่าน VM method เท่านั้น); state ทุกชนิดอยู่ใน viewmodel/หรือ data layer — ห้ามประกาศ global notifier/state ในไฟล์ view; VM ใหม่สร้างผ่าน `forContext(ctx)` pattern เดิม (หยิบ ApiClient จาก Provider root ไม่ใช่ส่งผ่าน view); model เป็น pure data; feature ใหม่ทำโครง `data/models/viewmodels/views` ให้ครบ
 - ข้อมูลตัวเลือก/ฟิลเตอร์ต้องมาจาก backend เสมอ ห้าม hardcode
 - preserve geometry fidelity, cursor pagination (ห้ามโหลดหลักหมื่นเข้า RAM), สิทธิ์ farmer/officer

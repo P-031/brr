@@ -130,8 +130,9 @@ class _PlotProjectSheetState extends State<_PlotProjectSheet> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

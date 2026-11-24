@@ -144,8 +144,9 @@ class _ActivityRecordViewState extends State<ActivityRecordView> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

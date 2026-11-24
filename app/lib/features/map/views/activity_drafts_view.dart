@@ -338,7 +338,8 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
         }
         final items = snap.data ?? const [];
         // แบ่งตามสถานะการส่ง — รายการเก่าไม่มี field นับเป็น
-        // "รอส่งขึ้นระบบ" (ยังไม่มี endpoint นำส่งจริง)
+        // "รอส่งขึ้นระบบ"; 'queued' = เน็ตหลุดตอนส่ง รอ flush
+        // อัตโนมัติเมื่อ connectivity กลับ (flushQueuedActivities)
         final pending = [
           for (final a in items)
             if ('${a['submitStatus'] ?? 'pending'}' == 'pending' ||

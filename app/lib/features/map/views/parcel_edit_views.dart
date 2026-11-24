@@ -158,8 +158,9 @@ class _EditRouteSeqViewState extends State<EditRouteSeqView> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -320,8 +321,9 @@ abstract class _RequestViewBaseState<T extends _RequestViewBase>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -629,8 +631,9 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
         farmers = _farmers ??= await widget.vm.loadFarmers();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+          );
         }
         return;
       }
@@ -942,8 +945,9 @@ class _GroupRequestViewState extends _RequestViewBaseState<GroupRequestView> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);

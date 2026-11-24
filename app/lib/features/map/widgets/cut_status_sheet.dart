@@ -137,7 +137,7 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
       firstDate: DateTime(2000),
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() => isStart ? _startDate = picked : _endDate = picked);
     }
   }
@@ -183,8 +183,9 @@ class _CutStatusSheetState extends State<_CutStatusSheet> {
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);

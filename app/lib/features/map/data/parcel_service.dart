@@ -242,11 +242,12 @@ class ParcelService {
   Future<void> removeActivityDraft(String id) => _local.removeActivityDraft(id);
 
   /// นำส่งกิจกรรมที่บันทึกในเครื่องขึ้นระบบ —
-  /// `POST /plots/:id/activities` body = ฟิลด์กิจกรรมทั้งหมด
-  /// (ตัด id/submitStatus/photos ของเครื่องออก ส่ง photoCount แทน —
-  /// อัปโหลดรูปรอ multipart endpoint ตาม docs/API_CONTRACT.md)
-  /// สำเร็จ → mark 'sent', พลาดทุกกรณี → mark 'failed' แล้ว throw
-  /// ให้ UI แจ้งเหตุผล (endpoint ยังไม่มี → ตก failed ซื่อสัตย์)
+  /// `POST /plots/:id/activities` body = ฟิลด์กิจกรรมทั้งหมด +
+  /// รูปถ่ายบีบอัดเป็น base64 data URI (backend เก็บ payload ดิบ
+  /// เพดาน body 1MB — ไม่ต้องรอ multipart endpoint)
+  /// สำเร็จ → mark 'sent', transport fail → mark 'queued' +
+  /// throw [ActivityQueued], server ปฏิเสธ → mark 'failed' + throw
+  /// ให้ UI แจ้งเหตุผล
   Future<void> submitActivity(
     String plotId,
     Map<String, dynamic> activity,
@@ -256,11 +257,24 @@ class ParcelService {
     }
     final actId = '${activity['id']}';
     final actPhotos = activity['photos'];
+    // encode ล้มทั้งก้อน (isolate/ไฟล์) ห้ามทำ submit พัง —
+    // ส่งไปแบบไม่มีรูป ดีกว่ากิจกรรมค้างเพราะรูปเสีย
+    List<String> photoUris = const [];
+    if (actPhotos is List) {
+      try {
+        photoUris = await _local.encodePhotosForUpload([
+          for (final p in actPhotos) '$p',
+        ]);
+      } catch (_) {}
+    }
     final body = <String, dynamic>{
       for (final e in activity.entries)
         if (!const {'id', 'submitStatus', 'plotId', 'photos'}.contains(e.key))
           e.key: e.value,
-      'photoCount': actPhotos is List ? actPhotos.length : 0,
+      // photoCount = จำนวนรูปที่ฝังส่งจริง — รูปที่ไฟล์หายก่อน
+      // ส่งไม่ถูกนับรวม (backend นับ photos ได้ตรงกับของที่มี)
+      'photoCount': photoUris.length,
+      if (photoUris.isNotEmpty) 'photos': photoUris,
     };
     final http.Response res;
     try {
@@ -940,9 +954,7 @@ class ParcelService {
 
   /// ส่งคำขออัปเดตแปลง (เมนู ⋮ → คำขอ1/2/กลุ่ม) —
   /// `POST /plots/:id/requests` body = {kind, value?, ...fields}
-  /// TODO(backend): endpoint ยังไม่มี — shape ตาม
-  /// docs/API_CONTRACT.md; ตอนนี้ call แล้วจะเจอ 404 โชว์บน UI
-  /// ซื่อสัตย์ เมื่อ backend เขียนเสร็จใช้ได้ทันที ไม่ต้องแก้แอป
+  /// (backend เก็บ payload ดิบ — field เสริมเข้า payload ตรงๆ)
   /// คืน status ที่ backend บันทึกจริง (เช่น "รออนุมัติ") ให้ UI แจ้งผู้ใช้
   Future<String> submitPlotRequest(
     String id, {
@@ -972,7 +984,6 @@ class ParcelService {
 
   /// ดาวน์โหลด/อัปเดตข้อมูลจุดเสี่ยงภัยพิบัติล่าสุด — GET /risk-points
   /// แล้ว merge เข้า local store ตาม plotId
-  /// TODO(backend): endpoint ยังไม่มี — ตอนนี้จะเจอ 404 โชว์ซื่อสัตย์
   Future<int> downloadRiskPoints() async {
     if (!ApiConfig.enabled || _api == null) {
       throw Exception('ออฟไลน์อยู่ — ดาวน์โหลดไม่ได้');
