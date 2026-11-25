@@ -19,6 +19,7 @@ metaRouter.get(
         ]);
     
     const labels = (group: string) => options.filter((row) => row.group === group).map((row) => row.label);
+    const canePlantModes = labels("canePlantModes");
     const locations : Record<string, Record<string, Record<string, string[]>>> ={};
     for (const place of places) {
         const districts = (locations[place.province] ??= {});
@@ -49,6 +50,18 @@ metaRouter.get(
         parcelStatuses: labels("parcelStatuses"),
         riskLevels: labels("riskLevels"),
         organicFertilizerTypes: labels("organicFertilizerTypes"),
+        diseaseTypes: labels("diseaseTypes"),
+        pestTypes: labels("pestTypes"),
+        fertilizerFormulas: labels("fertilizerFormulas"),
+        canePlantModes,
+        caneTypesByMode: Object.fromEntries(
+          canePlantModes.map((mode) => [mode, labels(`caneTypesByMode:${mode}`)]),
+        ),
+        projectCriteria: labels("projectCriteria").map((name) => ({
+          name,
+          required: false,
+          options: [] as string[],
+        })),
         taskKinds: Object.keys(taskKindByName),
         cutStatuses: [...cutStatuses],
         provinces: Object.keys(locations),
