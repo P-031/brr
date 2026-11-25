@@ -13,15 +13,16 @@ import { env } from "./env";
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
-  app.use(cors({ origin: env.corsOrigins }));
   app.use(express.json({ limit: "1mb" }));
+
+  app.use(cors({ origin: env.corsOrigins.length ? env.corsOrigins : true, credentials: true }))
 
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true });
   });
 
-  app.use("api/v1/auth/token", rateLimit({ windowMs: 60_000, max: 10 }));
+  app.use("/api/v1/auth/token", rateLimit({ windowMs: 60_000, max: 10 }));
   app.use(sessionRouter);
   app.use(requireAuth);
   app.use(accountRouter);

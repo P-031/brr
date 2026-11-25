@@ -49,7 +49,6 @@ metaRouter.get(
         plotRequestTypes: labels("plotRequestTypes"),
         parcelStatuses: labels("parcelStatuses"),
         riskLevels: labels("riskLevels"),
-        riskTypes: labels("riskTypes"),
         organicFertilizerTypes: labels("organicFertilizerTypes"),
         diseaseTypes: labels("diseaseTypes"),
         pestTypes: labels("pestTypes"),
