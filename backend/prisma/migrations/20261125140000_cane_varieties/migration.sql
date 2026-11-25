@@ -9,7 +9,7 @@ INSERT INTO "FromOption" ("group", "label", "sort") VALUES
 ('caneVarieties', 'CSB08-108', 8),
 ('caneVarieties', 'CSB08-99', 9),
 ('caneVarieties', 'CSB08-111', 10),
-('caneVarieties', 'ไข่หวาาน', 11),
+('caneVarieties', 'ไข่หวาน', 11),
 ('caneVarieties', 'ทองม้วน', 12),
 ('caneVarieties', 'เม็ดขนุน', 13),
 ('caneVarieties', 'ขอนแก่น 4', 14),
