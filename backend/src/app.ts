@@ -7,17 +7,21 @@ import { fieldRouter } from "./routes/plots";
 import { sessionRouter } from "./routes/session";
 import { syncRouter } from "./routes/sync";
 import { metaRouter } from "./routes/meta";
+import { rateLimit } from "express-rate-limit";
+import { env } from "./env";
 
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
-  app.use(cors());
+  app.use(cors({ origin: env.corsOrigins }));
   app.use(express.json({ limit: "1mb" }));
+
 
   app.get("/health", (_req, res) => {
     res.json({ ok: true });
   });
 
+  app.use("api/v1/auth/token", rateLimit({ windowMs: 60_000, max: 10 }));
   app.use(sessionRouter);
   app.use(requireAuth);
   app.use(accountRouter);

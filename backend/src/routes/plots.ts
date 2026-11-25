@@ -967,10 +967,11 @@ fieldRouter.post(
         },
       });
       if (plantedAt) {
-        await tx.plot.update({
-          where: { id: plot.id },
-          data: {  plantedAt, version: { increment: 1 } },
+        const p = await tx.plot.updateMany({
+          where: { id: plot.id, version: plot.version },
+          data: { plantedAt, version: { increment: 1 } },
         });
+        if (p.count === 0 ) throw versionConflict(await toDetail(plot));
       }
       return created;
     });
@@ -1013,10 +1014,11 @@ fieldRouter.patch(
       });
       if (updated.count === 0) return null;
       if (plantedAt) {
-        await tx.plot.update({
-          where: { id: plot.id },
+        const p = await tx.plot.updateMany({
+          where: { id: plot.id, version: plot.version },
           data: { plantedAt, version: { increment: 1 } },
         });
+        if (p.count === 0 ) throw versionConflict(await toDetail(plot));
       }
       return tx.plotActivity.findUniqueOrThrow({ where: { id: activityId } });
     });

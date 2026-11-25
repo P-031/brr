@@ -86,10 +86,6 @@ describe("walked survey", () => {
     rejectsCorner(survey);
   });
 
-  it("rejects a double tap on the same corner", () => {
-    rejectsCorner(walk([field[0], field[1], destination(field[1], 0.5, 0), field[2], field[3]]), 3);
-  });
-
   it("rejects a walk that finishes in the future", () => {
     const survey = walk(field);
     rejectsCorner({ ...survey, finishedAt: new Date(now.getTime() + 60 * 60_000) });

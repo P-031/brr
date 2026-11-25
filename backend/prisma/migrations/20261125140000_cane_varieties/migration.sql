@@ -1,0 +1,21 @@
+INSERT INTO "FromOption" ("group", "label", "sort") VALUES
+('caneVarieties', 'K95-84', 1),
+('caneVarieties', 'K88-92', 2),
+('caneVarieties', 'ขอนแก่น 3', 3),
+('caneVarieties', 'CSB06-4-162', 4),
+('caneVarieties', 'ขอนแก่น 80', 5),
+('caneVarieties', 'KPS01-12', 6),
+('caneVarieties', 'LK92-11', 7),
+('caneVarieties', 'CSB08-108', 8),
+('caneVarieties', 'CSB08-99', 9),
+('caneVarieties', 'CSB08-111', 10),
+('caneVarieties', 'ไข่หวาาน', 11),
+('caneVarieties', 'ทองม้วน', 12),
+('caneVarieties', 'เม็ดขนุน', 13),
+('caneVarieties', 'ขอนแก่น 4', 14),
+('caneVarieties', 'K07-250', 15),
+('caneVarieties', 'อู่ทอง 17', 16),
+('caneVarieties', 'CSB15-221', 17),
+('caneVarieties', 'CSB15-144', 18),
+('caneVarieties', 'อื่นๆ', 19)
+ON CONFLICT ("group", "label") DO UPDATE SET "sort" = EXCLUDED."sort";
