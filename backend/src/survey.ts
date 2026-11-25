@@ -7,7 +7,7 @@ export const surveyRules = {
   maxCorners: 500,
   /** Worst GPS accuracy (metres, as the phone reports it) accepted for a corner. */
   maxAccuracyM: 15,
-  /** Corners closer than this to the previous one count as a double tap. */
+  /** A finish within this distance of the start is the same corner and is dropped. */
   minCornerGapM: 2,
   /** จุดที่ห่างกว่านี้ถือว่าพิกัดกระโดด ตรงกับเกณฑ์ในแอป */
   maxCornerGapM: 25,
@@ -137,7 +137,6 @@ export function measureSurvey(survey: Survey, now: Date): MeasuredSurvey {
     if (seconds <= 0) invalid(`มุมที่ ${number} ต้องถูกเก็บหลังมุมก่อนหน้า`, number);
 
     const gap = distanceM(previous, corner);
-    if (gap < rules.minCornerGapM) invalid(`มุมที่ ${number} ซ้ำกับมุมก่อนหน้า`, number);
     if (gap > rules.maxCornerGapM) {
       invalid(`มุมที่ ${number} ห่างจากมุมก่อนหน้าเกิน ${rules.maxCornerGapM} เมตร`, number);
     }

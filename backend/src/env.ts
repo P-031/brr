@@ -27,6 +27,7 @@ export const env = {
   keycloakIssuer: issuer,
   keycloakIssuers: issuerAliases(issuer),
   keycloakClientId: required("KEYCLOAK_CLIENT_ID"),
+  corsOrigins: process.env.CORS_ORIGINS?.split(",").map((s) => s.trim()) || [],
 };
 
 if (!Number.isInteger(env.port) || env.port < 1 || env.port > 65535) {
