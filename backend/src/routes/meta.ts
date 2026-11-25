@@ -48,6 +48,7 @@ metaRouter.get(
         plotRequestTypes: labels("plotRequestTypes"),
         parcelStatuses: labels("parcelStatuses"),
         riskLevels: labels("riskLevels"),
+        organicFertilizerTypes: labels("organicFertilizerTypes"),
         taskKinds: Object.keys(taskKindByName),
         cutStatuses: [...cutStatuses],
         provinces: Object.keys(locations),
