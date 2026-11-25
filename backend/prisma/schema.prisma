@@ -114,6 +114,9 @@ model Plot {
   tasks   FieldTask[]
   surveys PlotSurvey[]
   riskPoint RiskPoint?
+  promotion PlotProject?
+  confirm PlotConfirm?
+  cut     PlotCut?
 
   @@index([farmerId, createdAt, id])
   @@index([farmerId, updatedAt])
@@ -250,4 +253,36 @@ model Notification {
 
   @@index([userId, createdAt])
   @@index([userId, readAt])
+}
+
+model PlotProject {
+  plotId      String    @id
+  items       String[]
+  choices     Json?
+  passed      Boolean   @default(false)
+  updatedAt   DateTime  @updatedAt
+  plot        Plot      @relation(fields: [plotId], references: [id], onDelete: Cascade)
+}
+
+model PlotConfirm {
+  plotId      String    @id
+  targetYear  String?
+  status      String?
+  note        String?
+  photoCount  Int       @default(0)
+  recordedBy  String?
+  updatedAt   DateTime  @updatedAt
+  plot        Plot      @relation(fields: [plotId], references: [id], onDelete: Cascade)
+}
+
+model PlotCut {
+  plotId        String    @id
+  status        String
+  statusCode    String?
+  startDate     DateTime? @db.Date
+  endDate       DateTime? @db.Date
+  estimateTons  Float?
+  cutCaneTons   Float?
+  updatedAt     DateTime  @updatedAt
+  plot          Plot      @relation(fields: [plotId], references: [id], onDelete: Cascade)
 }

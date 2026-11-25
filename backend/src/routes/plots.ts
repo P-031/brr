@@ -1380,3 +1380,161 @@ fieldRouter.post(
     res.json({ unread: 0 });
   }),
 );
+
+const dayText = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish();
+const tonsText = z.string().trim().max(20).nullish();
+
+function dayOrNull(value: string | null | undefined): Date | null | undefined {
+  if (value == null) return value;
+  return new Date(`${value}T00:00:00.000Z`);
+}
+
+function tonsOrNull(value: string | null | undefined): number | null | undefined {
+  if (value == null) return value;
+  if (value === "") return null;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new HttpError(400, "จำนวนตันไม่ถูกต้อง");
+  return n;
+}
+
+function isoDay(value: Date | null ): string | null {
+  if (!value) return null;
+  return value.toISOString().slice(0, 10);
+}
+
+const projectBody = z.object({
+  items: z.array(z.string().trim().min(1).max(120)).max(30),
+  choices: z.record(z.string().max(80), z.string().max(80)).optional(),
+  passed: z.boolean(),
+});
+
+fieldRouter.put(
+  "/plots/:plotId/project",
+  route(async (req, res) => {
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const body = projectBody.parse(req.body);
+    const row  = await prisma.plotProject.upsert({
+      where: { plotId: plot.id },
+      create: {
+        plotId: plot.id,
+        items: body.items,
+        choices: body.choices ?? {},
+        passed: body.passed,
+      },
+      update: {
+        items: body.items,
+        choices: body.choices ?? {},
+        passed: body.passed,
+      },
+    });
+    res.json({
+      plotId: row.plotId,
+      items: row.items,
+      choices: row.choices ?? {},
+      passed: row.passed,
+      updatedAt: row.updatedAt.toISOString(),
+    });
+  }),
+);
+
+const confirmBody = z.object({
+  targetYear: z.string().trim().min(1).max(80),
+  status: z.string().trim().min(1).max(80),
+  note: z.string().trim().max(500).nullish(),
+  photoCount: z.number().int().min(0).max(10).default(0),
+  recordedBy: z.string().trim().max(120).nullish(),
+});
+
+fieldRouter.put(
+  "/plots/:plotId/confirm",
+  route(async (req, res) => {
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const body = confirmBody.parse(req.body);
+    const row = await prisma.plotConfirm.upsert({
+      where: { plotId: plot.id },
+      create: {
+        plotId: plot.id,
+        targetYear: body.targetYear,
+        status: body.status,
+        note: body.note ?? null,
+        photoCount: body.photoCount,
+        recordedBy: body.recordedBy ?? null,
+      },
+      update: {
+        targetYear: body.targetYear,
+        status: body.status,
+        note: body.note ?? null,
+        photoCount: body.photoCount,
+        recordedBy: body.recordedBy ?? null,
+      },
+    });
+    res.json({
+      plotId: row.plotId,
+      targetYear: row.targetYear,
+      status: row.status,
+      note: row.note,
+      photoCount: row.photoCount,
+      recordedBy: row.recordedBy,
+      updatedAt: row.updatedAt.toISOString(),
+    });
+  }),
+);
+
+const cutBody = z.object({
+  status: z.string().trim().min(1).max(80),
+  statusCode: z.string().trim().max(8).nullish(),
+  startDate: dayText,
+  endDate: dayText,
+  estimateTons: tonsText,
+  cutCaneTons: tonsText,
+});
+
+fieldRouter.put(
+  "/plots/:plotId/cut",
+  route(async (req, res) => {
+    const plot = await visiblePlot(currentUser(req), pathId(req.params.plotId));
+    const body = cutBody.parse(req.body);
+    const estimateTons = tonsOrNull(body.estimateTons);
+    const cutCaneTons = tonsOrNull(body.cutCaneTons);
+    const known = (cutStatuses as readonly string[]).includes(body.status);
+    const row = await prisma.$transaction(async (tx) => {
+      const saved = await tx.plotCut.upsert({
+        where: {plotId: plot.id },
+        create: {
+          plotId: plot.id,
+          status: body.status,
+          statusCode: body.statusCode ?? null,
+          startDate: dayOrNull(body.startDate) ?? null,
+          endDate: dayOrNull(body.endDate) ?? null,
+          estimateTons: estimateTons ?? null,
+          cutCaneTons: cutCaneTons ?? null,
+        },
+        update: {
+          status: body.status,
+          statusCode: body.statusCode ?? null,
+          startDate: dayOrNull(body.startDate) ?? null,
+          endDate: dayOrNull(body.endDate) ?? null,
+          estimateTons: estimateTons ?? null,
+          cutCaneTons: cutCaneTons ?? null,
+        },
+      });
+      if (known) {
+        await tx.plot.update({
+          where: { id: plot.id },
+          data: {cutStatus: body.status, version: { increment: 1 } },
+        });
+      }
+      return saved;
+    });
+    res.json({
+      plotId: row.plotId,
+      status: row.status,
+      statusCode: row.statusCode,
+      startDate: isoDay(row.startDate),
+      endDate: isoDay(row.endDate),
+      estimateTons: row.estimateTons,
+      cutCaneTons: row.cutCaneTons,
+      updatedAt: row.updatedAt.toISOString(),
+    });
+  }),
+);
