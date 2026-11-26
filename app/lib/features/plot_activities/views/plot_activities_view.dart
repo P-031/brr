@@ -41,6 +41,7 @@ class _Body extends StatefulWidget {
 class _BodyState extends State<_Body> {
   GoogleMapController? _mapCtrl;
   final _listCtrl = ScrollController();
+  final _searchCtrl = TextEditingController();
   List<PlotListItem>? _fittedItems;
   String? _lastFocusedId;
   MapType _mapType = MapType.satellite;
@@ -190,6 +191,7 @@ class _BodyState extends State<_Body> {
   @override
   void dispose() {
     _listCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -639,7 +641,6 @@ class _BodyState extends State<_Body> {
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
                       child: TextField(
                         textAlign: TextAlign.start,
-                        autofocus: true,
                         style: const TextStyle(fontSize: 18),
                         onChanged: (q) => setSheet(() => query = q),
                         decoration: InputDecoration(
@@ -823,8 +824,14 @@ class _BodyState extends State<_Body> {
                 children: [
                   Expanded(
                     child: TextField(
+                      controller: _searchCtrl,
                       textAlign: TextAlign.start,
-                      onChanged: vm.setSearch,
+                      onChanged: (v) {
+                        vm.setSearch(v);
+                        // rebuild ให้ปุ่ม × โผล่/หายตามข้อความ
+                        setState(() {});
+                      },
+                      onSubmitted: (_) => vm.submitSearch(),
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         hintText: 'ค้นหาจาก ชื่อ, รหัสพื้นที่, รหัสชาวไร่',
@@ -832,11 +839,30 @@ class _BodyState extends State<_Body> {
                           fontSize: 14,
                           color: Colors.black38,
                         ),
-                        prefixIcon: const Icon(
-                          Iconsax.search_normal_1,
-                          size: 20,
-                          color: Colors.black45,
+                        // แว่นขยายกดได้ — ค้นหาทันทีเหมือนกดค้นบนคีย์บอร์ด
+                        prefixIcon: GestureDetector(
+                          onTap: vm.submitSearch,
+                          child: const Icon(
+                            Iconsax.search_normal_1,
+                            size: 24,
+                            color: AppColors.green,
+                          ),
                         ),
+                        // ปุ่ม × ล้างข้อความ — โผล่เฉพาะตอนมีข้อความ
+                        suffixIcon: _searchCtrl.text.isEmpty
+                            ? null
+                            : GestureDetector(
+                                onTap: () {
+                                  _searchCtrl.clear();
+                                  vm.setSearch('');
+                                  vm.submitSearch();
+                                },
+                                child: const Icon(
+                                  Iconsax.close_circle,
+                                  size: 24,
+                                  color: Colors.black54,
+                                ),
+                              ),
                         filled: true,
                         fillColor: Colors.white,
                         contentPadding: const EdgeInsets.symmetric(
@@ -870,23 +896,18 @@ class _BodyState extends State<_Body> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
               child: SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
+                child: FilledButton(
                   onPressed: () => _openFullMap(vm),
-                  icon: Image.asset(
-                    'assets/images/map_cute.png',
-                    width: 24,
-                    height: 24,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
-                  label: Text(
+                  child: Text(
                     'แสดงผลบนแผนที่ จำนวน [${vm.total}] รายการ',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                 ),
               ),
@@ -961,7 +982,7 @@ class _BodyState extends State<_Body> {
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: vm.loadMore,
-                  icon: const Icon(Iconsax.arrow_circle_down, size: 22),
+                  icon: const Icon(Iconsax.arrow_down, size: 24),
                   label: const Text(
                     'โหลดเพิ่ม',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
@@ -1062,94 +1083,124 @@ class _PlotCard extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       elevation: 0,
+      clipBehavior: Clip.antiAlias,
+      color: const Color(0xFFF2F2F2),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
           color: selected ? AppColors.gold : const Color(0xFFE0E0E0),
-          width: selected ? 1.5 : 1,
+          width: selected ? 3 : 1,
         ),
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              // รูปแปลงดาวเทียมกรอบมน กึ่งกลางแนวตั้งของการ์ด —
-              // โหลด tile ไม่ได้ fallback เป็น outline วาดเอง
-              SatelliteThumb(
-                points: p.points,
-                cacheKey: p.id,
-                loader: loader,
-                fallback: ParcelOutline(points: p.points),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      p.name,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // รูปแปลงดาวเทียมแบนเนอร์เต็มกว้าง (แบบเดียวกับการ์ด
+            // หน้าสถานะแปลง) — width ต้องเป็นตัวเลขจริงเพราะ loader
+            // เอาไป round() ขอ tile
+            Stack(
+              children: [
+                LayoutBuilder(
+                  builder: (context, c) => SatelliteThumb(
+                    points: p.points,
+                    cacheKey: p.id,
+                    loader: loader,
+                    fallback: ParcelOutline(points: p.points),
+                    width: c.maxWidth,
+                    height: 120,
+                    radius: 0,
+                  ),
+                ),
+                // ป้ายติ๊กทองมุมขวาบนรูป — บอกว่าเลือกอยู่
+                if (selected)
+                  const Positioned(
+                    top: 8,
+                    right: 8,
+                    child: CircleAvatar(
+                      radius: 14,
+                      backgroundColor: AppColors.gold,
+                      child: Icon(
+                        Iconsax.tick_circle,
+                        size: 20,
+                        color: Colors.white,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 5),
-                    if (p.sequenceNo != null)
-                      Text(
-                        'เลขแปลง ${p.sequenceNo}',
-                        style: const TextStyle(
-                          color: Colors.black54,
-                          fontSize: 15,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    if (p.farmerCode != null)
-                      Text(
-                        'รหัสชาวไร่ ${p.farmerCode}',
-                        style: const TextStyle(
-                          color: Colors.black54,
-                          fontSize: 15,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    if (p.farmerName != null)
-                      Text(
-                        'ชาวไร่ ${p.farmerName}',
-                        style: const TextStyle(
-                          color: Colors.black54,
-                          fontSize: 15,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    const SizedBox(height: 8),
-                    // พื้นที่ชิดซ้ายเหมือนข้อมูลบรรทัดอื่น (ย่อตัวเองถ้าแคบ)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'พื้นที่ ${p.areaThai}',
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              // ปุ่มเลือกชิดขวาบนสุด ระดับเดียวกับชื่อแปลง
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.name,
                           style: const TextStyle(
-                            fontSize: 15,
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.green,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 5),
+                        if (p.sequenceNo != null)
+                          Text(
+                            'เลขแปลง ${p.sequenceNo}',
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 17,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        if (p.farmerName != null)
+                          Text(
+                            'ชื่อชาวไร่ ${p.farmerName}',
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 17,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        if (p.farmerCode != null)
+                          Text(
+                            'รหัสชาวไร่ ${p.farmerCode}',
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 17,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        const SizedBox(height: 8),
+                        // พื้นที่เขียวหนาชิดซ้าย — ปุ่มเลือกอยู่นอก
+                        // column กึ่งกลางขวาของบล็อกทั้งหมด
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'พื้นที่ ${p.areaThai}',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.green,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 4),
+                  _SelectButton(onPressed: onSelect),
+                ],
               ),
-              const SizedBox(width: 10),
-              // ปุ่มเลือกกึ่งกลางขวา
-              _SelectButton(onPressed: onSelect),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -1171,35 +1222,34 @@ class _PlotCardSkeleton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: Color(0xFFE0E0E0)),
       ),
-      child: const Padding(
-        padding: EdgeInsets.all(12),
-        child: Row(
-          children: [
-            SkelBox(width: 92, height: 92, radius: 10),
-            SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SkelLine(width: 120, height: 16),
-                  SizedBox(height: 9),
-                  SkelLine(width: 90),
-                  SizedBox(height: 6),
-                  SkelLine(width: 110),
-                  SizedBox(height: 6),
-                  SkelLine(width: 140),
-                  SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: SkelLine(width: 90),
-                  ),
-                ],
-              ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SkelBox(width: double.infinity, height: 120, radius: 0),
+          Padding(
+            padding: EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SkelLine(width: 140, height: 16),
+                SizedBox(height: 9),
+                SkelLine(width: 90),
+                SizedBox(height: 6),
+                SkelLine(width: 110),
+                SizedBox(height: 6),
+                SkelLine(width: 140),
+                SizedBox(height: 12),
+                Row(
+                  children: [
+                    SkelLine(width: 110),
+                    Spacer(),
+                    SkelBox(width: 62, height: 38, radius: 19),
+                  ],
+                ),
+              ],
             ),
-            SizedBox(width: 10),
-            SkelBox(width: 62, height: 38, radius: 19),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1218,8 +1268,11 @@ class _SelectButton extends StatelessWidget {
       onPressed: onPressed,
       style: FilledButton.styleFrom(
         backgroundColor: AppColors.green,
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
       ),
       child: const Text('เลือก'),
     );

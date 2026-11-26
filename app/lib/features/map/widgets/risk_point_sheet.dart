@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/result_dialog.dart';
 import 'package:brr/core/widgets/sheet_close_button.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
@@ -164,8 +165,11 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
       if (mounted) Navigator.of(context).pop(_type);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$e'.replaceFirst('Exception: ', ''))),
+        showResultDialog(
+          context,
+          success: false,
+          title: 'บันทึกจุดเสี่ยงภัยไม่สำเร็จ',
+          message: '$e'.replaceFirst('Exception: ', ''),
         );
       }
     } finally {
@@ -196,7 +200,7 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  label,
+                  riskDisplayName(label),
                   style: TextStyle(
                     fontSize: 16.5,
                     fontWeight: FontWeight.bold,
@@ -320,15 +324,25 @@ class _RiskPointSheetState extends State<_RiskPointSheet> {
             style: TextStyle(fontSize: 17.5, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 12),
-          // ตัวเลือกประเภทจาก backend riskLevels
+          // ตัวเลือกประเภทจาก backend riskLevels — _type เก็บ label
+          // ของ backend เสมอ (PUT รับแค่นี้) ชื่อไทยใช้แค่ตอนแสดงผล
           FutureBuilder<FormOptions>(
             future: _options,
             builder: (context, snap) {
-              // แสดงเป็นชื่อชนิดภัย + กลับลำดับ — น้ำท่วม(สูง)มาก่อน 50-50(ต่ำ)ท้าย
+              // กลับลำดับ — น้ำท่วม(สูง)มาก่อน 50-50(ต่ำ)ท้าย
               final levels = [
-                for (final l in snap.data?.riskLevels ?? const <String>[])
-                  riskDisplayName(l),
+                ...(snap.data?.riskLevels ?? const <String>[]),
               ].reversed.toList();
+              // normalize ค่าเดิม (local/initialType อาจเป็นชื่อแสดง
+              // เก่า เช่น "น้ำท่วม") กลับเป็น backend label — idempotent
+              if (_type != null && !levels.contains(_type)) {
+                for (final o in levels) {
+                  if (riskDisplayName(o) == _type) {
+                    _type = o;
+                    break;
+                  }
+                }
+              }
               if (snap.connectionState != ConnectionState.done) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 10),

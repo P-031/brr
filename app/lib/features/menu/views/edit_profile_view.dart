@@ -67,6 +67,61 @@ class _EditProfileViewState extends State<EditProfileView> {
     Navigator.pop(context);
   }
 
+  /// ช่องกรอก — label แยกเหนือช่อง (pattern เดียวกับหน้า
+  /// เปลี่ยนรหัสผ่าน) + icon นำหน้าในช่อง
+  Widget _field(
+    String label,
+    TextEditingController ctrl, {
+    required IconData icon,
+    TextInputType? keyboardType,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: ctrl,
+          keyboardType: keyboardType,
+          textAlign: TextAlign.start,
+          style: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+          cursorColor: AppColors.gold,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 13,
+            ),
+            prefixIcon: Icon(icon),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: AppColors.gold,
+                width: 2,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthViewModel>().user;
@@ -135,26 +190,18 @@ class _EditProfileViewState extends State<EditProfileView> {
             ),
           ),
           const SizedBox(height: 28),
-          TextFormField(
-            textAlign: TextAlign.start,
-            controller: _emailCtrl,
+          _field(
+            'อีเมล',
+            _emailCtrl,
+            icon: Iconsax.sms,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'อีเมล',
-              prefixIcon: Icon(Iconsax.sms),
-              border: OutlineInputBorder(),
-            ),
           ),
           const SizedBox(height: 16),
-          TextFormField(
-            textAlign: TextAlign.start,
-            controller: _phoneCtrl,
+          _field(
+            'เบอร์โทร',
+            _phoneCtrl,
+            icon: Iconsax.call,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'เบอร์โทร',
-              prefixIcon: Icon(Iconsax.call),
-              border: OutlineInputBorder(),
-            ),
           ),
           const SizedBox(height: 32),
           SizedBox(

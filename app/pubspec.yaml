@@ -47,6 +47,7 @@ dependencies:
   shared_preferences: ^2.5.6
   path_provider: ^2.1.6
   url_launcher: ^6.3.3
+  flutter_svg: ^2.5.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -71,6 +72,19 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/icons/
+
+  fonts:
+    - family: Prompt
+      fonts:
+        - asset: assets/fonts/Prompt-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Prompt-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Prompt-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Prompt-Bold.ttf
+          weight: 700
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

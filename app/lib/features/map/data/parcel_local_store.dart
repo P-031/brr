@@ -45,6 +45,68 @@ class ParcelLocalStore {
   static const _pendingEditKey = 'pending_plot_edits_v1';
   static const _failedEditKey = 'failed_plot_edits_v1';
 
+  /// user ที่ login อยู่ — AuthViewModel เซ็ตตอน session เปลี่ยน
+  /// (login/restore/logout); ทุก key ต่อท้าย scope ทำให้ร่าง/
+  /// คิว/งานค้างของคนละบัญชีบนเครื่องเดียวไม่ปนกัน
+  /// (static — store ถูกสร้างหลาย instance ตาม service ต้องแชร์)
+  static String? _userScope;
+
+  /// key ที่ scope ตาม user — ไม่รวม cache ไฟล์ที่ scope เหมือนกัน
+  static const _scopedKeys = [
+    _draftsKey,
+    _activityKey,
+    _activitySeenKey,
+    _riskKey,
+    _projectKey,
+    _confirmKey,
+    _cutKey,
+    _pendingEditKey,
+    _failedEditKey,
+  ];
+
+  /// key จริงที่อ่าน/เขียน — มี user ต่อท้าย '@uid' เมื่อ login แล้ว
+  static String _k(String base) =>
+      _userScope == null ? base : '$base@$_userScope';
+
+  /// เรียกตอน session เปลี่ยน — login/restore เซ็ต uid, logout
+  /// เซ็ต null; ครั้งแรกที่ scope ถูกเซ็ตจะ migrate key แบบไม่
+  /// ต่อท้าย (ข้อมูลจากเวอร์ชันเก่า) เข้า user นั้น — เครื่องที่
+  /// อัปเดตมีเจ้าของเดิมแค่คนเดียวอยู่แล้ว เลยสันนิษฐานว่าเป็นของ
+  /// user ที่ login คนแรกหลังอัปเดต แล้วลบ key เก่าทิ้งไม่ให้
+  /// user ถัดไปเห็นข้อมูลคนอื่น
+  static Future<void> setUserScope(String? uid) async {
+    if (uid == _userScope) return;
+    _userScope = uid;
+    // badge งานค้างเป็นของ user คนก่อน — รีเซ็ตรอ seedCountFor
+    // อ่านค่า scoped ของ user ใหม่ (logout → 0 ทันที ไม่โชว์ของคนอื่น)
+    failedEditsCount.value = 0;
+    if (uid == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    for (final base in _scopedKeys) {
+      final scoped = _k(base);
+      if (!prefs.containsKey(base)) continue;
+      if (!prefs.containsKey(scoped)) {
+        final v = prefs.getString(base);
+        if (v != null) await prefs.setString(scoped, v);
+      }
+      // ลบ key เก่าเสมอ — ค้างไว้ user ถัดไปจะไป adopt ข้อมูลคนอื่น
+      await prefs.remove(base);
+    }
+    // ไฟล์ cache ก็ย้ายเข้า scope — ทำ best-effort พลาดโหลดใหม่ได้
+    try {
+      final dir = await getApplicationDocumentsDirectory();
+      for (final name in [_cacheName, _metaCacheName]) {
+        final old = File('${dir.path}/$name');
+        final scoped = File('${dir.path}/${_k(name)}');
+        if (await old.exists() && !await scoped.exists()) {
+          await old.rename(scoped.path);
+        } else if (await old.exists()) {
+          await old.delete();
+        }
+      }
+    } catch (_) {}
+  }
+
   /// ไฟล์ cache payload ดาวน์โหลดล่าสุด — fallback ตอนเน็ตล่ม.
   static const _cacheName = 'parcels_cache.json';
 
@@ -68,8 +130,9 @@ class ParcelLocalStore {
   // ---- ไฟล์ cache payload ดาวน์โหลด (เขียน/อ่านอย่างเดียว —
   // parse + merge ร่างเป็นหน้าที่ของ service) ----
 
-  Future<File> _cacheFile() async =>
-      File('${(await getApplicationDocumentsDirectory()).path}/$_cacheName');
+  Future<File> _cacheFile() async => File(
+    '${(await getApplicationDocumentsDirectory()).path}/${_k(_cacheName)}',
+  );
 
   /// body ดิบของ /plots/map ครั้งล่าสุด — null ถ้าไม่เคยดาวน์โหลด
   Future<String?> readParcelCache() async {
@@ -93,8 +156,9 @@ class ParcelLocalStore {
     } catch (_) {}
   }
 
-  Future<File> _metaCacheFile() async =>
-      File('${(await getApplicationDocumentsDirectory()).path}/$_metaCacheName');
+  Future<File> _metaCacheFile() async => File(
+    '${(await getApplicationDocumentsDirectory()).path}/${_k(_metaCacheName)}',
+  );
 
   /// body ดิบของ /meta/options ครั้งล่าสุด — null ถ้าไม่เคยโหลดสำเร็จ
   Future<String?> readMetaOptions() async {
@@ -222,7 +286,7 @@ class ParcelLocalStore {
 
   Future<List<Parcel>> loadDrafts() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_draftsKey);
+    final raw = prefs.getString(_k(_draftsKey));
     if (raw == null) return [];
     final List decoded;
     try {
@@ -246,7 +310,7 @@ class ParcelLocalStore {
     final drafts = await loadDrafts();
     drafts.add(p);
     await prefs.setString(
-      _draftsKey,
+      _k(_draftsKey),
       jsonEncode([for (final d in drafts) d.toJson()]),
     );
   });
@@ -273,7 +337,7 @@ class ParcelLocalStore {
       centerOverride: d.centerOverride,
     );
     await prefs.setString(
-      _draftsKey,
+      _k(_draftsKey),
       jsonEncode([for (final d in drafts) d.toJson()]),
     );
   });
@@ -308,7 +372,7 @@ class ParcelLocalStore {
           centerOverride: d.centerOverride,
         );
         await prefs.setString(
-          _draftsKey,
+          _k(_draftsKey),
           jsonEncode([for (final item in drafts) item.toJson()]),
         );
         return newId;
@@ -349,7 +413,7 @@ class ParcelLocalStore {
       });
       if (removed.isEmpty) return 0;
       await prefs.setString(
-        _draftsKey,
+        _k(_draftsKey),
         jsonEncode([for (final d in drafts) d.toJson()]),
       );
       await _deleteUnreferenced(
@@ -368,7 +432,7 @@ class ParcelLocalStore {
     final removed = drafts.where((d) => d.id == id).toList();
     drafts.removeWhere((d) => d.id == id);
     await prefs.setString(
-      _draftsKey,
+      _k(_draftsKey),
       jsonEncode([for (final d in drafts) d.toJson()]),
     );
     // ลบ record ไปแล้ว — ไฟล์รูปลบพลาด (ไฟล์หาย/path เสีย)
@@ -386,7 +450,7 @@ class ParcelLocalStore {
 
   Future<List<Map<String, dynamic>>> _loadActivities() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_activityKey);
+    final raw = prefs.getString(_k(_activityKey));
     if (raw == null) return [];
     try {
       return _decodeMapList(raw);
@@ -514,7 +578,15 @@ class ParcelLocalStore {
       final i = items.indexWhere((a) => a['id'] == activityId);
       if (i >= 0) {
         entry['createdAt'] = items[i]['createdAt'];
-        entry['submitStatus'] = items[i]['submitStatus'] ?? 'pending';
+        // รายการที่ส่งแล้วถูกแก้ — ต้องนำส่งซ้ำ (PATCH ทับของเดิม
+        // บน server) เลยกลับไปคิว 'pending' ไม่ใช่ค้างเป็น 'sent'
+        // แบบเงียบๆ; version ของ server เก็บไว้ใช้ PATCH ต่อ
+        entry['submitStatus'] = items[i]['submitStatus'] == 'sent'
+            ? 'pending'
+            : items[i]['submitStatus'] ?? 'pending';
+        if (items[i]['version'] is int) {
+          entry['version'] = items[i]['version'];
+        }
         // ร่างเก่าอาจยังไม่มี serverId (สร้างก่อน schema นี้) —
         // คงของเดิมถ้ามี ไม่งั้น dedup ฝั่ง server พัง
         entry['serverId'] = items[i]['serverId'] ?? _newUuid();
@@ -530,7 +602,7 @@ class ParcelLocalStore {
         final rawNew = entry['photos'];
         final newPhotos = rawNew is List ? rawNew : const [];
         items[i] = entry;
-        await prefs.setString(_activityKey, jsonEncode(items));
+        await prefs.setString(_k(_activityKey), jsonEncode(items));
         await _deleteUnreferenced(
           oldPhotos.where((p) => !newPhotos.contains(p)),
         );
@@ -540,7 +612,7 @@ class ParcelLocalStore {
     entry['submitStatus'] = 'pending';
     entry['createdAt'] = DateTime.now().toIso8601String();
     items.add(entry);
-    await prefs.setString(_activityKey, jsonEncode(items));
+    await prefs.setString(_k(_activityKey), jsonEncode(items));
   });
 
   /// จำนวนกิจกรรมในเครื่องของแปลง — ใช้ตั้งชื่อ "ครั้งที่ N"
@@ -567,7 +639,7 @@ class ParcelLocalStore {
     List<Map<String, dynamic>> acts,
   ) async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_activitySeenKey);
+    final raw = prefs.getString(_k(_activitySeenKey));
     if (raw == null) return {};
     try {
       final decoded = jsonDecode(raw) as Map;
@@ -604,7 +676,7 @@ class ParcelLocalStore {
   Future<void> markActivitiesSeen(String plotId) => _serialized(() async {
     final acts = await activitiesFor(plotId);
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_activitySeenKey);
+    final raw = prefs.getString(_k(_activitySeenKey));
     // prefs เสีย → ถือว่าไม่เคยดู แทนที่จะ throw ทำหน้าประวัติเปิดไม่ได้
     Map<dynamic, dynamic> decoded = const {};
     if (raw != null) {
@@ -616,7 +688,7 @@ class ParcelLocalStore {
       for (final e in decoded.entries) e.key: e.value,
     };
     seen[plotId] = [for (final a in acts) '${a['id']}'];
-    await prefs.setString(_activitySeenKey, jsonEncode(seen));
+    await prefs.setString(_k(_activitySeenKey), jsonEncode(seen));
   });
 
   /// ล้างสถานะ "ดูแล้ว" ทั้งหมด — เรียกตอน logout เพราะเป็นข้อมูล
@@ -624,7 +696,16 @@ class ParcelLocalStore {
   /// ร่าง/คิวส่งไม่แตะ — งานค้างของผู้ใช้ต้องอยู่ครบ
   static Future<void> clearActivitySeen() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_activitySeenKey);
+    await prefs.remove(_k(_activitySeenKey));
+  }
+
+  /// กิจกรรมรายการเดียวจากเครื่อง — caller ต้องอ่านก่อนลบ
+  /// (ดู serverId/submitStatus ว่าต้องคิว DELETE ฝั่ง server ไหม)
+  Future<Map<String, dynamic>?> activityById(String id) async {
+    for (final a in await _loadActivities()) {
+      if (a['id'] == id) return a;
+    }
+    return null;
   }
 
   /// ลบกิจกรรมในเครื่อง + ลบรูปที่ persist ไว้ตามรายการด้วย
@@ -634,7 +715,7 @@ class ParcelLocalStore {
     final items = await _loadActivities();
     final removed = items.where((a) => a['id'] == id).toList();
     items.removeWhere((a) => a['id'] == id);
-    await prefs.setString(_activityKey, jsonEncode(items));
+    await prefs.setString(_k(_activityKey), jsonEncode(items));
     for (final a in removed) {
       final ph = a['photos'];
       await _deleteUnreferenced(ph is List ? ph : const []);
@@ -663,27 +744,36 @@ class ParcelLocalStore {
     if (existing is String && existing.isNotEmpty) return existing;
     final uuid = _newUuid();
     items[i]['serverId'] = uuid;
-    await prefs.setString(_activityKey, jsonEncode(items));
+    await prefs.setString(_k(_activityKey), jsonEncode(items));
     return uuid;
   });
 
   /// อัปเดต submitStatus ของกิจกรรม (pending/queued/failed/sent) —
   /// หน้านำส่งใช้แยก tab ตามสถานะนี้
-  Future<void> setActivitySubmitStatus(String id, String status) =>
-      _serialized(() async {
-        final prefs = await SharedPreferences.getInstance();
-        final items = await _loadActivities();
-        final i = items.indexWhere((a) => a['id'] == id);
-        if (i < 0) return;
-        items[i] = {...items[i], 'submitStatus': status};
-        await prefs.setString(_activityKey, jsonEncode(items));
-      });
+  Future<void> setActivitySubmitStatus(
+    String id,
+    String status, {
+    int? version,
+  }) => _serialized(() async {
+    final prefs = await SharedPreferences.getInstance();
+    final items = await _loadActivities();
+    final i = items.indexWhere((a) => a['id'] == id);
+    if (i < 0) return;
+    items[i] = {
+      ...items[i],
+      'submitStatus': status,
+      // version ที่ server คืนตอนรับ — guard ของ PATCH/DELETE
+      // รอบถัดไป + ตัวบอกว่ารายการนี้อยู่บน server แล้ว
+      'version': ?version,
+    };
+    await prefs.setString(_k(_activityKey), jsonEncode(items));
+  });
 
   // ---- จุดเสี่ยงภัยพิบัติ — เก็บลงเครื่องก่อน รอ endpoint backend ----
 
   Future<List<Map<String, dynamic>>> loadRiskPoints() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_riskKey);
+    final raw = prefs.getString(_k(_riskKey));
     if (raw == null) return [];
     try {
       return _decodeMapList(raw);
@@ -720,7 +810,7 @@ class ParcelLocalStore {
       'note': ?note,
       'updatedAt': DateTime.now().toIso8601String(),
     });
-    await prefs.setString(_riskKey, jsonEncode(items));
+    await prefs.setString(_k(_riskKey), jsonEncode(items));
   });
 
   /// โหลด→แก้→บันทึกจุดเสี่ยงภายใต้ write queue เดียว —
@@ -732,7 +822,7 @@ class ParcelLocalStore {
     final prefs = await SharedPreferences.getInstance();
     final items = await loadRiskPoints();
     final result = await transform(items);
-    await prefs.setString(_riskKey, jsonEncode(items));
+    await prefs.setString(_k(_riskKey), jsonEncode(items));
     return result;
   });
 
@@ -740,7 +830,7 @@ class ParcelLocalStore {
 
   Future<List<Map<String, dynamic>>> _loadPlotProjects() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_projectKey);
+    final raw = prefs.getString(_k(_projectKey));
     if (raw == null) return [];
     try {
       return _decodeMapList(raw);
@@ -775,14 +865,14 @@ class ParcelLocalStore {
       'passed': passed,
       'updatedAt': DateTime.now().toIso8601String(),
     });
-    await prefs.setString(_projectKey, jsonEncode(rows));
+    await prefs.setString(_k(_projectKey), jsonEncode(rows));
   });
 
   // ---- ยืนยันแปลงข้ามปี — เก็บลงเครื่องก่อน รอ endpoint นำส่ง ----
 
   Future<List<Map<String, dynamic>>> _loadParcelConfirms() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_confirmKey);
+    final raw = prefs.getString(_k(_confirmKey));
     if (raw == null) return [];
     try {
       return _decodeMapList(raw);
@@ -829,7 +919,7 @@ class ParcelLocalStore {
       'recordedBy': ?recordedBy,
       'updatedAt': DateTime.now().toIso8601String(),
     });
-    await prefs.setString(_confirmKey, jsonEncode(rows));
+    await prefs.setString(_k(_confirmKey), jsonEncode(rows));
     await _deleteUnreferenced(oldPhotos.where((p) => !newPhotos.contains(p)));
   });
 
@@ -837,7 +927,7 @@ class ParcelLocalStore {
 
   Future<List<Map<String, dynamic>>> _loadCutStatus() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_cutKey);
+    final raw = prefs.getString(_k(_cutKey));
     if (raw == null) return [];
     try {
       return _decodeMapList(raw);
@@ -879,14 +969,14 @@ class ParcelLocalStore {
       'cutCaneTons': ?cutCaneTons,
       'updatedAt': DateTime.now().toIso8601String(),
     });
-    await prefs.setString(_cutKey, jsonEncode(rows));
+    await prefs.setString(_k(_cutKey), jsonEncode(rows));
   });
 
   // ---- คิว PATCH ที่ค้างเพราะออฟไลน์ — retry เมื่อเน็ตกลับ ----
 
   Future<List<Map<String, dynamic>>> loadPendingEdits() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_pendingEditKey);
+    final raw = prefs.getString(_k(_pendingEditKey));
     if (raw == null) return [];
     try {
       return _decodeMapList(raw);
@@ -903,7 +993,7 @@ class ParcelLocalStore {
     final prefs = await SharedPreferences.getInstance();
     final items = await loadPendingEdits();
     final result = await transform(items);
-    await prefs.setString(_pendingEditKey, jsonEncode(items));
+    await prefs.setString(_k(_pendingEditKey), jsonEncode(items));
     return result;
   });
 
@@ -917,7 +1007,7 @@ class ParcelLocalStore {
   /// 410 ถูกลบ) — เก็บ plotId+body+สาเหตุ ให้ UI/ซัพพอร์ตดูย้อนได้
   Future<List<Map<String, dynamic>>> loadFailedEdits() async {
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_failedEditKey);
+    final raw = prefs.getString(_k(_failedEditKey));
     if (raw == null) return [];
     try {
       return _decodeMapList(raw);
@@ -936,14 +1026,14 @@ class ParcelLocalStore {
         while (items.length > _maxFailedEdits) {
           items.removeAt(0);
         }
-        await prefs.setString(_failedEditKey, jsonEncode(items));
+        await prefs.setString(_k(_failedEditKey), jsonEncode(items));
         failedEditsCount.value = items.length;
       });
 
   /// ล้างรายการที่ปฏิเสธ — เรียกหลังผู้ใช้รับทราบ/แก้ไขแล้ว
   Future<void> clearFailedEdits() => _serialized(() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_failedEditKey);
+    await prefs.remove(_k(_failedEditKey));
     failedEditsCount.value = 0;
   });
 
@@ -956,7 +1046,7 @@ class ParcelLocalStore {
     final prefs = await SharedPreferences.getInstance();
     final items = await loadFailedEdits();
     final result = await transform(items);
-    await prefs.setString(_failedEditKey, jsonEncode(items));
+    await prefs.setString(_k(_failedEditKey), jsonEncode(items));
     failedEditsCount.value = items.length;
     return result;
   });

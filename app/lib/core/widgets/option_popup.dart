@@ -17,16 +17,26 @@ Future<int?> showOptionPopup(
 }) => showDialog<int>(
   context: context,
   builder: (ctx) {
-    // query ต้องอยู่นอก StatefulBuilder — ไม่งั้นโดน reset ทุก rebuild
+    // query/controller ต้องอยู่นอก StatefulBuilder — ไม่งั้นโดน
+    // reset ทุก rebuild; ใช้ controller เพื่อให้ปุ่ม X ล้างข้อความได้
     var query = '';
+    final searchCtrl = TextEditingController();
     return StatefulBuilder(
       builder: (ctx, setDialogState) {
         // ตรงก่อน — ไม่เจอค่อยหาคำใกล้เคียง (fuzzySearch)
+        final direct = [
+          for (var i = 0; i < labels.length; i++)
+            if (query.isNotEmpty &&
+                labels[i].toLowerCase().contains(query.toLowerCase()))
+              i,
+        ];
         final filtered = fuzzySearch(
           List<int>.generate(labels.length, (i) => i),
           query,
           (i) => labels[i],
         );
+        // ผลมาจากคำใกล้เคียง = query ไม่ว่างแต่ไม่มีตัวตรงเลย
+        final showingSimilar = query.isNotEmpty && direct.isEmpty;
         return Dialog(
           backgroundColor: Colors.white,
           insetPadding: const EdgeInsets.symmetric(
@@ -61,17 +71,61 @@ Future<int?> showOptionPopup(
                   Padding(
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
                     child: TextField(
+                      controller: searchCtrl,
                       textAlign: TextAlign.start,
-                      autofocus: true,
                       style: const TextStyle(fontSize: 18),
+                      // ไม่ autofocus — เปิดมาเห็น list เต็มก่อน
+                      // เหมือนช่องค้นหาในแผนที่
+                      autofocus: false,
                       onChanged: (q) => setDialogState(() => query = q),
+                      // กดค้นบนคีย์บอร์ด = ยืนยันค้น ปิดคีย์บอร์ด
+                      textInputAction: TextInputAction.search,
+                      onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
                       decoration: InputDecoration(
                         hintText: searchHint,
                         hintStyle: const TextStyle(fontSize: 17),
-                        prefixIcon: const Icon(Iconsax.search_normal),
+                        // แตะแว่นขยาย = ยืนยันค้น/ปิดคีย์บอร์ด เหมือน
+                        // ช่องค้นหาในแผนที่
+                        prefixIcon: GestureDetector(
+                          onTap: () => FocusScope.of(ctx).unfocus(),
+                          behavior: HitTestBehavior.opaque,
+                          child: const Icon(
+                            Iconsax.search_normal,
+                            size: 28,
+                          ),
+                        ),
+                        // ปุ่ม X ล้างข้อความ — โผล่เฉพาะตอนมี query
+                        suffixIcon: query.isEmpty
+                            ? null
+                            : GestureDetector(
+                                onTap: () {
+                                  searchCtrl.clear();
+                                  setDialogState(() => query = '');
+                                },
+                                behavior: HitTestBehavior.opaque,
+                                child: const Icon(
+                                  Iconsax.close_circle,
+                                  size: 28,
+                                  color: Colors.black54,
+                                ),
+                              ),
                         isDense: true,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                  ),
+                if (showingSimilar && filtered.isNotEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'ไม่พบตรง — คำใกล้เคียง:',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.black45,
                         ),
                       ),
                     ),

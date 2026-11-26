@@ -1,7 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:provider/provider.dart';
 
+import 'package:brr/features/auth/models/user_profile.dart';
+import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
 import 'package:brr/features/map/models/parcel.dart';
 
@@ -12,18 +15,46 @@ import 'package:brr/features/map/models/parcel.dart';
 ///
 /// View ไม่เห็น ParcelService เลย — ทุก network call ผ่าน VM นี้
 class ParcelDetailViewModel extends ChangeNotifier {
-  ParcelDetailViewModel({required this.parcel, required this._service}) {
+  ParcelDetailViewModel({
+    required this.parcel,
+    required this._service,
+    this._user,
+  }) {
     // warm options cache ทิ้งไว้เบื้องหลัง — sheet ย่อย (จุดเสี่ยง/
     // โครงการ/คำขอ) ที่เปิดจาก flow นี้จะมี options พร้อมทันที
     // (service cache แชร์กัน ยิงซ้ำไม่เสียหาย); พลาดเงียบเดี๋ยว
     // sheet ลองเองอีกทีตอนเปิด
-    unawaited(
-      _service.fetchOptions().catchError((_) => const FormOptions()),
-    );
+    unawaited(_service.fetchOptions().catchError((_) => const FormOptions()));
   }
+
+  /// สร้างจาก context — VM เป็นคนอ่าน session user เอง ให้ view
+  /// ส่งแค่ context ไม่ต้องรู้เรื่อง AuthViewModel (ใช้เติม
+  /// recordedBy/recordedByRole ตอนบันทึกเอง)
+  factory ParcelDetailViewModel.forContext(
+    BuildContext context, {
+    required Parcel parcel,
+    required ParcelService service,
+  }) => ParcelDetailViewModel(
+    parcel: parcel,
+    service: service,
+    user: context.read<AuthViewModel>().user,
+  );
 
   final Parcel parcel;
   final ParcelService _service;
+  final UserProfile? _user;
+
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
 
   Future<Map<String, dynamic>?>? _detail;
 
@@ -93,7 +124,8 @@ class ParcelDetailViewModel extends ChangeNotifier {
     status: status,
     note: note,
     photoPaths: photoPaths,
-    recordedBy: recordedBy,
+    // ผู้บันทึก default เป็น session user — view ไม่ต้องส่งเอง
+    recordedBy: recordedBy ?? _user?.displayName,
   );
 
   /// บันทึกกิจกรรมลงเครื่อง — photos = path ไฟล์ที่ถ่าย;
@@ -193,8 +225,9 @@ class ParcelDetailViewModel extends ChangeNotifier {
     seedCaneNote: seedCaneNote,
     suggestion: suggestion,
     activityId: activityId,
-    recordedBy: recordedBy,
-    recordedByRole: recordedByRole,
+    // ผู้บันทึก/role default เป็น session user — view ไม่ต้องส่งเอง
+    recordedBy: recordedBy ?? _user?.displayName,
+    recordedByRole: recordedByRole ?? _user?.role,
   );
 
   /// จุดเสี่ยงภัยพิบัติของแปลง — เก็บในเครื่องรอ endpoint
@@ -269,7 +302,7 @@ class ParcelDetailViewModel extends ChangeNotifier {
       return true;
     }
     _detail = _service.fetchParcelDetail(parcel.id);
-    notifyListeners();
+    _safeNotify();
     return false;
   }
 

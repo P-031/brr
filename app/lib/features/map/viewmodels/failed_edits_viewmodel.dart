@@ -25,12 +25,24 @@ class FailedEditsViewModel extends ChangeNotifier {
   /// ที่ store บันทึกรายการใหม่ ไม่ต้องรอเปิดเมนู
   static ValueListenable<int> get countListenable => failedEditsCount;
 
-  /// จำนวนรายการสำหรับ badge ที่เมนู — static เพราะเมนูไม่ได้ถือ
-  /// VM ตัวเต็ม (อ่าน prefs ตรงๆ เบามาก)
-  static Future<int> failedCountFor(BuildContext context) async {
-    final n = (await ParcelService(
-      context.read<ApiClient>(),
-    ).loadFailedEdits()).length;
+  /// seed จำนวนจาก prefs เข้า notifier โดยไม่ต้องใช้ context —
+  /// เรียกตอน login/restore session ให้ badge หน้า home ขึ้น
+  /// ตั้งแต่แรก (ไม่ต้องรอเปิดเมนู/หน้าแจ้งเตือน)
+  static Future<void> seedCountFor(ApiClient? api) async {
+    if (api == null) return;
+    try {
+      failedEditsCount.value = (await ParcelService(
+        api,
+      ).loadFailedEdits()).length;
+    } catch (_) {}
+  }
+
+  /// จำนวนรายการสำหรับ badge — static เพราะ caller ไม่ได้ถือ
+  /// VM ตัวเต็ม (อ่าน prefs ตรงๆ เบามาก); รับ api จาก VM ของ
+  /// หน้านั้นๆ ไม่รับ context ตรงๆ
+  static Future<int> failedCountFor(ApiClient? api) async {
+    if (api == null) return 0;
+    final n = (await ParcelService(api).loadFailedEdits()).length;
     failedEditsCount.value = n;
     return n;
   }
@@ -41,12 +53,32 @@ class FailedEditsViewModel extends ChangeNotifier {
   bool _loading = true;
   bool _disposed = false;
 
+  /// เรียงใหม่สุดก่อน (default) — toggle จากปุ่มบน app bar
+  bool _newestFirst = true;
+
   /// plotId ที่กำลัง retry/discard — ปิดปุ่มใบนั้นกันกดซ้ำ
   String? _busyId;
 
   List<Map<String, dynamic>> get items => _items;
   bool get loading => _loading;
+  bool get newestFirst => _newestFirst;
   String? get busyId => _busyId;
+
+  /// สลับเรียงใหม่สุด↔เก่าสุด ตามเวลาที่ server ปฏิเสธ
+  void toggleSort() {
+    _newestFirst = !_newestFirst;
+    _applySort();
+    _safeNotify();
+  }
+
+  void _applySort() {
+    final items = _items.toList();
+    items.sort((a, b) {
+      final cmp = '${a['failedAt']}'.compareTo('${b['failedAt']}');
+      return _newestFirst ? -cmp : cmp;
+    });
+    _items = items;
+  }
 
   void _safeNotify() {
     if (!_disposed) notifyListeners();
@@ -68,6 +100,7 @@ class FailedEditsViewModel extends ChangeNotifier {
     }
     try {
       _items = await service.loadFailedEdits();
+      _applySort();
     } catch (_) {
       _items = const [];
     }

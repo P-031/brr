@@ -146,6 +146,8 @@ class ApiClient {
   Future<http.Response> patchJson(String path, Map<String, Object?> body) =>
       _send('PATCH', path, body: jsonEncode(body));
 
+  Future<http.Response> delJson(String path) => _send('DELETE', path);
+
   Future<http.Response> _send(
     String method,
     String path, {
@@ -167,6 +169,8 @@ class ApiClient {
                   ? _client.put(uri, headers: headers, body: body)
                   : method == 'PATCH'
                   ? _client.patch(uri, headers: headers, body: body)
+                  : method == 'DELETE'
+                  ? _client.delete(uri, headers: headers)
                   : _client.post(uri, headers: headers, body: body))
               .timeout(_timeout);
     } catch (e) {

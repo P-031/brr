@@ -553,45 +553,64 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
   @override
   String get requestKind => 'edit';
 
+  /// ประเภทคำขอที่เลือก → การ์ดย่อย — backend seed ชื่อ 'แก้ประเภทอ้อย'
+  /// (ไม่มี "ไข") แต่ label อาจเพี้ยนได้อีก เช็กแบบ contains ทุกจุด
+  /// ไม่งั้นการ์ดไม่เด้งและ payload ส่งว่างเปล่า
+  String? get _editSection {
+    final v = _selected;
+    if (v == null) return null;
+    if (v.contains('ประเภทอ้อย')) return 'caneType';
+    if (v.contains('ชาวไร')) return 'farmer';
+    if (v.contains('ปีการผลิต')) return 'year';
+    if (v.contains('เขต')) return 'zone';
+    return null;
+  }
+
   /// payload เพิ่มเติมตามประเภทคำขอ — backend เก็บลง PlotRequest.payload
   @override
   Map<String, String?>? get requestFields {
-    if (_selected == 'แก้ไขประเภทอ้อย') {
-      return {'canePlantMode': _caneMode, 'caneTypeNew': _caneTypeNew};
+    switch (_editSection) {
+      case 'caneType':
+        return {'canePlantMode': _caneMode, 'caneTypeNew': _caneTypeNew};
+      case 'farmer':
+        final code = _plotCodeCtrl.text.trim();
+        return {
+          'newPlotCode': code.isEmpty ? null : code,
+          'newFarmer': _newFarmer?.name,
+          'newFarmerId': _newFarmer?.id,
+        };
+      case 'year':
+        return {'newProductionYear': _newYear};
+      case 'zone':
+        return {'newZone': _newZone};
     }
-    if (_selected == 'แก้ไขชาวไร') {
-      final code = _plotCodeCtrl.text.trim();
-      return {
-        'newPlotCode': code.isEmpty ? null : code,
-        'newFarmer': _newFarmer?.name,
-        'newFarmerId': _newFarmer?.id,
-      };
-    }
-    if (_selected == 'แก้ปีการผลิต') return {'newProductionYear': _newYear};
-    if (_selected == 'แก้เขต') return {'newZone': _newZone};
     return null;
   }
 
   /// การ์ดที่โผล่แล้วต้องกรอกครบก่อนส่ง
   @override
   String? get submitBlocker {
-    if (_selected == 'แก้ไขประเภทอ้อย') {
-      if (_caneMode == null) return 'กรุณาเลือกประเภทอ้อยหลักใหม่';
-      if (_caneTypeNew == null) {
-        return 'กรุณาเลือกประเภทอ้อย$_caneMode';
-      }
-    }
-    if (_selected == 'แก้ไขชาวไร') {
-      if (_plotCodeCtrl.text.trim().isEmpty) {
-        return 'กรุณากรอกรหัสแปลงใหม่';
-      }
-      if (_newFarmer == null) return 'กรุณาเลือกชาวไร่คนใหม่';
-    }
-    if (_selected == 'แก้ปีการผลิต' && _newYear == null) {
-      return 'กรุณาเลือกปีการผลิตใหม่';
-    }
-    if (_selected == 'แก้เขต' && _newZone == null) {
-      return 'กรุณาเลือกเขตใหม่';
+    switch (_editSection) {
+      case 'caneType':
+        if (_caneMode == null) return 'กรุณาเลือกประเภทอ้อยหลักใหม่';
+        if (_caneTypeNew == null) {
+          return 'กรุณาเลือกประเภทอ้อย$_caneMode';
+        }
+      case 'farmer':
+        final code = _plotCodeCtrl.text.trim();
+        if (code.isEmpty) {
+          return 'กรุณากรอกรหัสแปลงใหม่';
+        }
+        // backend บังคับ newPlotCode เป็นตัวเลข ≤10 หลัก — เช็กก่อน
+        // ส่งไม่งั้นคำขอโดน 400 ทั้งที่กรอกครบแล้ว
+        if (!RegExp(r'^\d{1,10}$').hasMatch(code)) {
+          return 'รหัสแปลงต้องเป็นตัวเลข (ไม่เกิน 10 หลัก)';
+        }
+        if (_newFarmer == null) return 'กรุณาเลือกชาวไร่คนใหม่';
+      case 'year':
+        if (_newYear == null) return 'กรุณาเลือกปีการผลิตใหม่';
+      case 'zone':
+        if (_newZone == null) return 'กรุณาเลือกเขตใหม่';
     }
     return null;
   }
@@ -810,7 +829,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                   _resetSub();
                 }),
               ),
-              if (_selected == 'แก้ไขประเภทอ้อย') ...[
+              if (_editSection == 'caneType') ...[
                 const SizedBox(height: 14),
                 _subCard('กรอกข้อมูลประเภทอ้อยใหม่', [
                   _subLabel('ประเภทอ้อยหลักใหม่'),
@@ -839,7 +858,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                   ],
                 ]),
               ],
-              if (_selected == 'แก้ไขชาวไร') ...[
+              if (_editSection == 'farmer') ...[
                 const SizedBox(height: 14),
                 _subCard('แก้ไขข้อมูลชาวไร่และแปลง', [
                   _subLabel('รหัสแปลงใหม่'),
@@ -863,7 +882,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                   _farmerField(),
                 ]),
               ],
-              if (_selected == 'แก้ปีการผลิต') ...[
+              if (_editSection == 'year') ...[
                 const SizedBox(height: 14),
                 _subCard('กรอกข้อมูลปีการผลิตใหม่', [
                   _subLabel('ปีการผลิตใหม่'),
@@ -879,7 +898,7 @@ class _EditRequestViewState extends _RequestViewBaseState<EditRequestView> {
                   ),
                 ]),
               ],
-              if (_selected == 'แก้เขต') ...[
+              if (_editSection == 'zone') ...[
                 const SizedBox(height: 14),
                 _subCard('กรอกข้อมูลเขตใหม่', [
                   _subLabel('เขตใหม่'),

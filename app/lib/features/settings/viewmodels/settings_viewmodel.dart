@@ -17,6 +17,18 @@ class SettingsViewModel extends ChangeNotifier {
   bool _backingUp = false;
   bool get backingUp => _backingUp;
 
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
   /// เปิดหน้าแอปบน Play Store — ลอง market:// (เด้งเข้าแอปสโตร์
   /// ตรง) ก่อน fallback เป็น https ใน browser; คืน false ถ้าเปิด
   /// ไม่ได้ทั้งคู่ให้ UI แจ้ง
@@ -42,12 +54,12 @@ class SettingsViewModel extends ChangeNotifier {
   Future<String> backup() async {
     if (_backingUp) throw Exception('กำลังสำรองข้อมูลอยู่');
     _backingUp = true;
-    notifyListeners();
+    _safeNotify();
     try {
       return await _service.exportBackup();
     } finally {
       _backingUp = false;
-      notifyListeners();
+      _safeNotify();
     }
   }
 }

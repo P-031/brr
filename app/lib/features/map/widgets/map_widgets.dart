@@ -14,8 +14,8 @@ class MapButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
@@ -24,13 +24,13 @@ class MapButton extends StatelessWidget {
       ),
       child: loading
           ? const Padding(
-              padding: EdgeInsets.all(14),
+              padding: EdgeInsets.all(16),
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 color: AppColors.green,
               ),
             )
-          : Icon(icon, color: AppColors.green, size: 24),
+          : Icon(icon, color: AppColors.green, size: 28),
     );
   }
 }
@@ -46,8 +46,8 @@ class CompassButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 56,
+      height: 56,
       decoration: BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,
@@ -58,7 +58,7 @@ class CompassButton extends StatelessWidget {
         // หมุนเข็มตรงข้ามกล้อง — ปลายแดงชี้เหนือจริงเสมอ
         angle: -bearing * math.pi / 180,
         child: const Padding(
-          padding: EdgeInsets.all(10),
+          padding: EdgeInsets.all(12),
           child: CustomPaint(painter: _CompassPainter()),
         ),
       ),

@@ -17,6 +17,18 @@ class PlotDownloadViewModel extends ChangeNotifier {
 
   final ParcelService _service;
 
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
   /// จำนวนแปลงต่อปีจาก server (ไม่รวม draft) — null ขณะโหลดรอบแรก.
   Map<String?, int>? _serverYears;
   List<Parcel> _drafts = const [];
@@ -86,7 +98,7 @@ class PlotDownloadViewModel extends ChangeNotifier {
   Future<void> loadIndex() async {
     _error = null;
     _serverYears = null;
-    notifyListeners();
+    _safeNotify();
     try {
       final index = await _service.fetchYearIndex();
       _serverYears = index.years;
@@ -97,7 +109,7 @@ class PlotDownloadViewModel extends ChangeNotifier {
     } catch (e) {
       _error = '$e'.replaceFirst('Exception: ', '');
     }
-    notifyListeners();
+    _safeNotify();
   }
 
   /// รอบสอง — กดปุ่มแล้วค่อยดาวน์โหลดขอบแปลงจริงพร้อม % bytes.
@@ -108,7 +120,7 @@ class PlotDownloadViewModel extends ChangeNotifier {
     _received = 0;
     _total = null;
     _processing = false;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _service.fetchParcels(
         // ส่งปีที่เลือกไปให้ backend กรองใน SQL — payload เหลือ
@@ -117,11 +129,11 @@ class PlotDownloadViewModel extends ChangeNotifier {
         onProgress: (received, total) {
           _received = received;
           _total = total;
-          notifyListeners();
+          _safeNotify();
         },
         onProcessing: () {
           _processing = true;
-          notifyListeners();
+          _safeNotify();
         },
       );
       // สำเร็จ — ไม่ notify กลับ: ถ้าเคลียร์ flag ตอนนี้ UI จะ
@@ -132,7 +144,7 @@ class PlotDownloadViewModel extends ChangeNotifier {
       _downloading = false;
       _processing = false;
       _downloadError = '$e'.replaceFirst('Exception: ', '');
-      notifyListeners();
+      _safeNotify();
       return null;
     }
   }
@@ -144,14 +156,14 @@ class PlotDownloadViewModel extends ChangeNotifier {
     _downloadError = null;
     // อ่าน+parse จากไฟล์ทั้งหมดใน isolate — เป็นเฟส processing ตลอด
     _processing = true;
-    notifyListeners();
+    _safeNotify();
     try {
       final page = await _service.loadCachedParcels();
       if (page == null || page.items.isEmpty) {
         _downloading = false;
         _processing = false;
         _downloadError = 'ไม่มีข้อมูลที่บันทึกไว้';
-        notifyListeners();
+        _safeNotify();
         return null;
       }
       // ไม่ notify — เหตุผลเดียวกับ download(): กัน flash กลับ
@@ -161,20 +173,20 @@ class PlotDownloadViewModel extends ChangeNotifier {
       _downloading = false;
       _processing = false;
       _downloadError = '$e'.replaceFirst('Exception: ', '');
-      notifyListeners();
+      _safeNotify();
       return null;
     }
   }
 
   void toggleYear(String? year, bool on) {
     on ? _selected.add(year) : _selected.remove(year);
-    notifyListeners();
+    _safeNotify();
   }
 
   /// เลือกทั้งหมด/ยกเลิกทั้งหมดตาม [on].
   void toggleAll(bool on) {
     _selected.clear();
     if (on) _selected.addAll(displayYears.keys);
-    notifyListeners();
+    _safeNotify();
   }
 }

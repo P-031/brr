@@ -115,9 +115,48 @@ class MapViewModel extends ChangeNotifier {
 
   List<Parcel> get parcels => _parcels;
 
-  /// ฟิลเตอร์ปีการผลิต — null คือแสดงทุกปี
-  String? _yearFilter;
-  String? get yearFilter => _yearFilter;
+  /// ฟิลเตอร์แปลงบนแผนที่ (กรองฝั่ง client บนแปลงที่โหลดอยู่)
+  /// เซตว่าง = ไม่กรองช่องนั้น; null ใน _filterYears = "ไม่มีปีการผลิต"
+  final Set<String?> _filterYears = {};
+  final Set<String> _filterZones = {};
+  final Set<String> _filterCaneTypes = {};
+  final Set<bool> _filterPlanted = {}; // true=ปลูกแล้ว false=ยังไม่ปลูก
+  // ชื่อกลุ่มจริง (caneGroup) — แยก 2 เซตตามคำในชื่อกลุ่ม
+  final Set<String> _filterCutGroups = {};
+  final Set<String> _filterMaintainGroups = {};
+
+  Set<String?> get filterYears => _filterYears;
+  Set<String> get filterZones => _filterZones;
+  Set<String> get filterCaneTypes => _filterCaneTypes;
+  Set<bool> get filterPlanted => _filterPlanted;
+  Set<String> get filterCutGroups => _filterCutGroups;
+  Set<String> get filterMaintainGroups => _filterMaintainGroups;
+
+  /// จำนวนค่าฟิลเตอร์ที่เลือก — จุด badge บนปุ่มฟิลเตอร์
+  int get activeFilterCount =>
+      _filterYears.length +
+      _filterZones.length +
+      _filterCaneTypes.length +
+      _filterPlanted.length +
+      _filterCutGroups.length +
+      _filterMaintainGroups.length;
+
+  /// ช่องค้นหาแปลงบนแผนที่ — ว่าง = ไม่กรอง; กรองเฉพาะแปลง
+  /// จาก backend (draft ในเครื่องแสดงเสมอ)
+  String _searchQuery = '';
+  String get searchQuery => _searchQuery;
+
+  /// ค้นหาใน ชื่อแปลง/#เลขแปลง/เจ้าของ/รหัส-ชื่อชาวไร่/รูท
+  /// (ครอบชุดเดียวกับ `search` ของ backend)
+  bool _matchesSearch(Parcel p) {
+    final q = _searchQuery.toLowerCase();
+    final farmer = p.meta?['farmer'];
+    final hay =
+        '${p.name} ${p.owner ?? ''} ${p.meta?['farmerName'] ?? ''} '
+        '${p.meta?['farmerId'] ?? ''} ${p.meta?['rootNo'] ?? ''} '
+        '${farmer is Map ? '${farmer['username'] ?? ''} ${farmer['displayName'] ?? ''}' : ''}';
+    return hay.toLowerCase().contains(q);
+  }
 
   /// ปีการผลิตที่มีในแปลงทั้งหมด — เรียงปีล่าสุดก่อน
   List<String> get years {
@@ -139,9 +178,96 @@ class MapViewModel extends ChangeNotifier {
           : _freshIds.contains(p.id) ||
                 ((yearAllowlist == null ||
                         yearAllowlist!.contains(p.productionYear)) &&
-                    (_yearFilter == null || p.productionYear == _yearFilter)))
+                    _matchesFilters(p) &&
+                    (_searchQuery.isEmpty || _matchesSearch(p))))
         p,
   ];
+
+  /// match ฟิลเตอร์ที่เลือก (ปี/เขต/ประเภทอ้อย/สถานะปลูก/กลุ่มงาน)
+  /// เซตว่างของช่องไหน = ผ่านช่องนั้น — ตรรกะเดียวกับ
+  /// fetchPlots ของ backend: ปลูกแล้ว = มี caneType,
+  /// กลุ่มตัด/บำรุง = caneGroup มีคำ "ตัด"/"บำรุง"
+  bool _matchesFilters(Parcel p) {
+    final meta = p.meta ?? const {};
+    if (_filterYears.isNotEmpty && !_filterYears.contains(p.productionYear)) {
+      return false;
+    }
+    if (_filterZones.isNotEmpty &&
+        !_filterZones.contains('${meta['zone'] ?? ''}')) {
+      return false;
+    }
+    final caneType = '${meta['caneType'] ?? ''}';
+    if (_filterCaneTypes.isNotEmpty && !_filterCaneTypes.contains(caneType)) {
+      return false;
+    }
+    if (_filterPlanted.isNotEmpty &&
+        !_filterPlanted.contains(caneType.isNotEmpty)) {
+      return false;
+    }
+    if (_filterCutGroups.isNotEmpty || _filterMaintainGroups.isNotEmpty) {
+      final group = '${meta['caneGroup'] ?? ''}';
+      if (!(_filterCutGroups.contains(group) ||
+          _filterMaintainGroups.contains(group))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// ตัวเลือกเขต/ประเภทอ้อย/กลุ่มจาก meta ของแปลงที่โหลดอยู่
+  /// (เรียงตามตัวอักษร ให้เลือกได้เฉพาะค่าที่มีจริง)
+  /// กลุ่มแยก 2 list ด้วยคำในชื่อ — "ตัด"=กลุ่มตัด "บำรุง"=กลุ่มบำรุง
+  List<String> get zoneOptions => _metaOptions('zone');
+  List<String> get caneTypeOptions => _metaOptions('caneType');
+  List<String> get cutGroupOptions =>
+      _metaOptions('caneGroup', contains: 'ตัด');
+  List<String> get maintainGroupOptions =>
+      _metaOptions('caneGroup', contains: 'บำรุง');
+
+  List<String> _metaOptions(String key, {String? contains}) {
+    final out = <String>{
+      for (final p in _parcels)
+        if (!p.isDraft && '${p.meta?[key] ?? ''}'.isNotEmpty) '${p.meta![key]}',
+    };
+    final list = out.toList()..sort();
+    return contains == null
+        ? list
+        : [
+            for (final v in list)
+              if (v.contains(contains)) v,
+          ];
+  }
+
+  /// apply ครั้งเดียวจาก filter sheet — invalidate+notify รอบเดียว
+  void applyFilters({
+    required Set<String?> years,
+    required Set<String> zones,
+    required Set<String> caneTypes,
+    required Set<bool> planted,
+    required Set<String> cutGroups,
+    required Set<String> maintainGroups,
+  }) {
+    _filterYears
+      ..clear()
+      ..addAll(years);
+    _filterZones
+      ..clear()
+      ..addAll(zones);
+    _filterCaneTypes
+      ..clear()
+      ..addAll(caneTypes);
+    _filterPlanted
+      ..clear()
+      ..addAll(planted);
+    _filterCutGroups
+      ..clear()
+      ..addAll(cutGroups);
+    _filterMaintainGroups
+      ..clear()
+      ..addAll(maintainGroups);
+    _invalidateRender();
+    _safeNotify();
+  }
 
   /// GoogleMap renders every polygon handed to it — คัดเฉพาะแปลงที่
   /// ทับกับกรอบที่กำลังดู (bbox overlap) แล้วจำกัดจำนวนอีกชั้น
@@ -188,10 +314,24 @@ class MapViewModel extends ChangeNotifier {
     return [...drafts, ...rest.take(_maxRenderedParcels)];
   }
 
-  void setYearFilter(String? year) {
-    _yearFilter = year;
+  void setSearchQuery(String q) {
+    final t = q.trim();
+    if (t == _searchQuery) return;
+    _searchQuery = t;
     _invalidateRender();
     _safeNotify();
+  }
+
+  /// dropdown แนะนำใต้ช่องค้นหา — แปลงที่ match 8 รายการแรก
+  /// (ไม่รวม draft ในเครื่อง)
+  List<Parcel> get searchSuggestions {
+    if (_searchQuery.isEmpty) return const [];
+    final out = <Parcel>[];
+    for (final p in _parcels) {
+      if (!p.isDraft && _matchesSearch(p)) out.add(p);
+      if (out.length >= 8) break;
+    }
+    return out;
   }
 
   /// Viewport refetch in progress — drives the thin top progress bar.
@@ -329,9 +469,10 @@ class MapViewModel extends ChangeNotifier {
   }
 
   /// VM ของ flow ข้อมูลแปลง (info sheet → รายละเอียด → เมนูแก้ไข) —
-  /// สร้างต่อแปลงที่แตะ แชร์ service/token เดียวกัน
-  ParcelDetailViewModel detailVmFor(Parcel p) =>
-      ParcelDetailViewModel(parcel: p, service: _service);
+  /// สร้างต่อแปลงที่แตะ แชร์ service/token เดียวกัน; รับ context
+  /// ให้ VM ปลายทางอ่าน session user เอง (เติม recordedBy ตอนบันทึก)
+  ParcelDetailViewModel detailVmFor(BuildContext context, Parcel p) =>
+      ParcelDetailViewModel.forContext(context, parcel: p, service: _service);
 
   /// VM ของหน้าดาวน์โหลด — แชร์ service เดียวกัน ไม่สร้างใหม่
   PlotDownloadViewModel createDownloadVm() => PlotDownloadViewModel(_service);
@@ -350,7 +491,12 @@ class MapViewModel extends ChangeNotifier {
         if (p.isDraft || years.contains(p.productionYear)) p,
     ];
     _coverage = page.truncated ? null : _parseBox(ParcelService.fullBox);
-    _yearFilter = null;
+    _filterYears.clear();
+    _filterZones.clear();
+    _filterCaneTypes.clear();
+    _filterPlanted.clear();
+    _filterCutGroups.clear();
+    _filterMaintainGroups.clear();
     _loading = false;
     _error = null;
     _invalidateRender();

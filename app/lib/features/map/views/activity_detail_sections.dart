@@ -14,6 +14,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade400, width: 1.5),
       ),
       child: Column(
         children: [
@@ -35,6 +36,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -90,6 +92,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -170,6 +173,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -205,6 +209,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -259,6 +264,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -313,12 +319,11 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             Text(
-              _rounds
-                  .fold<double>(
-                    0,
-                    (s, r) => s + (double.tryParse(r.rate ?? '') ?? 0),
-                  )
-                  .toStringAsFixed(1),
+              // รวมเฉพาะรอบใส่ปุ๋ย — base=null ให้ rateOf นับเป็น 0
+              totalFertilizerRate(
+                null,
+                _rounds.map((r) => r.rate),
+              ).toStringAsFixed(1),
               style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.bold,
@@ -338,6 +343,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -370,6 +376,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
             selectedIndex: _organicType == null
                 ? null
                 : opts.organicFertilizerTypes.indexOf(_organicType!),
+            searchHint: 'ค้นหาชนิดปุ๋ย',
           );
           if (idx != null) {
             _set(() => _organicType = opts.organicFertilizerTypes[idx]);
@@ -396,6 +403,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,6 +430,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,6 +466,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -481,6 +491,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -520,6 +531,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
             selectedIndex: _diseaseType == null
                 ? null
                 : opts.diseaseTypes.indexOf(_diseaseType!),
+            searchHint: 'ค้นหาชนิดโรค',
           );
           if (idx != null) {
             _set(() => _diseaseType = opts.diseaseTypes[idx]);
@@ -545,6 +557,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -583,6 +596,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
             selectedIndex: _pestType == null
                 ? null
                 : opts.pestTypes.indexOf(_pestType!),
+            searchHint: 'ค้นหาชนิดแมลง',
           );
           if (idx != null) {
             _set(() => _pestType = opts.pestTypes[idx]);
@@ -609,6 +623,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -632,6 +647,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -650,6 +666,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -749,6 +766,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -780,6 +798,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
             selectedIndex: _lossReason == null
                 ? null
                 : opts.lossOptions.indexOf(_lossReason!),
+            searchHint: 'ค้นหาสาเหตุ',
           );
           if (idx != null) {
             _set(() => _lossReason = opts.lossOptions[idx]);
@@ -800,6 +819,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -842,6 +862,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
               selectedIndex: _cutLossReason == null
                   ? null
                   : opts.lossOptions.indexOf(_cutLossReason!),
+              searchHint: 'ค้นหาสาเหตุ',
             );
             if (idx != null) {
               _set(() => _cutLossReason = opts.lossOptions[idx]);
@@ -864,6 +885,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -915,6 +937,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -962,6 +985,7 @@ extension _ActivityDetailSections on _ActivityDetailViewState {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.grey.shade400, width: 1.5),
     ),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,

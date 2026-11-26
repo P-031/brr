@@ -195,6 +195,12 @@ class PlotActivitiesViewModel extends ChangeNotifier {
     );
   }
 
+  /// กดค้นบนคีย์บอร์ด/ไอคอนแว่นขยาย — ยิงทันทีไม่รอ debounce
+  void submitSearch() {
+    _searchDebounce?.cancel();
+    unawaited(refresh());
+  }
+
   // ---------- set ฟิลเตอร์แล้วรีเฟรช ----------
   /// apply ครั้งเดียวจาก filter sheet — refresh รอบเดียวไม่ยิงซ้ำ
   void applyFilters({

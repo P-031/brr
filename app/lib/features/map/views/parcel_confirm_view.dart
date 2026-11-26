@@ -3,14 +3,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/widgets/discard_guard.dart';
 import 'package:brr/core/widgets/image_source_sheet.dart';
 import 'package:brr/core/widgets/option_popup.dart';
-import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/models/parcel.dart';
 import 'package:brr/features/map/viewmodels/parcel_detail_viewmodel.dart';
 import 'package:brr/core/utils/json_safe.dart';
@@ -174,13 +172,11 @@ class _ParcelConfirmViewState extends State<ParcelConfirmView> {
     }
     setState(() => _saving = true);
     try {
-      final user = context.read<AuthViewModel>().user;
       await widget.vm.saveParcelConfirm(
         targetYear: _targetYear,
         status: _status,
         note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
         photoPaths: _photos,
-        recordedBy: user?.displayName,
       );
       if (mounted) {
         Navigator.of(context).pop('บันทึกยืนยันแปลงข้ามปีแล้ว');

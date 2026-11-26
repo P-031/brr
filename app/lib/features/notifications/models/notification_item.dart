@@ -1,6 +1,6 @@
-/// รายการแจ้งเตือนหนึ่งแถว — shape เตรียมไว้ตรงกับ
-/// GET /notifications เมื่อ backend พร้อม (ตอนนี้ยังไม่มี
-/// endpoint → list ว่าง)
+/// รายการแจ้งเตือนหนึ่งแถว — parse จาก `GET /notifications`
+/// item `{id,title,body,createdAt ISO,read}`; `time` คือ
+/// createdAt ที่ฟอร์แมตเป็นไทยแล้วสำหรับแสดง
 class NotificationItem {
   const NotificationItem({
     required this.title,

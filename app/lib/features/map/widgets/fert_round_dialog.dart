@@ -81,6 +81,7 @@ class _FertRoundDialogState extends State<FertRoundDialog> {
       title: 'เลือกสูตรปุ๋ย',
       labels: labels,
       selectedIndex: _formula == null ? null : labels.indexOf(_formula!),
+      searchHint: 'ค้นหาสูตรปุ๋ย',
     );
     if (idx == null || !mounted) return;
     setState(() {

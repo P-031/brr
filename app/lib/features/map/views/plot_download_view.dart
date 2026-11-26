@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
 import 'package:brr/core/widgets/brr_app_bar.dart';
+import 'package:brr/core/widgets/error_retry_view.dart';
 import 'package:brr/features/map/models/parcel.dart' show ParcelPage;
 import 'package:brr/features/map/viewmodels/plot_download_viewmodel.dart';
 import 'package:brr/features/map/widgets/map_skeleton.dart';
@@ -77,13 +78,12 @@ class _DownloadBody extends StatelessWidget {
           : SafeArea(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: FilledButton.icon(
+                child: FilledButton(
                   onPressed: () => _run(context, vm, vm.download),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(52),
                   ),
-                  icon: const Icon(Iconsax.import),
-                  label: Text(
+                  child: Text(
                     'ดาวน์โหลด ${vm.selectedCount} แปลง',
                     style: const TextStyle(
                       fontSize: 16,
@@ -156,27 +156,19 @@ class _DownloadBody extends StatelessWidget {
     String title,
     VoidCallback retry, {
     VoidCallback? cacheFallback,
-  }) => Center(
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Iconsax.warning_2, color: Colors.red, size: 40),
-        const SizedBox(height: 8),
-        Text(title),
-        const SizedBox(height: 8),
-        TextButton.icon(
-          onPressed: retry,
-          icon: const Icon(Iconsax.refresh, size: 18),
-          label: const Text('ลองใหม่'),
-        ),
-        if (cacheFallback != null)
-          TextButton.icon(
+  }) => ErrorRetryView(
+    title,
+    onRetry: retry,
+    fallback: cacheFallback == null
+        ? null
+        : TextButton.icon(
             onPressed: cacheFallback,
-            icon: const Icon(Iconsax.archive, size: 18),
-            label: const Text('ใช้ข้อมูลที่บันทึกไว้'),
+            icon: const Icon(Iconsax.archive, size: 26),
+            label: const Text(
+              'ใช้ข้อมูลที่บันทึกไว้',
+              style: TextStyle(fontSize: 17),
+            ),
           ),
-      ],
-    ),
   );
 
   Widget _content(PlotDownloadViewModel vm) {
@@ -197,26 +189,88 @@ class _DownloadBody extends StatelessWidget {
           style: const TextStyle(color: Colors.black54, fontSize: 14),
         ),
         const SizedBox(height: 12),
-        CheckboxListTile(
-          value: vm.selected.length == years.length,
-          tristate: true,
-          onChanged: (on) => vm.toggleAll(on ?? false),
-          title: const Text(
-            'เลือกทั้งหมด',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          secondary: const Icon(Iconsax.tick_square),
+        // การ์ด "เลือกทั้งหมด" — ติ๊กเมื่อครบทุกปี
+        _yearCard(
+          icon: Iconsax.tick_square,
+          title: 'เลือกทั้งหมด',
+          subtitle: null,
+          selected: vm.selected.length == years.length,
+          onTap: () => vm.toggleAll(vm.selected.length != years.length),
         ),
-        const Divider(),
-        for (final e in years)
-          CheckboxListTile(
-            value: vm.selected.contains(e.key),
-            onChanged: (on) => vm.toggleYear(e.key, on ?? false),
-            title: Text(e.key ?? _noYear),
-            subtitle: Text('${e.value} แปลง'),
-            secondary: const Icon(Icons.calendar_today),
+        const SizedBox(height: 10),
+        for (final e in years) ...[
+          _yearCard(
+            icon: Icons.calendar_today,
+            title: e.key ?? _noYear,
+            subtitle: '${e.value} แปลง',
+            selected: vm.selected.contains(e.key),
+            onTap: () => vm.toggleYear(e.key, !vm.selected.contains(e.key)),
           ),
+          const SizedBox(height: 10),
+        ],
       ],
     );
   }
+
+  /// การ์ดแถวเลือกปี — ติ๊กแล้วขอบเขียว + พื้นเขียวจาง + ติ๊กขวา
+  /// (สไตล์เดียวกับรายการเลือกใน showOptionPopup)
+  Widget _yearCard({
+    required IconData icon,
+    required String title,
+    required String? subtitle,
+    required bool selected,
+    required VoidCallback onTap,
+  }) => InkWell(
+    borderRadius: BorderRadius.circular(14),
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: selected ? AppColors.green.withValues(alpha: 0.08) : null,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: selected ? AppColors.green : Colors.black12,
+          width: selected ? 1.8 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 24,
+            color: selected ? AppColors.green : Colors.black45,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected ? AppColors.green : Colors.black87,
+                  ),
+                ),
+                if (subtitle != null)
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: selected ? AppColors.green : Colors.black54,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Icon(
+            selected ? Iconsax.tick_circle : Icons.circle_outlined,
+            size: 26,
+            color: selected ? AppColors.green : Colors.black26,
+          ),
+        ],
+      ),
+    ),
+  );
 }

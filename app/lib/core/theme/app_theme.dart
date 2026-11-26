@@ -25,6 +25,10 @@ class AppTheme {
     return ThemeData(
       colorScheme: scheme,
       useMaterial3: true,
+      // ฟอนต์ไทย bundle ในแอป (assets/fonts) — อ่านง่ายกว่าระบบ
+      // และทำงานออฟไลน์ได้ ไม่ต้องโหลดสด; เปลี่ยนฟอนต์=เปลี่ยน
+      // ชื่อ family ตรงนี้จุดเดียว
+      fontFamily: 'Prompt',
       scaffoldBackgroundColor: Colors.white,
       appBarTheme: const AppBarTheme(
         backgroundColor: AppColors.green,

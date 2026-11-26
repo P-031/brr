@@ -62,7 +62,10 @@ class ParcelService {
   /// Bounding box covering Thailand — the backend clips to the
   /// caller's own parcels anyway.
   /// กรอบดาวน์โหลดเต็ม (ทั้งประเทศ) — fetch ครบแล้วครอบคลุมทุก viewport
-  static const fullBox = 'west=97&south=5&east=106&north=21&limit=50000';
+  // backend cap limit ที่ 2000/กรอบ (เคยรับ 50000 — เกินตอนนี้ 400);
+  // ถ้าแปลงรวมเกิน cap response ตั้ง truncated → coverage ไม่ถูก
+  // mark แล้ว viewport fetch เติมกรอบย่อยเองตอนเลื่อนแผนที่
+  static const fullBox = 'west=97&south=5&east=106&north=21&limit=2000';
 
   /// suffix กัน id ร่างชนเมื่อบันทึก 2 ครั้งใน microsecond เดียวกัน
   static int _draftSeq = 0;
@@ -221,9 +224,59 @@ class ParcelService {
   Future<int> activityDraftCount(String plotId) =>
       _local.activityDraftCount(plotId);
 
-  /// กิจกรรมที่บันทึกไว้ในเครื่องของแปลง — ใหม่สุดขึ้นก่อน
-  Future<List<Map<String, dynamic>>> activitiesFor(String plotId) =>
-      _local.activitiesFor(plotId);
+  /// กิจกรรมของแปลง = ในเครื่อง merge กับที่ส่งขึ้นระบบแล้ว
+  /// (`GET /plots/:id/activities`) — จับคู่ด้วย serverId:
+  /// ร่าง/คิว/ส่งไม่สำเร็จยังเป็น local; รายการที่ส่งแล้วอัปเดต
+  /// field จาก server (detail ที่ backend เก็บจริง/version) แต่
+  /// เก็บ id+photos ของ local ไว้เพราะปุ่มแก้/ลบและ thumbnail
+  /// อ้างค่าเดิม; รายการที่เครื่อง/อุปกรณ์อื่นส่งขึ้นมาก็โผล่ใน
+  /// แท็บ "ส่งสำเร็จแล้ว" — โหลดพลาดคืน local อย่างเดียว (ออฟไลน์)
+  Future<List<Map<String, dynamic>>> activitiesFor(String plotId) async {
+    final local = await _local.activitiesFor(plotId);
+    if (!ApiConfig.enabled || _api == null) return local;
+    final http.Response res;
+    try {
+      res = await _api.get(ApiEndpoints.plotActivities(plotId));
+    } catch (_) {
+      return local;
+    }
+    if (res.statusCode != 200) return local;
+    final decoded = jsonDecode(res.body);
+    final remote = decoded is Map && decoded['items'] is List
+        ? [
+            for (final x in decoded['items'] as List)
+              if (x is Map) Map<String, dynamic>.from(x),
+          ]
+        : const <Map<String, dynamic>>[];
+    final byServerId = {for (final r in remote) '${r['id']}': r};
+    final seen = <String>{};
+    final merged = <Map<String, dynamic>>[
+      for (final l in local)
+        () {
+          final serverId = '${l['serverId'] ?? ''}';
+          final r = byServerId[serverId];
+          if (r == null) return l;
+          seen.add(serverId);
+          return <String, dynamic>{
+            ...l,
+            ...r,
+            'id': l['id'],
+            'serverId': serverId,
+            'submitStatus': 'sent',
+            if (l['photos'] is List) 'photos': l['photos'],
+          };
+        }(),
+      for (final r in remote)
+        if (!seen.contains('${r['id']}'))
+          <String, dynamic>{
+            ...r,
+            'serverId': '${r['id']}',
+            'submitStatus': 'sent',
+          },
+    ];
+    merged.sort((a, b) => '${b['createdAt']}'.compareTo('${a['createdAt']}'));
+    return merged;
+  }
 
   /// จำนวนกิจกรรมใหม่ที่ยังไม่เคยเปิดดู — ใช้เป็น badge บนปุ่มเมนู
   Future<int> unseenActivityCount(String plotId) =>
@@ -239,8 +292,25 @@ class ParcelService {
   static Future<void> clearActivitySeen() =>
       ParcelLocalStore.clearActivitySeen();
 
-  /// ลบกิจกรรมในเครื่อง + ลบรูปที่ persist ไว้ตามรายการด้วย
-  Future<void> removeActivityDraft(String id) => _local.removeActivityDraft(id);
+  /// ลบกิจกรรมในเครื่อง + ลบรูปที่ persist ไว้ตามรายการด้วย;
+  /// รายการที่เคยขึ้น server แล้ว (ส่งสำเร็จ/มี version) คิว
+  /// DELETE /activities/:id ตามหลัง — ลบแต่ในเครื่องฝั่ง
+  /// server จะกลายเป็น record เรือนแม่
+  Future<void> removeActivityDraft(String id) async {
+    final act = await _local.activityById(id);
+    await _local.removeActivityDraft(id);
+    if (act == null) return;
+    final serverId = '${act['serverId'] ?? ''}';
+    final onServer = act['submitStatus'] == 'sent' || act['version'] is int;
+    if (!onServer || serverId.isEmpty) return;
+    final v = toIntOrNull(act['version']);
+    await _queuePendingEdit('${act['plotId'] ?? ''}', {
+      'activityId': serverId,
+      'version': ?v,
+    }, kind: 'activityDelete');
+    // ไม่รอผล — flush จัดการ retry/ออฟไลน์เองตามกลไกคิวเดิม
+    unawaited(flushPendingEdits());
+  }
 
   /// นำส่งกิจกรรมที่บันทึกในเครื่องขึ้นระบบ —
   /// `POST /plots/:id/activities` body = `{id: uuid(serverId),`
@@ -283,13 +353,25 @@ class ParcelService {
           'submitStatus',
           'plotId',
           'photos',
+          // version ของ server — ใช้ตัดสิน POST/PATCH เท่านั้น
+          // ห้ามรวมเข้า body เดี๋ยวหลุดไปเป็น field ใน detail
+          'version',
         }.contains(e.key))
           e.key: e.value,
       'photoCount': livePhotos.length,
     };
     final http.Response res;
     try {
-      res = await _api.postJson(ApiEndpoints.plotActivities(plotId), body);
+      // เคยส่งแล้ว (version merge มาจาก server) → PATCH ทับ
+      // ของเดิม; รายการใหม่ POST สร้าง record เหมือนเดิม
+      res = toIntOrNull(activity['version']) != null
+          ? await _patchActivity(
+              plotId,
+              serverId,
+              body,
+              toIntOrNull(activity['version'])!,
+            )
+          : await _api.postJson(ApiEndpoints.plotActivities(plotId), body);
     } on TransportException {
       // เน็ตหลุด/timeout — คิวไว้ส่งอัตโนมัติตอนเน็ตกลับ
       // (flushQueuedActivities) ไม่นับเป็น "ส่งไม่สำเร็จ"
@@ -306,9 +388,20 @@ class ParcelService {
     }
     if (res.statusCode == 200 || res.statusCode == 201) {
       // server รับแล้ว = สำเร็จ — เขียนสถานะลงเครื่องพลาด (ดิสก์เต็ม)
-      // ห้ามรายงาน fail ไม่งั้นผู้ใช้กดส่งซ้ำ → กิจกรรมซ้ำในระบบ
+      // ห้ามรายงาน fail ไม่งั้นผู้ใช้กดส่งซ้ำ → กิจกรรมซ้ำในระบบ;
+      // เก็บ version ที่ server คืนด้วย — เป็น guard ของ PATCH/
+      // DELETE รอบถัดไป + ตัวบอกว่ารายการอยู่บน server แล้ว
+      int? serverVersion;
       try {
-        await _local.setActivitySubmitStatus(actId, 'sent');
+        final j = jsonDecode(res.body);
+        if (j is Map) serverVersion = toIntOrNull(j['version']);
+      } catch (_) {}
+      try {
+        await _local.setActivitySubmitStatus(
+          actId,
+          'sent',
+          version: serverVersion,
+        );
       } catch (_) {}
       return;
     }
@@ -316,6 +409,47 @@ class ParcelService {
       await _local.setActivitySubmitStatus(actId, 'failed');
     } catch (_) {}
     throw Exception('นำส่งไม่สำเร็จ: ${_errorDetail(res)}');
+  }
+
+  /// กิจกรรมที่เคยส่งแล้วถูกแก้ — `PATCH /activities/:id` ด้วย
+  /// version (POST id เดิม backend คืนของเก่าไม่อัปเดต);
+  /// 404 = record บน server ถูกลบไปแล้ว → สร้างใหม่ด้วย POST;
+  /// 409 VERSION_CONFLICT → ดึง version สดจาก `current` ลองครั้งเดียว
+  Future<http.Response> _patchActivity(
+    String plotId,
+    String activityId,
+    Map<String, dynamic> body,
+    int version,
+  ) async {
+    // caller ยิงเฉพาะตอนออนไลน์อยู่แล้ว — กัน analyzer เฉยๆ
+    final api = _api;
+    if (api == null) throw StateError('ออฟไลน์อยู่');
+    final patchBody = <String, Object?>{
+      ...(Map<String, dynamic>.of(body)..remove('id')),
+      'version': version,
+    };
+    var res = await api.patchJson(ApiEndpoints.activity(activityId), patchBody);
+    if (res.statusCode == 404) {
+      return api.postJson(ApiEndpoints.plotActivities(plotId), body);
+    }
+    if (res.statusCode == 409) {
+      final j = jsonDecode(res.body);
+      final cur = j is Map ? j['current'] : null;
+      final fresh = cur is Map ? toIntOrNull(cur['version']) : null;
+      if (fresh != null) {
+        patchBody['version'] = fresh;
+        res = await api.patchJson(ApiEndpoints.activity(activityId), patchBody);
+      }
+    }
+    return res;
+  }
+
+  /// path ของ DELETE /activities/:id — version ที่รู้ล่าสุด
+  /// แนบเป็น query guard (backend: `?version=` ใส่ได้ไม่บังคับ)
+  String _activityDeletePath(Map<String, Object?> body) {
+    final v = toIntOrNull(body['version']);
+    final base = ApiEndpoints.activity('${body['activityId']}');
+    return v == null ? base : '$base?version=$v';
   }
 
   /// ส่งกิจกรรมที่คิวไว้ตอนออฟไลน์ขึ้นระบบอัตโนมัติ — เรียกเมื่อ
@@ -345,46 +479,97 @@ class ParcelService {
       '${r['plotId']}': '${r['type'] ?? ''}',
   };
 
-  /// บันทึก/อัปเดตจุดเสี่ยงของแปลง — type จาก backend riskLevels,
-  /// severity 1-5, name/note พิมพ์เอง
+  /// บันทึก/อัปเดตจุดเสี่ยงของแปลง — `PUT /plots/:id/risk-point`
+  /// (upsert ต่อแปลง; type ต้องตรงตัวเลือก riskLevels ของ backend)
+  /// เขียน local เสมอ — แผนที่ทาสี + prefill sheet อ่านจาก store;
+  /// เน็ตหลุดเข้าคิว pending edits ชนิด 'riskPoint' ส่งใหม่เอง
+  /// ตอนออนไลน์ (caller ถือว่าสำเร็จเหมือน PATCH ออฟไลน์)
   Future<void> saveRiskPoint({
     required String plotId,
     required String type,
     String? name,
     int? severity,
     String? note,
-  }) => _local.saveRiskPoint(
-    plotId: plotId,
-    type: type,
-    name: name,
-    severity: severity,
-    note: note,
-  );
+  }) async {
+    if (ApiConfig.enabled && _api != null) {
+      final body = <String, Object?>{
+        'type': type,
+        'name': ?name,
+        'note': ?note,
+        'severity': ?severity,
+      };
+      try {
+        final res = await _api.putJson(
+          '${ApiEndpoints.plot(plotId)}/risk-point',
+          body,
+        );
+        if (res.statusCode != 200) {
+          throw Exception('บันทึกจุดเสี่ยงไม่สำเร็จ: ${_errorDetail(res)}');
+        }
+      } on TransportException {
+        // เน็ตหลุด — คิว PUT ไว้ส่งตอนออนไลน์แล้วตกไปเขียน
+        // เครื่องตามปกติ (local ยังเป็นตัวขับสีแผนที่/prefill)
+        await _queuePendingEdit(plotId, body, kind: 'riskPoint');
+      }
+    }
+    await _local.saveRiskPoint(
+      plotId: plotId,
+      type: type,
+      name: name,
+      severity: severity,
+      note: note,
+    );
+  }
 
   /// โครงการที่เลือกไว้ของแปลง — {items: [ชื่อ], passed: bool}
   Future<Map<String, dynamic>?> plotProjectFor(String plotId) =>
       _local.plotProjectFor(plotId);
 
-  /// บันทึกรายการโครงการที่ติ๊ก — passed = ครบเกณฑ์บังคับแล้ว
+  /// บันทึกรายการโครงการที่ติ๊ก — `PUT /plots/:id/project`
+  /// (upsert ต่อแปลง) passed = ครบเกณฑ์บังคับแล้ว; เขียน local
+  /// เสมอ + เน็ตหลุดเข้าคิว kind 'project' ส่งใหม่ตอนออนไลน์
   /// choices = ตัวเลือกย่อยต่อเกณฑ์ {ชื่อเกณฑ์: ชนิด} (เช่น ชนิดปุ๋ยอินทรีย์)
   Future<void> savePlotProject({
     required String plotId,
     required List<String> items,
     Map<String, String> choices = const {},
     required bool passed,
-  }) => _local.savePlotProject(
-    plotId: plotId,
-    items: items,
-    choices: choices,
-    passed: passed,
-  );
+  }) async {
+    if (ApiConfig.enabled && _api != null) {
+      final body = <String, Object?>{
+        'items': items,
+        'passed': passed,
+        if (choices.isNotEmpty) 'choices': choices,
+      };
+      try {
+        final res = await _api.putJson(
+          '${ApiEndpoints.plot(plotId)}/project',
+          body,
+        );
+        if (res.statusCode != 200) {
+          throw Exception('บันทึกโครงการไม่สำเร็จ: ${_errorDetail(res)}');
+        }
+      } on TransportException {
+        await _queuePendingEdit(plotId, body, kind: 'project');
+      }
+    }
+    await _local.savePlotProject(
+      plotId: plotId,
+      items: items,
+      choices: choices,
+      passed: passed,
+    );
+  }
 
   /// การยืนยันข้ามปีล่าสุดของแปลง (เก็บทับรายการเดิมต่อ plotId)
   Future<Map<String, dynamic>?> parcelConfirmFor(String plotId) =>
       _local.parcelConfirmFor(plotId);
 
-  /// บันทึกยืนยันแปลงข้ามปี — รูป copy เข้า documents เหมือน
-  /// รูปกิจกรรม/รูปแปลง กัน temp cache ถูกระบบล้าง
+  /// บันทึกยืนยันแปลงข้ามปี — `PUT /plots/:id/confirm` (upsert
+  /// ต่อแปลง; backend บังคับ targetYear+status เลยยิงเฉพาะตอนมี
+  /// ครบ — ร่างที่ยังเลือกไม่ครบอยู่แค่ในเครื่อง) เน็ตหลุดเข้า
+  /// คิว kind 'confirm'; รูป copy เข้า documents เหมือนรูป
+  /// กิจกรรม/รูปแปลง กัน temp cache ถูกระบบล้าง
   Future<void> saveParcelConfirm({
     required String plotId,
     String? targetYear,
@@ -392,22 +577,51 @@ class ParcelService {
     String? note,
     List<String> photoPaths = const [],
     String? recordedBy,
-  }) => _local.saveParcelConfirm(
-    plotId: plotId,
-    targetYear: targetYear,
-    status: status,
-    note: note,
-    photoPaths: photoPaths,
-    recordedBy: recordedBy,
-  );
+  }) async {
+    if (ApiConfig.enabled &&
+        _api != null &&
+        targetYear != null &&
+        status != null) {
+      final body = <String, Object?>{
+        'targetYear': targetYear,
+        'status': status,
+        'note': ?note,
+        'photoCount': photoPaths.length,
+        'recordedBy': ?recordedBy,
+      };
+      try {
+        final res = await _api.putJson(
+          '${ApiEndpoints.plot(plotId)}/confirm',
+          body,
+        );
+        if (res.statusCode != 200) {
+          throw Exception('บันทึกยืนยันแปลงไม่สำเร็จ: ${_errorDetail(res)}');
+        }
+      } on TransportException {
+        await _queuePendingEdit(plotId, body, kind: 'confirm');
+      }
+    }
+    await _local.saveParcelConfirm(
+      plotId: plotId,
+      targetYear: targetYear,
+      status: status,
+      note: note,
+      photoPaths: photoPaths,
+      recordedBy: recordedBy,
+    );
+  }
 
   /// สถานะตัดล่าสุดของแปลง — {status, startDate, endDate,
   /// estimateTons, cutCaneTons, updatedAt}
   Future<Map<String, dynamic>?> cutStatusFor(String plotId) =>
       _local.cutStatusFor(plotId);
 
-  /// บันทึก/อัปเดตสถานะแปลงตัด — status = ชื่อตัวเลือกที่แสดง,
-  /// statusCode = รหัสสถานะจาก backend (กัน label เปลี่ยน)
+  /// บันทึก/อัปเดตสถานะแปลงตัด — `PUT /plots/:id/cut` (upsert
+  /// ต่อแปลง + backend อัปเดต plot.cutStatus ให้เมื่อ status
+  /// ตรงตัวเลือก) status = ชื่อตัวเลือกที่แสดง, statusCode =
+  /// รหัสสถานะจาก backend (กัน label เปลี่ยน); เขียน local เสมอ
+  /// + เน็ตหลุดเข้าคิว kind 'cut' — status ว่าง (ยังไม่เลือก)
+  /// backend ปฏิเสธ min(1) เลยเก็บเฉพาะเครื่อง
   Future<void> saveCutStatus({
     required String plotId,
     required String status,
@@ -416,15 +630,38 @@ class ParcelService {
     String? endDate,
     String? estimateTons,
     String? cutCaneTons,
-  }) => _local.saveCutStatus(
-    plotId: plotId,
-    status: status,
-    statusCode: statusCode,
-    startDate: startDate,
-    endDate: endDate,
-    estimateTons: estimateTons,
-    cutCaneTons: cutCaneTons,
-  );
+  }) async {
+    if (ApiConfig.enabled && _api != null && status.isNotEmpty) {
+      final body = <String, Object?>{
+        'status': status,
+        'statusCode': ?statusCode,
+        'startDate': ?startDate,
+        'endDate': ?endDate,
+        'estimateTons': ?estimateTons,
+        'cutCaneTons': ?cutCaneTons,
+      };
+      try {
+        final res = await _api.putJson(
+          '${ApiEndpoints.plot(plotId)}/cut',
+          body,
+        );
+        if (res.statusCode != 200) {
+          throw Exception('บันทึกสถานะแปลงตัดไม่สำเร็จ: ${_errorDetail(res)}');
+        }
+      } on TransportException {
+        await _queuePendingEdit(plotId, body, kind: 'cut');
+      }
+    }
+    await _local.saveCutStatus(
+      plotId: plotId,
+      status: status,
+      statusCode: statusCode,
+      startDate: startDate,
+      endDate: endDate,
+      estimateTons: estimateTons,
+      cutCaneTons: cutCaneTons,
+    );
+  }
 
   /// จำนวน PATCH ที่ค้างในคิวรอส่ง — ใช้แสดง badge/สถานะ
   Future<int> pendingEditCount() async =>
@@ -783,7 +1020,7 @@ class ParcelService {
       'targetYield': ?double.tryParse(targetYield ?? ''),
       'note': ?note,
     };
-    final http.Response res;
+    http.Response res;
     try {
       // _send throw เฉพาะข้อผิดพลาดชั้น transport (timeout/socket)
       // — error จาก server กลับมาเป็น Response ปกติ ไม่เข้า catch
@@ -796,6 +1033,27 @@ class ParcelService {
     if (res.statusCode == 200) {
       return jsonDecode(res.body) as Map<String, dynamic>;
     }
+    // version ที่ส่ง stale (มีคนแก้แปลงระหว่างเปิดหน้า) — server
+    // ตอบ 409 พร้อม detail ปัจจุบันใน `current` ลองอีกครั้งด้วย
+    // version สด เหมือนที่คิวออฟไลน์ทำใน _flushPending
+    if (res.statusCode == 409) {
+      try {
+        final j = jsonDecode(res.body);
+        final fresh = j is Map ? j['current'] : null;
+        final v = fresh is Map ? fresh['version'] : null;
+        if (j is Map && j['code'] == 'VERSION_CONFLICT' && v is int) {
+          body['version'] = v;
+          res = await _api.patchJson(ApiEndpoints.plot(id), body);
+          if (res.statusCode == 200) {
+            return jsonDecode(res.body) as Map<String, dynamic>;
+          }
+        }
+      } catch (_) {
+        // เน็ตหลุดระหว่าง retry — เข้าคิวเหมือน transport error
+        await _queuePendingEdit(id, body);
+        throw const PendingEditQueued();
+      }
+    }
     throw Exception('บันทึกไม่สำเร็จ: ${_errorDetail(res)}');
   }
 
@@ -804,26 +1062,51 @@ class ParcelService {
 
   // ---- คิว PATCH ที่ค้างเพราะออฟไลน์ — retry เมื่อเน็ตกลับ ----
 
-  /// เก็บ PATCH ไว้ส่งภายหลัง — แปลงเดียวกัน merge เป็น entry เดียว
-  /// โดยรวมฟิลด์ของทุกรอบที่คิวไว้ (ค่าใหม่ชนะต่อฟิลด์) — ถ้าทับ
-  /// ทั้ง body การแก้คนละฟิลด์ 2 รอบจะเหลือแค่รอบสุดท้าย
-  Future<void> _queuePendingEdit(String id, Map<String, Object?> body) =>
-      _local.updatePendingEdits((items) async {
-        final prev = items
-            .where((e) => e['plotId'] == id)
-            .map((e) => e['body'])
-            .whereType<Map>()
-            .fold<Map<String, Object?>>(
-              {},
-              (acc, b) => acc..addAll(Map<String, Object?>.from(b)),
-            );
-        items.removeWhere((e) => e['plotId'] == id);
-        items.add({
-          'plotId': id,
-          'body': {...prev, ...body},
-          'queuedAt': DateTime.now().toIso8601String(),
-        });
-      });
+  /// เก็บงานค้างส่งไว้ภายหลัง — แปลงเดียวกัน+kind เดียวกัน merge
+  /// เป็น entry เดียวโดยรวมฟิลด์ของทุกรอบที่คิวไว้ (ค่าใหม่ชนะต่อ
+  /// ฟิลด์) — ถ้าทับทั้ง body การแก้คนละฟิลด์ 2 รอบจะเหลือแค่รอบ
+  /// สุดท้าย; kind 'patch' = PATCH /plots/:id, ส่วน 'riskPoint' /
+  /// 'cut' / 'confirm' / 'project' = PUT ไป path ย่อยของแปลง
+  /// (ค่าเก่าที่ไม่มี kind = patch)
+  Future<void> _queuePendingEdit(
+    String id,
+    Map<String, Object?> body, {
+    String kind = 'patch',
+  }) => _local.updatePendingEdits((items) async {
+    bool same(Map<String, dynamic> e) {
+      if (e['plotId'] != id || '${e['kind'] ?? 'patch'}' != kind) {
+        return false;
+      }
+      // คิวลบกิจกรรม — คนละ activityId = คนละรายการ ห้ามรวม
+      // (ลบ 2 กิจกรรมของแปลงเดียวแล้ว merge จะเหลือแค่ตัวท้าย)
+      if (kind == 'activityDelete') {
+        final eb = e['body'];
+        return eb is Map && '${eb['activityId']}' == '${body['activityId']}';
+      }
+      return true;
+    }
+
+    // merge เฉพาะ patch (partial update) — kind ที่ส่ง body เต็ม
+    // ชุดแบบ upsert (riskPoint) ต้องทับทั้งก้อน ไม่งั้นฟิลด์ที่
+    // ผู้ใช้ลบออกในรอบใหม่จะติดกลับมาจากค่าที่คิวไว้ก่อนหน้า
+    final prev = kind == 'patch'
+        ? items
+              .where(same)
+              .map((e) => e['body'])
+              .whereType<Map>()
+              .fold<Map<String, Object?>>(
+                {},
+                (acc, b) => acc..addAll(Map<String, Object?>.from(b)),
+              )
+        : const <String, Object?>{};
+    items.removeWhere(same);
+    items.add({
+      'plotId': id,
+      'kind': kind,
+      'body': {...prev, ...body},
+      'queuedAt': DateTime.now().toIso8601String(),
+    });
+  });
 
   /// ลองส่งคิวค้างทั้งหมดตามลำดับ — หยุดเมื่อเจอ transport error
   /// (ยังออฟไลน์อยู่ คิวที่เหลือค้างไว้รอรอบหน้า); 4xx/5xx จาก
@@ -876,19 +1159,62 @@ class ParcelService {
         continue;
       }
       final plotId = '${e['plotId']}';
+      // kind บอกว่าส่งไป endpoint ไหน — entry เก่า (ก่อนมี field
+      // นี้) ถือเป็น patch เสมอ
+      final kind = '${e['kind'] ?? 'patch'}';
       final body = Map<String, Object?>.from(rawBody);
       http.Response res;
       try {
-        res = await api.patchJson(ApiEndpoints.plot(plotId), body);
+        // kind → endpoint: 'patch' = PATCH /plots/:id ส่วน kind
+        // upsert ทั้งหลายใช้ PUT ไป path ย่อยของแปลงเดียวกัน
+        res = switch (kind) {
+          'riskPoint' => await api.putJson(
+            '${ApiEndpoints.plot(plotId)}/risk-point',
+            body,
+          ),
+          'cut' => await api.putJson('${ApiEndpoints.plot(plotId)}/cut', body),
+          'confirm' => await api.putJson(
+            '${ApiEndpoints.plot(plotId)}/confirm',
+            body,
+          ),
+          'project' => await api.putJson(
+            '${ApiEndpoints.plot(plotId)}/project',
+            body,
+          ),
+          'activityDelete' => await api.delJson(_activityDeletePath(body)),
+          _ => await api.patchJson(ApiEndpoints.plot(plotId), body),
+        };
       } catch (_) {
         // transport error — ยังออฟไลน์ เก็บตัวนี้+ที่เหลือไว้แล้วหยุด
         break;
+      }
+      // version ที่คิวไว้ตอนลบอาจ stale — 409 พร้อม `current`
+      // → ดึง version สดลองลบอีกครั้งเดียวเหมือน patch
+      if (kind == 'activityDelete' && res.statusCode == 409) {
+        try {
+          final j = jsonDecode(res.body);
+          final cur = j is Map ? j['current'] : null;
+          final fresh = cur is Map ? toIntOrNull(cur['version']) : null;
+          if (j is Map && j['code'] == 'VERSION_CONFLICT' && fresh != null) {
+            body['version'] = fresh;
+            res = await api.delJson(_activityDeletePath(body));
+          }
+        } catch (_) {
+          break;
+        }
+      }
+      // ไม่มีบน server อยู่แล้ว (ถูกลบไปก่อน) = เป้าหมายของ
+      // การลบสำเร็จแล้ว ไม่นับเป็น fail
+      if (kind == 'activityDelete' && res.statusCode == 404) {
+        sentKeys.add(key);
+        continue;
       }
       // version ที่คิวไว้ตั้งแต่ตอนแก้อาจ stale — server ตอบ 409
       // VERSION_CONFLICT พร้อมรายละเอียดปัจจุบันใน `current`
       // ดึง version สดแล้วส่งซ้ำครั้งเดียว แทนที่จะทิ้งการแก้ไข
       // ที่ผู้ใช้ตั้งใจไว้ (แก้ไข offline ชนะตามลำดับคิว)
-      if (res.statusCode == 409) {
+      // (riskPoint ไม่มี version — upsert ไม่ชนกันอยู่แล้ว)
+      if (kind == 'patch' && res.statusCode == 409) {
         try {
           final j = jsonDecode(res.body);
           final cur = j is Map ? j['current'] : null;
@@ -902,7 +1228,8 @@ class ParcelService {
           break;
         }
       }
-      if (res.statusCode == 200) {
+      // DELETE คืน 204 (ไม่มี body) — นับเป็นสำเร็จเหมือน 200
+      if (res.statusCode == 200 || res.statusCode == 204) {
         sentKeys.add(key);
         continue;
       }
@@ -911,10 +1238,14 @@ class ParcelService {
       if (res.statusCode == 401 || res.statusCode == 403) break;
       // server ปฏิเสธจริงๆ (หลัง retry แล้วยังไม่ผ่าน / 4xx-5xx
       // อื่น) — ตัดออกจากคิวแต่จดไว้ใน failed list พร้อมสาเหตุ
+      // + ข้อความ error จริงจาก server (zod details ฯลฯ) ให้
+      // ผู้ใช้/support ดูว่าผิดอะไร
       failed.add({
         'plotId': plotId,
+        'kind': kind,
         'body': body,
         'status': res.statusCode,
+        'detail': _errorDetail(res),
         'queuedAt': e['queuedAt'],
       });
       droppedKeys.add(key);
@@ -941,8 +1272,43 @@ class ParcelService {
 
   /// การแก้ไขที่ server ปฏิเสธตอนส่งคิว — expose ให้ layer บน
   /// แจ้งผู้ใช้ได้ (เช่น badge ในหน้าเมนู) ไม่ให้หายเงียบ
-  Future<List<Map<String, dynamic>>> loadFailedEdits() =>
-      _local.loadFailedEdits();
+  Future<List<Map<String, dynamic>>> loadFailedEdits() async {
+    final items = await _local.loadFailedEdits();
+    // เติมชื่อแปลงจริงให้รายการที่ยังไม่มี — entry เก็บแค่ plotId
+    // (cuid) ดูยาก; ดึง detail ครั้งเดียวแล้วเขียนกลับไว้เลย
+    // รอบหน้าไม่ต้องยิงซ้ำ; ออฟไลน์/หาไม่เจอ → view fallback
+    // โชว์ plotId เหมือนเดิม
+    var dirty = false;
+    for (final e in items) {
+      if (e['plotName'] != null) continue;
+      final d = await fetchParcelDetail('${e['plotId']}');
+      final rawName = '${d?['name'] ?? ''}';
+      final name = rawName.replaceAll(RegExp(r'\s+#\S+$'), '');
+      if (name.isNotEmpty) {
+        e['plotName'] = name;
+        // เลขแปลง — meta.sequenceNo ก่อน ไม่มีก็เอา #NNN
+        // ท้ายชื่อดิบ
+        final meta = d?['meta'];
+        final no = meta is Map ? '${meta['sequenceNo'] ?? ''}' : '';
+        final tail = RegExp(r'#(\S+)$').firstMatch(rawName)?.group(1) ?? '';
+        final plotNo = no.isNotEmpty ? no : tail;
+        if (plotNo.isNotEmpty) e['plotNo'] = plotNo;
+        dirty = true;
+      }
+    }
+    if (dirty) {
+      await _local.updateFailedEdits((current) async {
+        for (final e in items) {
+          final i = current.indexWhere((c) => _sameFailedEdit(c, e));
+          if (i >= 0 && current[i]['plotName'] == null) {
+            current[i]['plotName'] = e['plotName'];
+            current[i]['plotNo'] = e['plotNo'];
+          }
+        }
+      });
+    }
+    return items;
+  }
 
   /// ส่งรายการที่โดนปฏิเสธเข้าคิวใหม่ — ค่าที่ผู้ใช้แก้ยังอยู่
   /// ครบใน body; flush จะ retry ด้วย version สดเองถ้ายัง stale
@@ -953,7 +1319,11 @@ class ParcelService {
     if (plotId.isEmpty || body is! Map) {
       throw Exception('ข้อมูลรายการเสีย ส่งใหม่ไม่ได้');
     }
-    await _queuePendingEdit(plotId, Map<String, Object?>.from(body));
+    await _queuePendingEdit(
+      plotId,
+      Map<String, Object?>.from(body),
+      kind: '${entry['kind'] ?? 'patch'}',
+    );
     await _local.updateFailedEdits((items) async {
       items.removeWhere((e) => _sameFailedEdit(e, entry));
     });
@@ -1003,6 +1373,62 @@ class ParcelService {
       if (status is String && status.isNotEmpty) return status;
     } catch (_) {}
     return 'รออนุมัติ';
+  }
+
+  /// ตัดสินคำขอ — `PATCH /plot-requests/:id` `{status}` (เฉพาะ
+  /// OFFICER; backend กัน 409 "ตัดสินไปแล้ว" ถ้าคำขอถูกตัดสิน)
+  /// คืนสถานะใหม่จาก backend หรือค่าที่ส่งถ้า parse ไม่ได้
+  Future<String> updateRequestStatus(String requestId, String status) async {
+    if (!ApiConfig.enabled || _api == null) {
+      throw Exception('ออฟไลน์อยู่ — ตัดสินคำขอไม่ได้');
+    }
+    final res = await _api.patchJson(
+      '${ApiEndpoints.plotRequests}/$requestId',
+      {'status': status},
+    );
+    if (res.statusCode != 200) {
+      throw Exception('ตัดสินคำขอไม่สำเร็จ: ${_errorDetail(res)}');
+    }
+    try {
+      final s = jsonDecode(res.body)['status'];
+      if (s is String && s.isNotEmpty) return s;
+    } catch (_) {}
+    return status;
+  }
+
+  /// แจ้งเตือนของผู้ใช้ — `GET /notifications` คืน
+  /// `{unread, items:[{id,title,body,createdAt ISO,read}]}`;
+  /// badge sync จาก `unread` ของ server ไม่นับเอง (items ตัดที่
+  /// 50 แต่ unread คือ count จริง)
+  Future<({int unread, List<Map<String, dynamic>> items})>
+  fetchNotifications() async {
+    if (!ApiConfig.enabled || _api == null) {
+      throw Exception('ออฟไลน์อยู่ — โหลดแจ้งเตือนไม่ได้');
+    }
+    final res = await _api.get(ApiEndpoints.notifications);
+    if (res.statusCode != 200) {
+      throw Exception('โหลดแจ้งเตือนไม่สำเร็จ: ${_errorDetail(res)}');
+    }
+    final decoded = jsonDecode(res.body);
+    final items = decoded is Map && decoded['items'] is List
+        ? [
+            for (final x in decoded['items'] as List)
+              if (x is Map) Map<String, dynamic>.from(x),
+          ]
+        : <Map<String, dynamic>>[];
+    return (
+      unread: decoded is Map ? toIntOrNull(decoded['unread']) ?? 0 : 0,
+      items: items,
+    );
+  }
+
+  /// ทำเครื่องหมายอ่านแล้วทั้งหมด — `POST /notifications/read`
+  /// best-effort: พลาดแค่เงียบไว้ badge จะกลับมารอบโหลดหน้า
+  Future<void> markNotificationsRead() async {
+    if (!ApiConfig.enabled || _api == null) return;
+    try {
+      await _api.postJson(ApiEndpoints.notificationsRead, const {});
+    } catch (_) {}
   }
 
   /// ดาวน์โหลด/อัปเดตข้อมูลจุดเสี่ยงภัยพิบัติล่าสุด — GET /risk-points

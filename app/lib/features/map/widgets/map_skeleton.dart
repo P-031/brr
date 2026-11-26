@@ -24,12 +24,14 @@ class MapSkeleton extends StatelessWidget {
           Container(color: Colors.grey.shade300),
           // ปุ่มย้อนกลับ (ซ้ายบน — ตำแหน่งเดียวกับของจริง)
           Positioned(top: top + 12, left: 16, child: const _Circle()),
-          // pill ฟิลเตอร์ปีการผลิต — ตำแหน่งเดียวกับของจริง
+          // ช่องค้นหา + ปุ่มฟิลเตอร์ — ตำแหน่งเดียวกับของจริง
           Positioned(
             top: top + 12,
-            left: 76,
-            child: const SkelBox(width: 150, height: 48, radius: 24),
+            left: 84,
+            right: 82,
+            child: const SkelBox(height: 56, radius: 28),
           ),
+          Positioned(top: top + 12, right: 16, child: const _Circle()),
           // คอลัมน์ปุ่มขวา — โหมดแปลงมี 4 อัน (ชั้น/GPS/ดาวน์โหลด/
           // ร่าง) ล่างสุดชิดขอบ; โหมดวัด 3 อัน (ชั้น/GPS/ร่าง)
           // เหนือแถบล่าง
@@ -80,8 +82,8 @@ class _Circle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 48,
-      height: 48,
+      width: 56,
+      height: 56,
       decoration: const BoxDecoration(
         color: Colors.white,
         shape: BoxShape.circle,

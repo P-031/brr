@@ -33,17 +33,78 @@ class _ChangePasswordState extends State<ChangePasswordView> {
     super.dispose();
   }
 
-  InputDecoration _deco(String label, bool show, VoidCallback toggle) =>
-      InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(fontSize: 19),
-        prefixIcon: const Icon(Iconsax.lock, color: AppColors.green),
-        suffixIcon: IconButton(
-          icon: Icon(show ? Icons.visibility : Iconsax.eye_slash),
-          onPressed: toggle,
+  /// ช่องกรอกรหัส — label แยกเหนือช่อง (pattern เดียวกับฟอร์ม
+  /// แก้ไขแปลง) + ปุ่มตา toggle ท้ายช่อง
+  Widget _field(
+    String label,
+    TextEditingController ctrl, {
+    required bool show,
+    required VoidCallback toggle,
+    required String? Function(String?) validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
         ),
-        border: const OutlineInputBorder(),
-      );
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: ctrl,
+          obscureText: !show,
+          textAlign: TextAlign.start,
+          style: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+          cursorColor: AppColors.gold,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: Colors.grey.shade100,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 13,
+            ),
+            suffixIcon: IconButton(
+              icon: Icon(show ? Icons.visibility : Iconsax.eye_slash),
+              onPressed: toggle,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: AppColors.gold,
+                width: 2,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(
+                color: AppColors.gold,
+                width: 2,
+              ),
+            ),
+          ),
+          validator: validator,
+        ),
+      ],
+    );
+  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -68,58 +129,42 @@ class _ChangePasswordState extends State<ChangePasswordView> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            TextFormField(
-              textAlign: TextAlign.start,
-              controller: _oldCtrl,
-              obscureText: !_showOld,
-              style: const TextStyle(fontSize: 19),
-              decoration: _deco(
-                'รหัสผ่านเดิม',
-                _showOld,
-                () => setState(() => _showOld = !_showOld),
-              ),
+            _field(
+              'รหัสผ่านเดิม',
+              _oldCtrl,
+              show: _showOld,
+              toggle: () => setState(() => _showOld = !_showOld),
               validator: (v) =>
                   (v == null || v.isEmpty) ? 'กรุณากรอกรหัสผ่านเดิม' : null,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              textAlign: TextAlign.start,
-              controller: _newCtrl,
-              obscureText: !_showNew,
-              style: const TextStyle(fontSize: 19),
-              decoration: _deco(
-                'รหัสผ่านใหม่',
-                _showNew,
-                () => setState(() => _showNew = !_showNew),
-              ),
+            _field(
+              'รหัสผ่านใหม่',
+              _newCtrl,
+              show: _showNew,
+              toggle: () => setState(() => _showNew = !_showNew),
               validator: (v) => (v == null || v.length < 6)
                   ? 'รหัสผ่านใหม่ต้องยาวอย่างน้อย 6 ตัว'
                   : null,
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              textAlign: TextAlign.start,
-              controller: _confirmCtrl,
-              obscureText: !_showConfirm,
-              style: const TextStyle(fontSize: 19),
-              decoration: _deco(
-                'ยืนยันรหัสผ่านใหม่',
-                _showConfirm,
-                () => setState(() => _showConfirm = !_showConfirm),
-              ),
+            _field(
+              'ยืนยันรหัสผ่านใหม่',
+              _confirmCtrl,
+              show: _showConfirm,
+              toggle: () => setState(() => _showConfirm = !_showConfirm),
               validator: (v) =>
                   v != _newCtrl.text ? 'รหัสผ่านใหม่ไม่ตรงกัน' : null,
             ),
             const SizedBox(height: 32),
             SizedBox(
               height: 50,
-              child: FilledButton.icon(
+              child: FilledButton(
                 onPressed: _busy ? null : _save,
-                icon: const Icon(Iconsax.refresh),
-                label: Text(
+                child: Text(
                   _busy ? 'กำลังบันทึก…' : 'เปลี่ยนรหัสผ่าน',
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
                 ),

@@ -54,6 +54,40 @@ class ParcelStatusViewModel extends ChangeNotifier {
   List<PlotRequestEntry> requestsOf(String status) =>
       _requests.where((r) => r.status == status).toList();
 
+  /// คำขอที่ยังไม่ตัดสิน — หน้าอนุมัติใช้ (backend ตั้งชื่อ
+  /// สถานะเริ่มต้นว่า "รออนุมัติ" ตรงตัวเลือก parcelStatuses)
+  List<PlotRequestEntry> get pending =>
+      _requests.where((r) => r.status == 'รออนุมัติ').toList();
+
+  /// ตัดสินคำขอ — PATCH แล้วอัปเดต status ใน list ให้ย้าย tab
+  /// ทันที ไม่ต้อง reload ทั้งหน้า; throw ให้ view แจ้ง error
+  Future<void> decideRequest(String requestId, String status) async {
+    final service = _service;
+    if (service == null) {
+      throw Exception('ออฟไลน์อยู่ — ตัดสินคำขอไม่ได้');
+    }
+    final newStatus = await service.updateRequestStatus(requestId, status);
+    final i = _requests.indexWhere((r) => r.id == requestId);
+    if (i >= 0) {
+      final r = _requests[i];
+      _requests[i] = PlotRequestEntry(
+        id: r.id,
+        plotId: r.plotId,
+        plotName: r.plotName,
+        productionYear: r.productionYear,
+        requester: r.requester,
+        farmerName: r.farmerName,
+        areaSqm: r.areaSqm,
+        kind: r.kind,
+        payload: r.payload,
+        status: newStatus,
+        createdAt: r.createdAt,
+        points: r.points,
+      );
+      _safeNotify();
+    }
+  }
+
   bool _disposed = false;
 
   void _safeNotify() {

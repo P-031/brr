@@ -25,6 +25,10 @@ class ApiEndpoints {
   /// backend เก็บ body ทั้งชุดลง payload (ตาม docs/API_CONTRACT.md)
   static String plotActivities(String id) => '/plots/$id/activities';
 
+  /// กิจกรรมทีละรายการ — PATCH แก้กิจกรรมที่ส่งแล้ว (version-guarded)
+  /// / DELETE ลบ record ที่เคยนำส่งไม่ให้ค้างเป็น ghost บน server
+  static String activity(String id) => '/activities/$id';
+
   /// Master option lists for pickers/dropdowns — extend this payload
   /// server-side instead of hardcoding lists in the app.
   static const String metaOptions = '/meta/options';
@@ -37,4 +41,10 @@ class ApiEndpoints {
 
   /// จุดเสี่ยงภัยพิบัติล่าสุด — หน้าฉบับร่างดาวน์โหลดมา merge เก็บในเครื่อง
   static const String riskPoints = '/risk-points';
+
+  /// การแจ้งเตือนของผู้ใช้ — GET คืน {unread, items[]}
+  static const String notifications = '/notifications';
+
+  /// ทำเครื่องหมายอ่านแล้วทั้งหมด — POST คืน {unread: 0}
+  static const String notificationsRead = '/notifications/read';
 }

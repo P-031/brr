@@ -14,6 +14,8 @@ class PlotRequestEntry {
     required this.createdAt,
     this.productionYear,
     this.requester,
+    this.farmerName,
+    this.areaSqm,
     this.payload = const {},
     this.points = const [],
   });
@@ -22,6 +24,11 @@ class PlotRequestEntry {
   final String plotId;
   final String plotName;
   final String? productionYear;
+
+  /// ชื่อชาวไร่เจ้าของแปลง + พื้นที่ ตร.ม. — officer ใช้ประกอบ
+  /// การตัดสิน (backend แนบมาตั้งแต่ GET /plot-requests)
+  final String? farmerName;
+  final double? areaSqm;
 
   /// ชื่อผู้ส่งคำขอ (displayName)
   final String? requester;
@@ -59,6 +66,35 @@ class PlotRequestEntry {
     return parts.join('  •  ');
   }
 
+  /// ทุกฟิลด์ที่ส่งมาในคำขอเป็นคู่ (label, ค่า) — หน้าอนุมัติ
+  /// ต้องเห็นรายละเอียดครบก่อนตัดสิน ไม่ย่อเป็นบรรทัดเดียว
+  List<(String, String)> get detailRows {
+    final rows = <(String, String)>[];
+    void add(String label, dynamic raw) {
+      if (raw is String && raw.isNotEmpty) rows.add((label, raw));
+    }
+
+    add(
+      switch (kind) {
+        'status' => 'สถานะที่ขอ',
+        'edit' => 'สิ่งที่ขอแก้ไข',
+        _ => 'รายละเอียด',
+      },
+      payload['value'],
+    );
+    add('เหตุผลประกอบ', payload['reason']);
+    add('อ้อยหลักใหม่', payload['canePlantMode']);
+    add('อ้อยปลูกใหม่', payload['caneTypeNew']);
+    add('รหัสแปลงใหม่', payload['newPlotCode']);
+    add('ชาวไร่ใหม่', payload['newFarmer']);
+    add('รหัสชาวไร่ใหม่', payload['newFarmerId']);
+    add('ปีการผลิตใหม่', payload['newProductionYear']);
+    add('เขตใหม่', payload['newZone']);
+    add('กลุ่มบำรุง', payload['maintainGroup']);
+    add('กลุ่มตัด', payload['harvestGroup']);
+    return rows;
+  }
+
   String get kindLabel => switch (kind) {
     'status' => 'คำขอเปลี่ยนสถานะ',
     'edit' => 'คำขอแก้ไขข้อมูล',
@@ -72,6 +108,8 @@ class PlotRequestEntry {
     plotName: '${j['plotName'] ?? ''}',
     productionYear: j['productionYear']?.toString(),
     requester: j['requester']?.toString(),
+    farmerName: j['farmerName']?.toString(),
+    areaSqm: j['areaSqm'] is num ? (j['areaSqm'] as num).toDouble() : null,
     kind: '${j['kind'] ?? ''}',
     payload: j['payload'] is Map
         ? Map<String, dynamic>.from(j['payload'] as Map)

@@ -1,15 +1,17 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/config/app_info.dart';
 import 'package:brr/core/theme/app_theme.dart';
-import 'package:brr/features/auth/viewmodels/auth_viewmodel.dart';
 import 'package:brr/features/map/viewmodels/failed_edits_viewmodel.dart';
+import 'package:brr/features/menu/viewmodels/menu_viewmodel.dart';
 import 'package:brr/features/map/views/failed_edits_view.dart';
 import 'package:brr/features/menu/views/change_password_view.dart';
+import 'package:brr/features/parcel_status/views/request_approval_view.dart';
 import 'package:brr/features/menu/views/edit_profile_view.dart';
 import 'package:brr/features/settings/views/settings_view.dart';
 
@@ -20,7 +22,19 @@ class MenuView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final vm = context.watch<AuthViewModel>();
+    return ChangeNotifierProvider(
+      create: MenuViewModel.forContext,
+      child: const _MenuBody(),
+    );
+  }
+}
+
+class _MenuBody extends StatelessWidget {
+  const _MenuBody();
+
+  @override
+  Widget build(BuildContext context) {
+    final vm = context.watch<MenuViewModel>();
     final user = vm.user;
     return SafeArea(
       child: Column(
@@ -91,6 +105,20 @@ class MenuView extends StatelessWidget {
             child: Card(
               child: Column(
                 children: [
+                  // หน้าตัดสินคำขอ — เฉพาะ officer (backend กัน
+                  // 403 อีกชั้นถ้า farmer ยิงตรง) ไว้บนสุดเพราะ
+                  // คืองานที่ต้องทำบ่อยสุด
+                  if (vm.isOfficer)
+                    _item(
+                      context,
+                      Iconsax.tick_circle,
+                      'อนุมัติคำขอแปลง',
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const RequestApprovalView(),
+                        ),
+                      ),
+                    ),
                   _item(
                     context,
                     Iconsax.user,
@@ -123,7 +151,11 @@ class MenuView extends StatelessWidget {
                     context,
                     Iconsax.message,
                     'เชื่อมต่อ Line',
-                    iconColor: AppColors.greenLight,
+                    leading: SvgPicture.asset(
+                      'assets/icons/line_logo.svg',
+                      width: 32,
+                      height: 32,
+                    ),
                   ),
                   const _FailedEditsTile(),
                 ],
@@ -177,13 +209,14 @@ class MenuView extends StatelessWidget {
     IconData icon,
     String label, {
     Color iconColor = AppColors.green,
+    Widget? leading,
     bool divider = true,
     VoidCallback? onTap,
   }) {
     return Column(
       children: [
         ListTile(
-          leading: Icon(icon, color: iconColor),
+          leading: leading ?? Icon(icon, color: iconColor),
           title: Text(label, style: const TextStyle(fontSize: 18)),
           onTap:
               onTap ??
@@ -215,10 +248,10 @@ class _FailedEditsTileState extends State<_FailedEditsTile> {
   }
 
   /// seed จำนวนจาก prefs เข้า notifier (ค่า persist ข้ามรอบแอป)
-  /// — failedCountFor เขียนกลับเข้า countListenable เอง
+  /// — refreshFailedCount เขียนกลับเข้า countListenable เอง
   Future<void> _seed() async {
     if (!mounted) return;
-    await FailedEditsViewModel.failedCountFor(context);
+    await context.read<MenuViewModel>().refreshFailedCount();
   }
 
   @override

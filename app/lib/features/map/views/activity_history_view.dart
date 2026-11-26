@@ -309,7 +309,7 @@ class _ActivityHistoryViewState extends State<ActivityHistoryView> {
                         border: Border.all(color: Colors.grey.shade300),
                       ),
                       child: const Icon(
-                        Icons.refresh,
+                        Icons.autorenew,
                         size: 22,
                         color: Colors.black87,
                       ),

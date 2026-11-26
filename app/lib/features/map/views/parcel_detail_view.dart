@@ -26,6 +26,12 @@ class ParcelDetailView extends StatelessWidget {
     return (v == null || s.isEmpty) ? null : s;
   }
 
+  /// ค่าตัวเลขล้วนเติมหน่วยท้าย (ไร่/ตัน) — ค่าว่างคืน null
+  static String? _withUnit(dynamic v, String unit) {
+    final s = _str(v);
+    return s == null ? null : '$s $unit';
+  }
+
   /// เหมือนใน sheet — meta.plantedAt ยังไม่มีใน schema ตอนนี้
   /// fallback createdAt ของ record ไปก่อน
   static DateTime? _plantedDate(Map meta, Map<String, dynamic>? detail) {
@@ -48,7 +54,7 @@ class ParcelDetailView extends StatelessWidget {
         actions: [
           IconButton(
             onPressed: () => _openMenu(context),
-            icon: const Icon(Icons.more_vert),
+            icon: const Icon(Icons.more_vert, size: 28),
           ),
         ],
       ),
@@ -100,8 +106,8 @@ class ParcelDetailView extends StatelessWidget {
               ('กรรมสิทธิ์', _str(meta['ownership'])),
               ('ภูมิประเทศ', _str(meta['terrain'])),
               ('พื้นที่สูญเสีย', _str(meta['hasLoss'])),
-              ('สูญเสีย (ไร่)', _str(meta['lossRai'])),
-              ('ผลผลิตเป้าหมาย (ตัน)', _str(meta['targetYield'])),
+              ('สูญเสีย', _withUnit(meta['lossRai'], 'ไร่')),
+              ('ผลผลิตเป้าหมาย', _withUnit(meta['targetYield'], 'ตัน')),
               ('หมายเหตุ', _str(meta['note'])),
             ].where((r) => r.$2 != null).toList();
 
@@ -263,23 +269,42 @@ class ParcelDetailView extends StatelessWidget {
 
   /// ⋮ → sheet เมนูแบบ ref — แก้ไขรูท&ลำดับ / คำขอสถานะแปลง1,2
   void _openMenu(BuildContext context) {
-    Widget item(IconData icon, String label, Widget page) => ListTile(
-      leading: CircleAvatar(
-        radius: 20,
-        backgroundColor: AppColors.green.withValues(alpha: 0.12),
-        child: Icon(icon, color: AppColors.green, size: 20),
+    Widget item(IconData icon, String label, Widget page) => Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F7F7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE0E0E0)),
+        ),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 8,
+          ),
+          leading: CircleAvatar(
+            radius: 26,
+            backgroundColor: AppColors.green.withValues(alpha: 0.12),
+            child: Icon(icon, color: AppColors.green, size: 26),
+          ),
+          title: Text(
+            label,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+          ),
+          onTap: () async {
+            Navigator.of(context).pop();
+            final saved = await Navigator.of(context)
+                .push<Object>(MaterialPageRoute(builder: (_) => page));
+            if (saved != null && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(saved is String ? saved : 'บันทึกสำเร็จ'),
+                ),
+              );
+            }
+          },
+        ),
       ),
-      title: Text(label, style: const TextStyle(fontSize: 15)),
-      onTap: () async {
-        Navigator.of(context).pop();
-        final saved = await Navigator.of(context)
-            .push<Object>(MaterialPageRoute(builder: (_) => page));
-        if (saved != null && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(saved is String ? saved : 'บันทึกสำเร็จ')),
-          );
-        }
-      },
     );
     showModalBottomSheet<void>(
       context: context,
@@ -304,7 +329,7 @@ class ParcelDetailView extends StatelessWidget {
               const SizedBox(height: 14),
               const Text(
                 'เมนู',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 10),
               item(
@@ -313,7 +338,7 @@ class ParcelDetailView extends StatelessWidget {
                 EditRouteSeqView(vm: vm),
               ),
               item(
-                Iconsax.refresh,
+                Icons.autorenew,
                 'ยื่นคำขออัปเดตสถานะแปลง1',
                 StatusRequestView(vm: vm),
               ),
@@ -342,7 +367,7 @@ class ParcelDetailView extends StatelessWidget {
           SizedBox(height: 6),
           Text(
             'ยังไม่มีรูปถ่าย',
-            style: TextStyle(fontSize: 13, color: Colors.black45),
+            style: TextStyle(fontSize: 16, color: Colors.black45),
           ),
         ],
       ),
@@ -363,7 +388,7 @@ class ParcelDetailView extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDF3EE),
+        color: const Color(0xFFF2F2F2),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -372,7 +397,7 @@ class ParcelDetailView extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 17,
               fontWeight: FontWeight.bold,
               color: AppColors.green,
             ),
@@ -392,7 +417,8 @@ class ParcelDetailView extends StatelessWidget {
     );
   }
 
-  /// แถว label ซ้าย / value ขวาติดขอบ — ค่าว่างแสดง '—'
+  /// แถว label : value — label ความกว้างคงที่ให้ ':' ตรงกัน
+  /// ค่าว่างแสดง '—'
   static Widget _row(
     String label,
     String? value, {
@@ -404,19 +430,22 @@ class ParcelDetailView extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 5,
+          SizedBox(
+            width: 132,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              style: const TextStyle(fontSize: 17, color: Colors.black87),
             ),
           ),
+          const Text(
+            ' :  ',
+            style: TextStyle(fontSize: 17, color: Colors.black87),
+          ),
           Expanded(
-            flex: 7,
             child: Text(
               value == null || value.isEmpty ? '—' : value,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
                 color: color ?? (blue ? AppColors.sky : Colors.black87),
               ),
@@ -452,7 +481,7 @@ class _Section extends StatelessWidget {
           if (title != null) ...[
             Text(
               title!,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const Divider(height: 16, color: Colors.black12),
           ],

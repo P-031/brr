@@ -3,12 +3,14 @@ import 'package:iconsax/iconsax.dart';
 import 'package:provider/provider.dart';
 
 import 'package:brr/core/theme/app_theme.dart';
+import 'package:brr/core/widgets/brr_app_bar.dart';
 import 'package:brr/core/widgets/skeleton.dart';
 import 'package:brr/features/map/models/sat_thumb.dart';
 import 'package:brr/features/map/widgets/parcel_outline.dart';
 import 'package:brr/features/map/widgets/satellite_thumb.dart';
 import 'package:brr/features/parcel_status/models/plot_request.dart';
 import 'package:brr/features/parcel_status/viewmodels/parcel_status_viewmodel.dart';
+import 'package:brr/core/widgets/error_retry_view.dart';
 
 /// สถานะแปลง — scrollable status tabs + filtered parcel list.
 /// ชื่อ tab มาจาก backend (/meta/options → parcelStatuses) เสมอ;
@@ -35,6 +37,7 @@ class _Body extends StatefulWidget {
 
 class _BodyState extends State<_Body> {
   int _tab = 0;
+  bool _newestFirst = true;
   List<GlobalKey> _keys = const [];
 
   @override
@@ -47,23 +50,30 @@ class _BodyState extends State<_Body> {
     }
     final items = tabs.isEmpty
         ? const <PlotRequestEntry>[]
-        : vm.requestsOf(tabs[_tab]);
+        : (vm.requestsOf(tabs[_tab]).toList()..sort((a, b) {
+            // เรียงตามเวลาส่งคำขอ — ไม่มีเวลาถือว่าเก่าสุด
+            final ta = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final tb = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return _newestFirst ? tb.compareTo(ta) : ta.compareTo(tb);
+          }));
     return Column(
       children: [
-        Container(
-          width: double.infinity,
-          color: Colors.white,
-          padding: const EdgeInsets.only(top: 48, bottom: 12),
-          child: const Text(
-            'สถานะแปลง',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-        ),
-        Container(
-          color: Colors.white,
+        brrHeaderBackdrop(
           child: Column(
             children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 48, bottom: 12),
+                child: const Text(
+                  'สถานะแปลง',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
               if (vm.loading)
                 // skeleton แถว tab — เส้นข้อความเทาแนวนอน ตัวแรก
                 // มีเส้นใต้เหมือน tab ที่กำลังเลือก
@@ -86,12 +96,21 @@ class _BodyState extends State<_Body> {
               else if (vm.error != null)
                 Padding(
                   padding: const EdgeInsets.all(10),
-                  child: TextButton.icon(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
+                    ),
                     onPressed: vm.load,
-                    icon: const Icon(Iconsax.refresh, size: 18),
+                    icon: const Icon(Icons.autorenew, size: 26),
                     label: const Text(
                       'โหลดสถานะไม่สำเร็จ — ลองใหม่',
-                      style: TextStyle(fontSize: 17),
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 )
@@ -109,7 +128,37 @@ class _BodyState extends State<_Body> {
                     ],
                   ),
                 ),
-              const Divider(height: 1, color: Colors.black12),
+              const Divider(height: 1, color: Colors.white38),
+            ],
+          ),
+        ),
+        // แถบเครื่องมือเหนือ list — เรียงใหม่/เก่า + รีเฟรช
+        // (ชุดเดียวกับหน้าการแก้ไขที่ส่งไม่สำเร็จ) ใช้ได้ทุก
+        // tab แม้ tab ว่าง — รีเฟรชยังจำเป็น
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 6, 0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: () => setState(() => _newestFirst = !_newestFirst),
+                icon: const Icon(Iconsax.sort, size: 24),
+                label: Text(
+                  _newestFirst ? 'ใหม่สุด' : 'เก่าสุด',
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: TextButton.styleFrom(foregroundColor: Colors.black87),
+              ),
+              IconButton(
+                iconSize: 32,
+                padding: const EdgeInsets.all(12),
+                icon: const Icon(Icons.autorenew),
+                tooltip: 'รีเฟรช',
+                onPressed: vm.load,
+              ),
             ],
           ),
         ),
@@ -117,39 +166,15 @@ class _BodyState extends State<_Body> {
           child: vm.requestsError != null
               // แถบ tab โหลดได้แต่ list ล้ม — แจ้ง + ให้ retry เฉพาะ
               // ส่วน list ไม่ทำทั้งหน้าเสีย
-              ? Center(
-                  child: TextButton.icon(
-                    onPressed: vm.load,
-                    icon: const Icon(Iconsax.refresh, size: 18),
-                    label: const Text(
-                      'โหลดรายการไม่สำเร็จ — ลองใหม่',
-                      style: TextStyle(fontSize: 17),
-                    ),
-                  ),
-                )
+              ? ErrorRetryView('โหลดรายการไม่สำเร็จ', onRetry: vm.load)
               : vm.loading
               ? const Center(child: CircularProgressIndicator())
               : vm.error != null
               // แถบสถานะมาไม่ได้เลย — บอกสาเหตุกลางจอ ไม่ใช่โชว์
               // "ไม่มีข้อมูล" ทั้งที่ปัญหาคือติดต่อ server ไม่ได้
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        vm.error!.replaceFirst('Exception: ', ''),
-                        style: const TextStyle(fontSize: 18),
-                      ),
-                      TextButton.icon(
-                        onPressed: vm.load,
-                        icon: const Icon(Iconsax.refresh, size: 18),
-                        label: const Text(
-                          'ลองใหม่',
-                          style: TextStyle(fontSize: 17),
-                        ),
-                      ),
-                    ],
-                  ),
+              ? ErrorRetryView(
+                  vm.error!.replaceFirst('Exception: ', ''),
+                  onRetry: vm.load,
                 )
               : items.isEmpty
               ? const Center(
@@ -192,7 +217,7 @@ class _BodyState extends State<_Body> {
         style: TextStyle(
           fontSize: selected ? 22 : 19,
           fontWeight: selected ? FontWeight.bold : FontWeight.w600,
-          color: selected ? AppColors.green : Colors.black87,
+          color: Colors.white,
         ),
       ),
     );
@@ -241,65 +266,135 @@ class _RequestCard extends StatelessWidget {
   String _thaiDate(DateTime? d) {
     if (d == null) return '';
     final l = d.toLocal();
-    return '${l.day}/${l.month}/${l.year + 543} '
-        '${l.hour.toString().padLeft(2, '0')}:'
+    // \u2060 = word joiner — กันคำไทยแตกกลางคำ "วัน|ที่" คนละ
+    // บรรทัด (ไทยตัดบรรทัดได้ทุกพจน์ ไม่ใช่แค่ช่องว่าง)
+    // \u00A0 = NBSP กัน "วันที่" แยกจากตัวเลข
+    return 'วัน\u2060ที่\u00A0${l.day}/${l.month}/${l.year + 543}'
+        '\u00A0${l.hour.toString().padLeft(2, '0')}:'
         '${l.minute.toString().padLeft(2, '0')}';
   }
 
+  /// ชื่อแปลงล้วน / เลขแปลง — ตัด `#NNN` ท้ายชื่อแยกเป็น 2 ฟิลด์
+  /// (regex เดียวกับ Parcel.landNo/plotCode)
+  String get _landNo => r.plotName.replaceAll(RegExp(r'\s*#\d+\s*$'), '');
+  String get _plotCode =>
+      RegExp(r'#\s*(\d+)\s*$').firstMatch(r.plotName)?.group(1) ?? '';
+
+  /// สี+ไอคอนป้ายสถานะ — อ่านสถานะได้จากสีทันที
+  /// (เขียว=อนุมัติ เหลือง=รอ แดง=ไม่ผ่าน/ยกเลิก)
+  ({Color bg, IconData icon}) get _statusStyle => switch (status) {
+    'อนุมัติ' => (bg: AppColors.green, icon: Iconsax.tick_circle),
+    'รออนุมัติ' => (bg: const Color(0xFFE8960C), icon: Iconsax.clock),
+    _ => (bg: const Color(0xFFC62828), icon: Iconsax.close_circle),
+  };
+
   @override
   Widget build(BuildContext context) {
+    final st = _statusStyle;
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // รูปแปลงดาวเทียมกรอบมน — outline จาก backend จริง;
-            // โหลด tile ไม่ได้ fallback เป็น polygon วาดเอง
-            // (เหมือนการ์ดกิจกรรมแปลง)
-            SatelliteThumb(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // รูปแปลงดาวเทียมแบนเนอร์เต็มกว้าง — outline จาก
+          // backend จริง; โหลด tile ไม่ได้ fallback เป็น polygon
+          // วาดเอง (เหมือนการ์ดกิจกรรมแปลง)
+          // width ต้องเป็นตัวเลขจริง (loader เอาไป round() ขอ tile)
+          // — LayoutBuilder เอากว้างการ์ดจริง
+          LayoutBuilder(
+            builder: (context, c) => SatelliteThumb(
               points: r.points,
               cacheKey: 'req-${r.id}',
               loader: loader,
               fallback: ParcelOutline(points: r.points),
+              width: c.maxWidth,
+              height: 120,
+              radius: 0,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    r.plotName,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ชื่อแปลง + เลขแปลง (# จากท้ายชื่อ)
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          text: _landNo,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          children: [
+                            if (_plotCode.isNotEmpty)
+                              TextSpan(
+                                text: '  #$_plotCode',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.green,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
+                    const SizedBox(width: 8),
+                    // ป้ายสถานะ — บรรทัดเดียวกับชื่อ
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: st.bg,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(st.icon, size: 17, color: Colors.white),
+                          const SizedBox(width: 5),
+                          Text(
+                            status,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                if (r.productionYear != null)
                   Text(
-                    '${r.kindLabel}${r.detail.isEmpty ? '' : ' — ${r.detail}'}',
+                    'ปีการผลิต ${r.productionYear}',
                     style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      if (r.requester != null) 'โดย ${r.requester}',
-                      if (r.productionYear != null)
-                        'ปีการผลิต ${r.productionYear}',
-                      _thaiDate(r.createdAt),
-                    ].where((s) => s.isNotEmpty).join('  •  '),
-                    style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
+                const SizedBox(height: 4),
+                Text(
+                  [
+                    if (r.requester != null) 'โดย ${r.requester}',
+                    _thaiDate(r.createdAt),
+                  ].where((s) => s.isNotEmpty).join('  •  '),
+                  style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  r.kindLabel,
+                  style: TextStyle(fontSize: 16, color: Colors.grey.shade700),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Chip(
-              label: Text(status, style: const TextStyle(fontSize: 14)),
-              backgroundColor: AppColors.goldLight,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

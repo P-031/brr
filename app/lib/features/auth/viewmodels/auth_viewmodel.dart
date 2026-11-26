@@ -12,7 +12,10 @@ import 'package:brr/core/services/api_client.dart';
 import 'package:brr/features/auth/data/auth_service.dart';
 import 'package:brr/features/auth/data/avatar_store.dart';
 import 'package:brr/features/auth/data/session_store.dart';
+import 'package:brr/features/map/data/parcel_local_store.dart';
 import 'package:brr/features/map/data/parcel_service.dart';
+import 'package:brr/features/map/viewmodels/failed_edits_viewmodel.dart';
+import 'package:brr/features/notifications/viewmodels/notifications_viewmodel.dart';
 
 enum AuthStatus { restoring, unauthenticated, authenticating, authenticated }
 
@@ -174,9 +177,12 @@ class AuthViewModel extends ChangeNotifier {
       _session = await _attachPhoto(
         await _auth.refresh(saved.refreshToken, fallbackIdToken: saved.idToken),
       );
+      await ParcelLocalStore.setUserScope(_session!.user.id);
       _status = AuthStatus.authenticated;
       _offline = false;
       await _store.save(_session!);
+      unawaited(NotificationsViewModel.refreshBadge(api));
+      unawaited(FailedEditsViewModel.seedCountFor(api));
     } on AuthException {
       // Server rejected the refresh token — really signed out.
       await _clear();
@@ -196,6 +202,7 @@ class AuthViewModel extends ChangeNotifier {
             ),
           ),
         );
+        await ParcelLocalStore.setUserScope(_session!.user.id);
         _status = AuthStatus.authenticated;
         _offline = true;
       } else {
@@ -214,9 +221,12 @@ class AuthViewModel extends ChangeNotifier {
       _session = await _attachPhoto(
         await _auth.loginWithPassword(username, password),
       );
+      await ParcelLocalStore.setUserScope(_session!.user.id);
       _status = AuthStatus.authenticated;
       await _store.save(_session!);
       await _remember(_session!);
+      unawaited(NotificationsViewModel.refreshBadge(api));
+      unawaited(FailedEditsViewModel.seedCountFor(api));
     } on AuthException catch (e) {
       _status = AuthStatus.unauthenticated;
       _error = e.message;
@@ -243,9 +253,12 @@ class AuthViewModel extends ChangeNotifier {
           fallbackIdToken: account.idToken,
         ),
       );
+      await ParcelLocalStore.setUserScope(_session!.user.id);
       _status = AuthStatus.authenticated;
       await _store.save(_session!);
       await _remember(_session!);
+      unawaited(NotificationsViewModel.refreshBadge(api));
+      unawaited(FailedEditsViewModel.seedCountFor(api));
     } on AuthException {
       savedAccounts.removeWhere((a) => a.username == account.username);
       _store.saveAccounts(savedAccounts);
@@ -303,6 +316,8 @@ class AuthViewModel extends ChangeNotifier {
       final svc = ParcelService(api);
       unawaited(svc.flushPendingEdits());
       unawaited(svc.flushQueuedActivities());
+      unawaited(NotificationsViewModel.refreshBadge(api));
+      unawaited(FailedEditsViewModel.seedCountFor(api));
     }
   }
 
@@ -330,6 +345,7 @@ class AuthViewModel extends ChangeNotifier {
       _session = await _attachPhoto(
         await _auth.refresh(rt, fallbackIdToken: _session?.idToken),
       );
+      await ParcelLocalStore.setUserScope(_session!.user.id);
       _offline = false;
       await _store.save(_session!);
       // token สด + server ติดต่อได้ — จังหวะดีสุดในการส่งคิว
@@ -337,6 +353,10 @@ class AuthViewModel extends ChangeNotifier {
       final svc = ParcelService(api);
       unawaited(svc.flushPendingEdits());
       unawaited(svc.flushQueuedActivities());
+      // badge กระดิ่ง — รีเฟรชจำนวนยังไม่อ่านทุกครั้งที่ session
+      // สด (login/resume/เน็ตกลับ) ไม่ต้องรอเปิดหน้าแจ้งเตือน
+      unawaited(NotificationsViewModel.refreshBadge(api));
+      unawaited(FailedEditsViewModel.seedCountFor(api));
     } on AuthException {
       await _clear();
     } catch (_) {
@@ -348,6 +368,12 @@ class AuthViewModel extends ChangeNotifier {
   Future<void> _clear() async {
     _session = null;
     _status = AuthStatus.unauthenticated;
+    // ข้อมูล local (ร่าง/คิว/งานค้าง) ผูกกับ user — ออกจาก scope
+    // ไม่ให้คนถัดไปบนเครื่องเดียวกันเห็น/ยิงคิวของคนก่อน
+    await ParcelLocalStore.setUserScope(null);
+    // badge กระดิ่งเป็นของ user คนก่อน — ล้างทุกเส้นทางหลุด
+    // (signOut กดเอง + refresh token โดนปฏิเสธ)
+    NotificationsViewModel.clearBadge();
     try {
       await _store.clear();
     } catch (_) {}

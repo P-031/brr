@@ -266,7 +266,7 @@ class DraftsView extends StatelessWidget {
             ),
             IconButton(
               tooltip: 'รีเฟรช',
-              icon: const Icon(Iconsax.refresh, size: 24),
+              icon: const Icon(Icons.autorenew, size: 24),
               onPressed: vm.refresh,
             ),
             IconButton(
@@ -282,7 +282,7 @@ class DraftsView extends StatelessWidget {
             : SafeArea(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: FilledButton.icon(
+                  child: FilledButton(
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -291,8 +291,7 @@ class DraftsView extends StatelessWidget {
                       // อาจมีร่างใหม่จากการวัด — โหลด list ใหม่
                       await vm.refresh();
                     },
-                    icon: const Icon(Iconsax.rulerpen, size: 20),
-                    label: const Text(
+                    child: const Text(
                       'เริ่มวัดพื้นที่ใหม่',
                       style: TextStyle(
                         fontSize: 16,
@@ -378,7 +377,7 @@ class DraftsView extends StatelessWidget {
                       width: double.infinity,
                       child: FilledButton.icon(
                         onPressed: vm.loadMore,
-                        icon: const Icon(Iconsax.arrow_circle_down, size: 22),
+                        icon: const Icon(Iconsax.arrow_down, size: 24),
                         label: const Text(
                           'โหลดเพิ่ม',
                           style: TextStyle(

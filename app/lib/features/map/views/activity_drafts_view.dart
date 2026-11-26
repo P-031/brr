@@ -191,6 +191,14 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
     final pending = a['detailPending'] == true;
     final rawPhotos = a['photos'];
     final photos = rawPhotos is List ? rawPhotos : const [];
+    // รายการที่ส่งจากเครื่อง/อุปกรณ์อื่นไม่มีไฟล์ในเครื่อง — แสดง
+    // จำนวนจาก photoCount ที่ server เก็บไว้ตอนนำส่งแทน
+    final photoCount = photos.isNotEmpty
+        ? photos.length
+        : a['photoCount'] is int
+        ? a['photoCount'] as int
+        : 0;
+    final sent = '${a['submitStatus'] ?? 'pending'}' == 'sent';
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
@@ -221,12 +229,12 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
                             ),
                           ),
                         ),
-                        _statusChip(pending),
+                        if (!sent) _statusChip(pending),
                       ],
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'รูป ${photos.length} ใบ'
+                      'รูป $photoCount ใบ'
                       '${a['plantedAt'] != null ? '  •  ปลูก ${_fmtThai('${a['plantedAt']}')}' : ''}',
                       style: const TextStyle(
                         fontSize: 14,
@@ -262,7 +270,7 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
                 color: Colors.amber.shade800,
                 onTap: () => _openEdit(no, a),
               ),
-              if ('${a['submitStatus'] ?? 'pending'}' != 'sent') ...[
+              if (!sent) ...[
                 const SizedBox(width: 8),
                 _sendingId == '${a['id']}'
                     ? const Expanded(
@@ -331,7 +339,7 @@ class _ActivityDraftsViewState extends State<ActivityDraftsView> {
       actions: [
         IconButton(
           tooltip: 'รีเฟรช',
-          icon: const Icon(Icons.refresh, size: 26),
+          icon: const Icon(Icons.autorenew, size: 26),
           onPressed: _reload,
         ),
       ],

@@ -374,7 +374,7 @@ class _MapBottomBarState extends State<MapBottomBar>
                                   ? (widget.vm.walkPaused
                                         ? Iconsax.play
                                         : Iconsax.pause)
-                                  : Iconsax.refresh,
+                                  : Icons.autorenew,
                               size: 24,
                             ),
                             label: Text(

@@ -29,6 +29,18 @@ class DraftsViewModel extends ChangeNotifier {
 
   final ParcelService _service;
 
+  bool _disposed = false;
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  void _safeNotify() {
+    if (!_disposed) notifyListeners();
+  }
+
   List<Parcel> _drafts = const [];
   bool _loading = true;
   String? _busyId;
@@ -44,7 +56,7 @@ class DraftsViewModel extends ChangeNotifier {
   set statusFilter(String v) {
     _statusFilter = v;
     _shown = pageSize;
-    notifyListeners();
+    _safeNotify();
   }
 
   /// รายการตามฟิลเตอร์ที่เลือก — ร่างเก่าไม่มี status = ยังไม่ยืนยัน
@@ -73,7 +85,7 @@ class DraftsViewModel extends ChangeNotifier {
 
   void loadMore() {
     _shown += pageSize;
-    notifyListeners();
+    _safeNotify();
   }
 
   /// id ของร่างที่กำลังยืนยัน/แก้ไขอยู่ — ปิดปุ่มใบนั้นกันกดซ้ำ
@@ -92,10 +104,10 @@ class DraftsViewModel extends ChangeNotifier {
   /// โหลดรายการร่างใหม่ — เรียกตอนเข้าหน้าและหลังลบ/ยืนยัน
   Future<void> refresh() async {
     _loading = true;
-    notifyListeners();
+    _safeNotify();
     _drafts = await _service.fetchDrafts();
     _loading = false;
-    notifyListeners();
+    _safeNotify();
   }
 
   /// true เมื่อมีร่างถูกลบ/ยืนยันระหว่างเปิดหน้า — view pop ค่านี้
@@ -239,7 +251,7 @@ class DraftsViewModel extends ChangeNotifier {
     List<String> photos = const [],
   }) async {
     _busyId = source.id;
-    notifyListeners();
+    _safeNotify();
     try {
       final created = await create(source.points);
       if (confirm && created.isDraft) {
@@ -276,7 +288,7 @@ class DraftsViewModel extends ChangeNotifier {
       return '$e'.replaceFirst('Exception: ', '');
     } finally {
       _busyId = null;
-      notifyListeners();
+      _safeNotify();
     }
   }
 
@@ -286,7 +298,8 @@ class DraftsViewModel extends ChangeNotifier {
   }
 
   /// VM ของ flow ข้อมูลแปลง — view ใช้เปิด info sheet/หน้ารายละเอียด
-  /// โดยไม่แตะ ParcelService ตรงๆ (draft → detail resolve null)
-  ParcelDetailViewModel detailVmFor(Parcel p) =>
-      ParcelDetailViewModel(parcel: p, service: _service);
+  /// โดยไม่แตะ ParcelService ตรงๆ (draft → detail resolve null);
+  /// รับ context ให้ VM ปลายทางอ่าน session user เอง
+  ParcelDetailViewModel detailVmFor(BuildContext context, Parcel p) =>
+      ParcelDetailViewModel.forContext(context, parcel: p, service: _service);
 }
