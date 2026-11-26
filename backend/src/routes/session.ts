@@ -11,7 +11,7 @@ const passwordBody = z.object({
 });
 
 const refreshBody = z.object({
-  refreshToken: z.string().min(1),
+  refreshToken: z.string().min(1).max(8000),
 });
 
 /** Browser pages cannot POST to Keycloak's port. The API calls it instead. */

@@ -386,7 +386,7 @@ fieldRouter.get(
       if (box.west >= box.east || box.south >= box.north) {
         throw new HttpError(400, "กรอบแผนที่ไม่ถูกต้อง");
       }
-      const limit = z.coerce.number().int().min(1).max(50_000).default(200).parse(queryText(req.query.limit));
+      const limit = z.coerce.number().int().min(1).max(2_000).default(200).parse(queryText(req.query.limit));
       const season = queryText(req.query.season);
       const years = csv(req.query.years);
       const includeBlank = queryText(req.query.nullYear) === "1";
@@ -1388,7 +1388,7 @@ const tonsText = z.string().trim().max(20).nullish();
 
 function dayOrNull(value: string | null | undefined): Date | null | undefined {
   if (value == null) return value;
-  return new Date(`${value}T00:00:00.000Z`);
+  return parseDate(value);
 }
 
 function tonsOrNull(value: string | null | undefined): number | null | undefined {

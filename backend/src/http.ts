@@ -57,6 +57,12 @@ export function errorHandler(error: unknown, _req: Request, res: Response, _next
     return;
   }
 
-  console.error(error);
+  if (prismaError) {
+    console.error("prisma", prismaError.name, prismaError.code ?? "");
+  } else if (error instanceof Error) {
+    console.error(error.name, error.message);
+  } else {
+    console.error("unknown error");
+  }
   res.status(500).json({ error: "เซิร์ฟเวอร์ขัดข้อง" });
 }
