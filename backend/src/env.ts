@@ -1,3 +1,5 @@
+import { issuerAliases, parseCorsOrigins } from "./envParse";
+
 function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -10,26 +12,24 @@ const baseUrl = required("KEYCLOAK_BASE_URL").replace(/\/$/, "");
 const realm = required("KEYCLOAK_REALM");
 const issuer = (process.env.KEYCLOAK_ISSUER?.trim() || `${baseUrl}/realms/${realm}`).replace(/\/$/, "");
 
-/** Keycloak in dev stamps the issuer with whichever host was called. */
-function issuerAliases(value: string): string[] {
-  const match = value.match(/^(https?:\/\/)[^/:]+(:\d+)?(\/.*)$/);
-  if (!match) return [value];
-  const [, scheme, port = "", path] = match;
-  const aliases = ["127.0.0.1", "localhost", "10.0.2.2"].map((host) => `${scheme}${host}${port}${path}`);
-  return [...new Set([value, ...aliases])];
-}
-
 export const env = {
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: required("DATABASE_URL"),
   keycloakBaseUrl: baseUrl,
   keycloakRealm: realm,
   keycloakIssuer: issuer,
-  keycloakIssuers: issuerAliases(issuer),
+  keycloakIssuers: issuerAliases(
+    issuer,
+    process.env.NODE_ENV !== "production" || process.env.ALLOW_ISSUER_ALIASES === "1",
+  ),
   keycloakClientId: required("KEYCLOAK_CLIENT_ID"),
-  corsOrigins: process.env.CORS_ORIGINS?.split(",").map((s) => s.trim()).filter(Boolean) || [],
+  corsOrigins: parseCorsOrigins(process.env.CORS_ORIGINS),
 };
 
 if (!Number.isInteger(env.port) || env.port < 1 || env.port > 65535) {
   throw new Error("PORT must be a number from 1 to 65535");
+}
+
+if (process.env.NODE_ENV === "production" && env.corsOrigins.length === 0) {
+  throw new Error("CORS_ORIGINS must be set in production to a comma-separated list of allowed origins");
 }
