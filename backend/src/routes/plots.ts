@@ -966,7 +966,7 @@ fieldRouter.post(
           detail: detail as Prisma.InputJsonValue,
         },
       });
-      if (plantedAt) {
+      if (plantedAt && !plot.plantedAt) {
         const p = await tx.plot.updateMany({
           where: { id: plot.id, version: plot.version },
           data: { plantedAt, version: { increment: 1 } },
@@ -1013,7 +1013,9 @@ fieldRouter.patch(
         },
       });
       if (updated.count === 0) return null;
-      if (plantedAt) {
+      const ownsPlantedAt =
+        !plot.plantedAt || existing.plantedAt?.getTime() === plot.plantedAt.getTime();
+      if (plantedAt && ownsPlantedAt) {
         const p = await tx.plot.updateMany({
           where: { id: plot.id, version: plot.version },
           data: { plantedAt, version: { increment: 1 } },
