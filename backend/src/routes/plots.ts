@@ -1520,11 +1520,13 @@ fieldRouter.put(
           cutCaneTons: cutCaneTons ?? null,
         },
       });
-      const p = await tx.plot.updateMany({
-        where: { id: plot.id, version: plot.version },
-        data: { cutStatus: body.status, version: { increment: 1 } },
-      });
-      if (p.count === 0 ) throw versionConflict(await toDetail(plot));
+      if (known) {
+        const p = await tx.plot.updateMany({
+          where: { id: plot.id, version: plot.version },
+          data: { cutStatus: body.status, version: { increment: 1 } },
+        });
+        if (p.count === 0 ) throw versionConflict(await toDetail(plot));
+      }
       return saved;
     });
     res.json({
