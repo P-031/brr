@@ -68,6 +68,13 @@ const formFields = {
   groupKind: z.enum(["harvest", "maintain"]).optional(),
 };
 
+async function assertSeason(season: string): Promise<void> {
+  const known = await prisma.fromOption.findUnique({
+    where: { group_label: { group: "productionYears", label: season } },
+  });
+  if (!known) throw new HttpError(400, "ปีการผลิตไม่อยู่ในตัวเลือก");
+}
+
 const createPlotBody = z
 .object({
   id: clientId,
@@ -419,6 +426,7 @@ fieldRouter.post(
     const user = currentUser(req);
     requireFarmer(user);
     const body = overlapCheckBody.parse(req.body);
+    await assertSeason(body.season);
     if (body.plotId) await ownedPlot(user, body.plotId);
 
     const measured = measureSurvey(body.survey, new Date());
@@ -460,6 +468,7 @@ fieldRouter.post(
       return;
     }
     await refuseDeleted("PLOT", plotId);
+    if (season) await assertSeason(season);
 
     const measured = body.survey ? measureSurvey(body.survey, new Date()) : measurePoints(body.points!);
     const surveyedAt = body.survey?.finishedAt ?? new Date();

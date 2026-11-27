@@ -5,7 +5,7 @@ import { farmerIdsForList } from "../plotAccess";
 import { prisma } from "../prisma";
 import { taskKindByName  }  from "../serialize";
 import { cutStatuses } from "../serialize";
-
+import { getOrSet } from "../redisCache";
 
 export const metaRouter = Router();
 
@@ -13,11 +13,13 @@ metaRouter.get(
     "/meta/options",
     route(async (req, res) => {
         const user = currentUser(req);
-        const [options, places] = await Promise.all([
-            prisma.fromOption.findMany({ orderBy: [{ group: "asc"}, { sort: "asc"}, { label: "asc" }] }),
-            prisma.place.findMany(),
-        ]);
-    
+        const [options, places] = await getOrSet("fromOption+place", () =>
+            Promise.all([
+                prisma.fromOption.findMany({ orderBy: [{ group: "asc"}, { sort: "asc"}, { label: "asc" }] }),
+                prisma.place.findMany(),
+            ])
+        );
+
     const labels = (group: string) => options.filter((row) => row.group === group).map((row) => row.label);
     const canePlantModes = labels("canePlantModes");
     const locations : Record<string, Record<string, Record<string, string[]>>> ={};
@@ -37,6 +39,7 @@ metaRouter.get(
         });
 
     res.json({
+        productionYears: labels("productionYears"),
         projects: labels("projects"),
         caneGroups: labels("caneGroups"),
         zones: labels("zones"),
