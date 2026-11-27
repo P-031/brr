@@ -24,6 +24,10 @@ export function createApp() {
     next();
   });
   app.use(express.json({ limit: "1mb" }));
+  app.use((req, _res, next) => {
+    console.log(req.method,req.path);
+    next();
+  });
 
   app.use(cors({ origin: env.corsOrigins.length ? env.corsOrigins : true, credentials: true }));
 
